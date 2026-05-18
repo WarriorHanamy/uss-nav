@@ -14,6 +14,7 @@
 #include <std_msgs/Int16MultiArray.h>
 
 #include <atomic>
+#include <string>
 #include <thread>
 
 namespace mapping {
@@ -68,13 +69,13 @@ class Nodelet : public nodelet::Nodelet {
 
   message_filters::Subscriber<sensor_msgs::PointCloud2> map_sub_;
   std::shared_ptr<PointCloudOdomSynchronizer> map_odom_sync_Ptr_;
-  ros::Publisher gridmap_inflate_pub_1;
 
   // NOTE just for global map in simulation
   ros::Timer global_map_timer_;
   ros::Subscriber map_pc_sub_;
   bool map_recieved_ = false;
   bool use_global_map_ = false;
+  std::string map_input_mode_ = "depth";
 
   // NOTE for mask target
   bool use_mask_ = true;
@@ -225,16 +226,18 @@ class Nodelet : public nodelet::Nodelet {
     pcl::PointCloud<pcl::PointXYZ> latest_cloud;
     pcl::fromROSMsg(*msgPtr, latest_cloud);
 
-    if (latest_cloud.points.size() == 0)
+    if (latest_cloud.points.size() == 0) {
+      callback_lock_.clear();
       return;
+    }
 
     pcl::PointXYZ pt;
-    Eigen::Vector3d p3d, p3d_inf;
+    Eigen::Vector3d p3d;
     for (size_t i = 0; i < latest_cloud.points.size(); ++i) {
       pt = latest_cloud.points[i];
       p3d(0) = pt.x, p3d(1) = pt.y, p3d(2) = pt.z;
 
-      // 过滤无效点和过高点，迁移自新版 mapping 点云路径。
+      // 过滤无效点和过高点，避免雷达噪声把天花板或异常值写入局部障碍图。
       if (p3d.array().isNaN().sum() || p3d(2) > 3.0)
         continue;
 
@@ -319,6 +322,12 @@ class Nodelet : public nodelet::Nodelet {
     Eigen::Vector3d map_size;
     // NOTE whether to use global map
     nh.getParam("use_global_map", use_global_map_);
+    nh.param<std::string>("map_input_mode", map_input_mode_, "depth");
+    if (map_input_mode_ != "depth" && map_input_mode_ != "lidar" &&
+        map_input_mode_ != "depth_and_lidar") {
+      ROS_WARN("[mapping] unknown map_input_mode: %s, fallback to depth", map_input_mode_.c_str());
+      map_input_mode_ = "depth";
+    }
     if (use_global_map_) {
       double x, y, z, res;
       nh.getParam("x_length", x);
@@ -373,14 +382,21 @@ class Nodelet : public nodelet::Nodelet {
       map_pc_sub_ = nh.subscribe<sensor_msgs::PointCloud2>("global_map", 1, &Nodelet::map_call_back, this);
       global_map_timer_ = nh.createTimer(ros::Duration(1.0), &Nodelet::global_map_timer_callback, this);
     } else {
-      depth_sub_.subscribe(nh, "depth", 1);
       odom_sub_.subscribe(nh, "odom", 50);
-      depth_odom_sync_Ptr_ = std::make_shared<ImageOdomSynchronizer>(ImageOdomSyncPolicy(100), depth_sub_, odom_sub_);
-      depth_odom_sync_Ptr_->registerCallback(boost::bind(&Nodelet::depth_odom_callback, this, _1, _2));
 
-      map_sub_.subscribe(nh, "cloud", 50);
-      map_odom_sync_Ptr_ = std::make_shared<PointCloudOdomSynchronizer>(PointCloudOdomSyncPolicy(100), map_sub_, odom_sub_);
-      map_odom_sync_Ptr_->registerCallback(boost::bind(&Nodelet::pointcloud_odom_callback, this, _1, _2));
+      if (map_input_mode_ == "depth" || map_input_mode_ == "depth_and_lidar") {
+        // 深度图建图保留原版 elastic-tracker 的输入路径。
+        depth_sub_.subscribe(nh, "depth", 1);
+        depth_odom_sync_Ptr_ = std::make_shared<ImageOdomSynchronizer>(ImageOdomSyncPolicy(100), depth_sub_, odom_sub_);
+        depth_odom_sync_Ptr_->registerCallback(boost::bind(&Nodelet::depth_odom_callback, this, _1, _2));
+      }
+
+      if (map_input_mode_ == "lidar" || map_input_mode_ == "depth_and_lidar") {
+        // 雷达点云建图复用 OccGridMap 的 raycasting 更新，输出仍然是 gridmap_inflate。
+        map_sub_.subscribe(nh, "cloud", 50);
+        map_odom_sync_Ptr_ = std::make_shared<PointCloudOdomSynchronizer>(PointCloudOdomSyncPolicy(100), map_sub_, odom_sub_);
+        map_odom_sync_Ptr_->registerCallback(boost::bind(&Nodelet::pointcloud_odom_callback, this, _1, _2));
+      }
     }
 
     if (use_mask_) {

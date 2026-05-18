@@ -18,6 +18,25 @@
 
 [NOTE] this fork removes the CUDA depth renderer in **src/uav_simulator/local_sensing** and uses the CPU/PCL local point cloud renderer by default.
 
+## ws_main tracking map source
+
+This fork also provides ws_main-oriented tracking launch files:
+
+```
+roslaunch planning ws_main_tracking_sim.launch map_source:=occupancy
+roslaunch planning ws_main_tracking_real.launch map_source:=occupancy
+```
+
+`map_source:=occupancy` is the default. It starts `ws_main_map_adapter`, subscribes to the ws_main occupancy cloud, and publishes Elastic planning's `gridmap_inflate`.
+
+To build the Elastic map directly from lidar point cloud:
+
+```
+roslaunch planning ws_main_tracking_real.launch map_source:=lidar lidar_cloud_topic:=/laserMapping/cloud_registered
+```
+
+The lidar mode starts `mapping_nodelet` with `map_input_mode=lidar`; planning still subscribes to the same `gridmap_inflate` topic. Both modes start `mapping_vis_node`, which republishes the Elastic map as RViz-readable `sensor_msgs/PointCloud2` on `/<drone_ns>/mapping_vis/vs_gridmap_inflate`, for example `/drone0/mapping_vis/vs_gridmap_inflate`. The planning nodelet also samples each valid optimized trajectory into `nav_msgs/Path` on `/<drone_ns>/optimized_trajectory`, for example `/drone0/optimized_trajectory`.
+
 >Preparation and visualization:
 ```
 git clone https://github.com/ZJU-FAST-Lab/Elastic-Tracker.git

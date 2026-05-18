@@ -1,6 +1,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <mapping/mapping.h>
 #include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <nodelet/nodelet.h>
 #include <quadrotor_msgs/OccMap3d.h>
 #include <quadrotor_msgs/PolyTraj.h>
@@ -30,6 +31,7 @@ class Nodelet : public nodelet::Nodelet {
   ros::Timer plan_timer_;
 
   ros::Publisher traj_pub_, heartbeat_pub_, replanState_pub_, tracking_finish_pub_;
+  ros::Publisher optimized_traj_path_pub_;
 
   std::shared_ptr<mapping::OccGridMap> gridmapPtr_;
   std::shared_ptr<env::Env> envPtr_;
@@ -51,6 +53,7 @@ class Nodelet : public nodelet::Nodelet {
 
   double tracking_dur_, tracking_dist_, tolerance_d_;
   double hover_finish_hold_time_ = 2.0;
+  double optimized_traj_vis_dt_ = 0.05;
   bool hover_finish_enable_ = true;
 
   Trajectory traj_poly_;
@@ -108,6 +111,38 @@ class Nodelet : public nodelet::Nodelet {
     // NOTE yaw
     traj_msg.yaw = yaw;
     traj_pub_.publish(traj_msg);
+  }
+
+  void publish_optimized_traj_path(const Trajectory& traj, const ros::Time& stamp) {
+    nav_msgs::Path path_msg;
+    path_msg.header.frame_id = "world";
+    path_msg.header.stamp = stamp;
+
+    const double duration = traj.getTotalDuration();
+    const double dt = optimized_traj_vis_dt_ > 1e-3 ? optimized_traj_vis_dt_ : 0.05;
+    for (double t = 0.0; t < duration; t += dt) {
+      const Eigen::Vector3d p = traj.getPos(t);
+      geometry_msgs::PoseStamped pose;
+      pose.header = path_msg.header;
+      pose.pose.position.x = p.x();
+      pose.pose.position.y = p.y();
+      pose.pose.position.z = p.z();
+      pose.pose.orientation.w = 1.0;
+      path_msg.poses.push_back(pose);
+    }
+
+    if (duration > 0.0) {
+      const Eigen::Vector3d p = traj.getPos(duration);
+      geometry_msgs::PoseStamped pose;
+      pose.header = path_msg.header;
+      pose.pose.position.x = p.x();
+      pose.pose.position.y = p.y();
+      pose.pose.position.z = p.z();
+      pose.pose.orientation.w = 1.0;
+      path_msg.poses.push_back(pose);
+    }
+
+    optimized_traj_path_pub_.publish(path_msg);
   }
 
   void triger_callback(const geometry_msgs::PoseStampedConstPtr& msgPtr) {
@@ -467,6 +502,7 @@ class Nodelet : public nodelet::Nodelet {
         yaw = 2 * std::atan2(target_q.z(), target_q.w());
       }
       pub_traj(traj, yaw, replan_stamp);
+      publish_optimized_traj_path(traj, replan_stamp);
       traj_poly_ = traj;
       replan_stamp_ = replan_stamp;
     } else if (force_hover_) {
@@ -547,6 +583,7 @@ class Nodelet : public nodelet::Nodelet {
           Eigen::Vector3d dp = un_known_p - odom_p;
           double yaw = std::atan2(dp.y(), dp.x());
           pub_traj(traj_poly_, yaw, replan_stamp_);
+          publish_optimized_traj_path(traj_poly_, replan_stamp_);
           no_need_replan = true;
         }
       }
@@ -652,6 +689,7 @@ class Nodelet : public nodelet::Nodelet {
       Eigen::Vector3d dp = un_known_p - odom_p;
       double yaw = std::atan2(dp.y(), dp.x());
       pub_traj(traj, yaw, replan_stamp);
+      publish_optimized_traj_path(traj, replan_stamp);
       traj_poly_ = traj;
       replan_stamp_ = replan_stamp;
     } else if (force_hover_) {
@@ -816,6 +854,7 @@ class Nodelet : public nodelet::Nodelet {
     nh.getParam("fake", fake_);
     nh.param("hover_finish_hold_time", hover_finish_hold_time_, 2.0);
     nh.param("hover_finish_enable", hover_finish_enable_, true);
+    nh.param("optimized_traj_vis_dt", optimized_traj_vis_dt_, 0.05);
 
     gridmapPtr_ = std::make_shared<mapping::OccGridMap>();
     envPtr_ = std::make_shared<env::Env>(nh, gridmapPtr_);
@@ -825,6 +864,7 @@ class Nodelet : public nodelet::Nodelet {
 
     heartbeat_pub_ = nh.advertise<std_msgs::Empty>("heartbeat", 10);
     traj_pub_ = nh.advertise<quadrotor_msgs::PolyTraj>("trajectory", 1);
+    optimized_traj_path_pub_ = nh.advertise<nav_msgs::Path>("optimized_trajectory", 1);
     replanState_pub_ = nh.advertise<quadrotor_msgs::ReplanState>("replanState", 1);
     tracking_finish_pub_ = nh.advertise<std_msgs::Bool>("tracking_finish", 10);
 
