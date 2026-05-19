@@ -121,6 +121,9 @@ class TrackRequest(BaseModel):
     stamp: float | None = Field(None, description="外部图像时间戳")
     init_bbox: list[float] | None = Field(None, description="可选 xyxy 初始框，多同类目标时建议提供")
     reset: bool = Field(False, description="强制重置当前 tracker")
+    strict_identity: bool = Field(True, description="已有 target_id 后是否禁止普通帧自动切换到其他 id")
+    allow_rebind: bool = Field(False, description="是否允许本次请求按 bbox/last_bbox 重新绑定新 id")
+    lost_rebind: bool = Field(False, description="是否为 lost 后显式重捕获请求")
     tracker: str = Field("botsort", description="botsort 或 bytetrack")
     prompt_mode: str = Field("text", description="text / visual / hybrid")
     update_visual_prompt: bool = Field(False, description="是否使用当前 init_bbox 更新 visual prompt embedding")
@@ -170,6 +173,8 @@ class YoloeTrackEngine:
         self.target_id: int | None = None
         self.last_bbox: list[int] | None = None
         self.last_score = 0.0
+        self.lost_since = 0.0
+        self.last_seen_stamp = 0.0
         self.state = "idle"
         self.reason = "not_started"
         self.frame_seq = 0
@@ -297,6 +302,8 @@ class YoloeTrackEngine:
             self.target_id = None
             self.last_bbox = None
             self.last_score = 0.0
+            self.lost_since = 0.0
+            self.last_seen_stamp = 0.0
             self.state = "idle"
             self.reason = reason or "reset"
             self.latest_result = self._make_result(ok=False, reason=self.reason)
@@ -313,6 +320,8 @@ class YoloeTrackEngine:
                 "track_id": self.target_id,
                 "last_bbox": self.last_bbox,
                 "last_score": self.last_score,
+                "lost_since": self.lost_since,
+                "last_seen_stamp": self.last_seen_stamp,
                 "reason": self.reason,
                 "frame_seq": self.frame_seq,
             }
@@ -480,6 +489,8 @@ class YoloeTrackEngine:
                 self.target_id = None
                 self.last_bbox = None
                 self.last_score = 0.0
+                self.lost_since = 0.0
+                self.last_seen_stamp = 0.0
 
                 self.state = "acquiring"
                 self.reason = "reset" if req.reset else "new_target"
@@ -559,7 +570,12 @@ class YoloeTrackEngine:
                 )
 
             t0 = time.perf_counter()
-            selected = self._select_target(candidates, init_bbox=init_bbox)
+            selected = self._select_target(
+                candidates,
+                init_bbox=init_bbox,
+                strict_identity=bool(req.strict_identity),
+                allow_rebind=bool(req.allow_rebind or req.lost_rebind or init_bbox is not None),
+            )
             timings["select_target_ms"] = _ms(time.perf_counter() - t0)
             if selected is None:
                 timings["total_ms"] = _ms(time.perf_counter() - total_t0)
@@ -581,6 +597,8 @@ class YoloeTrackEngine:
 
             self.last_bbox = list(selected["bbox"])
             self.last_score = float(selected["score"])
+            self.lost_since = 0.0
+            self.last_seen_stamp = stamp
             self.state = "active"
             self.reason = ""
             timings["total_ms"] = _ms(time.perf_counter() - total_t0)
@@ -688,17 +706,29 @@ class YoloeTrackEngine:
             )
         return candidates
 
-    def _select_target(self, candidates: list[dict[str, Any]], init_bbox: list[float] | None) -> dict[str, Any] | None:
+    def _select_target(
+        self,
+        candidates: list[dict[str, Any]],
+        init_bbox: list[float] | None,
+        *,
+        strict_identity: bool,
+        allow_rebind: bool,
+    ) -> dict[str, Any] | None:
         # 上层传入 init_bbox 时，说明 VLM/慢模型正在重新确认目标；
         # 此时优先用 bbox 在当前 YOLOE 轨迹中重新绑定 id，而不是盲目沿用旧 id。
         if init_bbox is None and self.target_id is not None:
             for candidate in candidates:
                 if int(candidate["track_id"]) == int(self.target_id):
                     return candidate
+            if strict_identity and not allow_rebind:
+                return None
 
         hint_bbox = init_bbox or self.last_bbox
         if hint_bbox is None:
             return max(candidates, key=lambda item: item["score"])
+
+        if self.target_id is not None and not allow_rebind:
+            return None
 
         best = None
         best_score = -1.0
@@ -732,6 +762,8 @@ class YoloeTrackEngine:
         timings: dict[str, float] | None = None,
     ) -> dict[str, Any]:
         self.state = "lost" if self.target_id is not None else "acquiring"
+        if self.lost_since <= 0.0:
+            self.lost_since = float(stamp)
         self.reason = reason
         self.latest_result = self._make_result(
             ok=False,
@@ -771,6 +803,8 @@ class YoloeTrackEngine:
             "score": float(score),
             "cls": cls,
             "has_mask": bool(has_mask),
+            "lost_since": float(self.lost_since),
+            "last_seen_stamp": float(self.last_seen_stamp),
             "stamp": float(stamp),
             "frame_seq": frame_seq,
             "source": f"yoloe:{self.current_tracker}",
