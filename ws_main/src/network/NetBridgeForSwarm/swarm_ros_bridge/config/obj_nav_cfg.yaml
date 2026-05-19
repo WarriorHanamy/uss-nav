@@ -322,3 +322,39 @@ topics:
       - groundStation0
     prefix: true
     same_prefix: true
+
+  - topic_name: /nav_mission_image
+    msg_type: sensor_msgs/Image
+    imgResizeRate: 0.8
+    srcIP:
+      - drone1
+    srcPort: 4019
+    max_freq: 10
+    dstIP:
+      - groundStation0
+    prefix: false
+
+  - topic_name: /drone0/mapping_vis/vs_gridmap_inflate
+    msg_type: sensor_msgs/PointCloud2
+    cloudCompress: true
+    cloudDownsample: -1.0
+    cloudType: normal
+    srcIP:
+      - drone1
+    srcPort: 4020
+    max_freq: 3
+    dstIP:
+      - groundStation0
+    prefix: false
+    same_prefix: false
+
+  - topic_name: /drone0/optimized_trajectory
+    msg_type: nav_msgs/Path
+    srcIP:
+      - drone1
+    srcPort: 4021
+    max_freq: -1
+    dstIP:
+     - groundStation0
+    prefix: false
+    same_prefix: false

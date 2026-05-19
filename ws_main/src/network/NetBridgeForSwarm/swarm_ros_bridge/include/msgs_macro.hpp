@@ -21,6 +21,7 @@
 #include <quadrotor_msgs/AgentPrompt.h>
 #include <quadrotor_msgs/GPSPosition.h>
 #include <sensor_msgs/BatteryState.h>
+#include <nav_msgs/Path.h>
 // include your msg type here
 
 #define INFO_MSG(str)        do {std::cout << str << std::endl; } while(false)
@@ -44,7 +45,8 @@
   X("quadrotor_msgs/AgentPrompt", quadrotor_msgs::AgentPrompt)         \
   X("std_msgs/Int32", std_msgs::Int32)                                 \
   X("quadrotor_msgs/GPSPosition", quadrotor_msgs::GPSPosition)         \
-  X("sensor_msgs/BatteryState", sensor_msgs::BatteryState)
+  X("sensor_msgs/BatteryState", sensor_msgs::BatteryState)             \
+  X("nav_msgs/Path", nav_msgs::Path)                                   
 
 #define SRVS_MACRO \
   X("std_srvs/Empty", std_srvs::Empty) \

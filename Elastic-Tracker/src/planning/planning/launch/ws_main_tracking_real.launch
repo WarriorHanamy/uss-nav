@@ -1,6 +1,6 @@
 <launch>
   <arg name="drone_ns" default="drone0"/>
-  <arg name="map_source" default="occupancy"/>
+  <arg name="map_source" default="lidar"/>
   <arg name="ws_main_map_topic" default="/drone_0_ego_planner_node/grid_map/occupancy"/>
   <arg name="lidar_cloud_topic" default="/laserMapping/cloud_registered"/>
   <arg name="odom_topic" default="/ekf_quat/ekf_odom"/>
