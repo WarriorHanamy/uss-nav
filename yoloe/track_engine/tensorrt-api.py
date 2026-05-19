@@ -173,6 +173,7 @@ class YoloeTensorRtTrackEngine:
         self.lock = threading.Lock()
         self._ensure_engine(rebuild=bool(rebuild_engine))
         self.model = self._load_engine()
+        self._warmup_engine()
 
         self.current_label = ""
         self.current_class_id: int | None = None
@@ -267,6 +268,32 @@ class YoloeTensorRtTrackEngine:
         print("[YOLOE_TRT_LOAD]", f"engine={self.engine_path}", flush=True)
         return YOLO(str(self.engine_path))
 
+    def _warmup_engine(self) -> None:
+        """在主线程预热 TensorRT engine，避免首个 HTTP worker 线程触发 CUDA/TensorRT 懒初始化。"""
+        if isinstance(self.default_imgsz, tuple):
+            height, width = int(self.default_imgsz[0]), int(self.default_imgsz[1])
+        else:
+            height = width = int(self.default_imgsz)
+        height = max(32, height)
+        width = max(32, width)
+        warmup_image = np.zeros((height, width, 3), dtype=np.uint8)
+        print(
+            "[YOLOE_TRT_WARMUP] start",
+            f"shape={height}x{width}",
+            f"device={self.device}",
+            flush=True,
+        )
+        with torch.no_grad():
+            self.model.predict(
+                source=warmup_image,
+                conf=self.default_conf,
+                iou=self.default_iou,
+                imgsz=self.default_imgsz,
+                device=self.device,
+                verbose=False,
+            )
+        print("[YOLOE_TRT_WARMUP] done", flush=True)
+
     def _tracker_cfg_path(self, tracker: str) -> str:
         tracker = str(tracker or "botsort").strip().lower()
         if tracker not in {"botsort", "bytetrack"}:
@@ -307,12 +334,16 @@ class YoloeTensorRtTrackEngine:
         return removed
 
     def _reset_predictor_and_tracker_state(self) -> int:
-        """清理 predictor、tracker 实例和 tracker callbacks。"""
+        """清理 tracker 状态，但保留 TensorRT predictor/execution context。
+
+        TensorRT engine 的 predictor 初始化成本和 native 状态较重，频繁置空 predictor
+        容易在 FastAPI 服务中触发底层 CUDA/TensorRT 资源重复释放。固定词表模式下
+        label 切换不需要重建 predictor，只需要重置 tracker 和移除 tracker callbacks。
+        """
         if self.model is None:
             return 0
         self._reset_ultralytics_trackers()
         removed_callbacks = self._clear_ultralytics_tracker_callbacks()
-        self.model.predictor = None
         return removed_callbacks
 
     def reset(self, reason: str = "") -> dict[str, Any]:
@@ -635,7 +666,7 @@ def create_app(engine: YoloeTensorRtTrackEngine) -> FastAPI:
     app = FastAPI(title="YOLOE TensorRT Fixed-Vocab Track Engine")
 
     @app.post("/track")
-    def track(req: TrackRequest):
+    async def track(req: TrackRequest):
         try:
             return engine.track(req)
         except Exception as exc:
@@ -643,15 +674,15 @@ def create_app(engine: YoloeTensorRtTrackEngine) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/reset")
-    def reset(req: ResetRequest | None = None):
+    async def reset(req: ResetRequest | None = None):
         return engine.reset(reason="" if req is None else req.reason)
 
     @app.get("/status")
-    def status():
+    async def status():
         return engine.status()
 
     @app.get("/latest")
-    def latest():
+    async def latest():
         return engine.latest()
 
     return app
