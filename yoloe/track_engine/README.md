@@ -25,6 +25,18 @@ YOLOE_TRACK_DEVICE=cuda:0 \
 bash track_engine/start_yoloe_tracking_api.sh
 ```
 
+## BoT-SORT ReID
+
+默认 `ultralytics/cfg/trackers/botsort.yaml` 中 `with_reid: True`，BoT-SORT 会在 YOLOE API 进程内加载 FastReID 模型，不需要单独启动 ReID 服务。当前默认使用 `fast-reid` 仓库内的 Market1501 R50 配置和权重：
+
+```text
+fast-reid/
+├── configs/Market1501/bagtricks_R50.yml
+└── weights/market_bot_R50.pth
+```
+
+`fast_reid_root`、`fast_reid_config` 和 `fast_reid_weights` 支持绝对路径，也支持相对 `ros_ws/uss-nav/yoloe` 的路径。若希望恢复原始 BoT-SORT 行为，将 `with_reid` 改为 `False`，此时不会导入或加载 FastReID。
+
 ## API
 
 `api.py` 提供一个单帧 tracking 接口：

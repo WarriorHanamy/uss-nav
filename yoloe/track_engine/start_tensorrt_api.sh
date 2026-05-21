@@ -8,8 +8,8 @@ cd "${YOLOE_ROOT}"
 
 python3 track_engine/tensorrt-api.py \
   --pt-model "${YOLOE_ROOT}/prompt/yoloe_pretrain/yoloe-11m-seg.pt" \
-  --engine "${YOLOE_ROOT}/prompt/yoloe_pretrain/yoloe-11m-seg-fixed.engine" \
-  --classes "${YOLOE_ROOT}/prompt/prompt.txt" \
+  --engine "${YOLOE_ROOT}/yoloe-v8m-seg.engine" \
+  --classes "${YOLOE_ROOT}/prompt/prompt2.txt" \
   --tracker-dir "${YOLOE_ROOT}/ultralytics/cfg/trackers" \
   --host "127.0.0.1" \
   --port 2250 \
