@@ -189,9 +189,16 @@ class BOTSORT(BYTETracker):
         self.proximity_thresh = args.proximity_thresh
         self.appearance_thresh = args.appearance_thresh
 
+        self.encoder = None
         if args.with_reid:
-            # Haven't supported BoT-SORT(reid) yet
-            self.encoder = None
+            from .utils.reid import FastReIDEncoder
+
+            self.encoder = FastReIDEncoder(
+                config_path=args.fast_reid_config,
+                weights_path=args.fast_reid_weights,
+                device=getattr(args, "reid_device", "cuda:0"),
+                root_path=getattr(args, "fast_reid_root", "fast-reid"),
+            )
         self.gmc = GMC(method=args.gmc_method)
 
     def get_kalmanfilter(self):
