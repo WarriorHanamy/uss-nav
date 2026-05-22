@@ -691,8 +691,8 @@ def create_app(engine: YoloeTensorRtTrackEngine) -> FastAPI:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="YOLOE TensorRT fixed-vocab tracking API")
     parser.add_argument("--pt-model", default=str(YOLOE_ROOT / "prompt" / "yoloe_pretrain" / "yoloe-11m-seg.pt"))
-    parser.add_argument("--engine", default=str(YOLOE_ROOT / "prompt" / "yoloe_pretrain" / "yoloe-11m-seg-fixed.engine"))
-    parser.add_argument("--classes", default=str(YOLOE_ROOT / "prompt" / "prompt.txt"))
+    parser.add_argument("--engine", default=str(YOLOE_ROOT / "yoloe-v8m-seg-test.onnx"))
+    parser.add_argument("--classes", default=str(YOLOE_ROOT / "prompt" / "prompt2.txt"))
     parser.add_argument("--tracker-dir", default=str(YOLOE_ROOT / "ultralytics" / "cfg" / "trackers"))
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--conf", type=float, default=0.1)

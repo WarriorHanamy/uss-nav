@@ -10,17 +10,17 @@
   <arg name="tracking_finish_topic" default="/elastic_tracker/tracking_finish"/>
   <arg name="stop_tracking_topic" default="/elastic_tracker/stop"/>
 
-  <arg name="map_resolution" default="0.15"/>
+  <arg name="map_resolution" default="0.10"/>
   <arg name="map_local_x" default="20.0"/>
   <arg name="map_local_y" default="20.0"/>
   <arg name="map_local_z" default="5.0"/>
-  <arg name="inflate_size" default="0.15"/>
-  <arg name="inflate_num" default="3"/>
+  <arg name="inflate_size" default="0.20"/>
+  <arg name="inflate_num" default="4"/>
 
   <arg name="rhos_visibility" default="10000.0"/>
   <arg name="rho_tracking" default="1000.0"/>
   <arg name="plan_hz" default="20"/>
-  <arg name="hover_finish_hold_time" default="3.0"/>
+  <arg name="hover_finish_hold_time" default="5.0"/>
 
   <group ns="$(arg drone_ns)">
     <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
@@ -99,7 +99,7 @@
       <param name="optimized_traj_vis_dt" value="0.05"/>
 
       <param name="K" value="8"/>
-      <param name="vmax" value="1.0"/>
+      <param name="vmax" value="2.0"/>
       <param name="amax" value="1.0"/>
       <param name="rhoT" value="100.0"/>
       <param name="rhoP" value="10000.0"/>
@@ -109,9 +109,9 @@
       <param name="rhosVisibility" value="$(arg rhos_visibility)"/>
       <param name="theta_clearance" value="0.8"/>
       <param name="clearance_d" value="0.2"/>
-      <param name="tolerance_d" value="0.3"/>
-      <param name="tracking_dist" value="2.5"/>
-      <param name="tracking_dur" value="3.0"/>
+      <param name="tracrance_d" value="0.3"/>
+      <param name="toleking_dist" value="1.5"/>
+      <param name="tracking_dur" value="1.5"/>
       <param name="tracking_dt" value="0.2"/>
       <param name="debug" value="false"/>
 

@@ -127,8 +127,8 @@ TrajExecResult exe_traj(const quadrotor_msgs::PolyTraj &trajMsg) {
     const double d_yaw = shortest_yaw_diff(last_yaw_, yaw);
     const double d_yaw_abs = std::fabs(d_yaw);
     double yaw_step = d_yaw;
-    if (d_yaw_abs >= 0.02) {
-      yaw_step = d_yaw / d_yaw_abs * 0.02;
+    if (d_yaw_abs >= 0.04) {
+      yaw_step = d_yaw / d_yaw_abs * 0.04; 
     }
     yaw = normalize_yaw(last_yaw_ + yaw_step);
     publish_cmd(trajMsg.traj_id, p, v, a, yaw, yaw_step / 0.01);
