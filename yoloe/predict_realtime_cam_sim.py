@@ -31,9 +31,9 @@ class YoloeDetectorNode:
         self.clip_model_path     = rospy.get_param('~clip_model_path', './mobileclip_blt.pt')
         
         # 三个输入话题参数
-        self.rgb_in_topic        = rospy.get_param('~rgb_topic',   '/camera1/color/image/compressed')
-        self.depth_in_topic      = rospy.get_param('~depth_topic', '/camera1/depth/image/compressed')
-        self.odom_in_topic       = rospy.get_param('~odom_topic',  '/unity_odom')
+        self.rgb_in_topic        = rospy.get_param('~rgb_topic',   '/camera/color/image_raw/compressed')
+        self.depth_in_topic      = rospy.get_param('~depth_topic', '/camera/aligned_depth_to_color/image_raw/compressedDepth')
+        self.odom_in_topic       = rospy.get_param('~odom_topic',  '/ekf_quat/ekf_odom')
         
         self.rgb_predict_out_topic = rospy.get_param('~output_topic', '/yoloe/plot')
         self.encodemask_out_topic  = rospy.get_param('~result_output_topic', '/yoloe/encodemask')

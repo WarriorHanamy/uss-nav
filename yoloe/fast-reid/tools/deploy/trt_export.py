@@ -129,25 +129,27 @@ def onnx2trt(
         network.mark_output(tensor=identity_out_tensor)
 
     config = builder.create_builder_config()
-    config.max_workspace_size = max_workspace_size * (1 << 25)
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, max_workspace_size * (1 << 25))
     if mode == 'fp16':
         assert builder.platform_has_fast_fp16, "not support fp16"
-        builder.fp16_mode = True
+        config.set_flag(trt.BuilderFlag.FP16)
     if mode == 'int8':
         assert builder.platform_has_fast_int8, "not support int8"
-        builder.int8_mode = True
-        builder.int8_calibrator = int8_calibrator
+        config.set_flag(trt.BuilderFlag.INT8)
+        config.int8_calibrator = int8_calibrator
 
     if strict_type_constraints:
         config.set_flag(trt.BuilderFlag.STRICT_TYPES)
 
     logger.info("Building an engine from file {}; this may take a while...".format(onnx_file_path))
-    engine = builder.build_cuda_engine(network)
+    serialized_engine = builder.build_serialized_network(network, config)
+    if serialized_engine is None:
+        raise RuntimeError("failed to build TensorRT engine from {}".format(onnx_file_path))
     logger.info("Create engine successfully!")
 
     logger.info("Saving TRT engine file to path {}".format(save_path))
     with open(save_path, 'wb') as f:
-        f.write(engine.serialize())
+        f.write(serialized_engine)
     logger.info("Engine file has already saved to {}!".format(save_path))
 
 

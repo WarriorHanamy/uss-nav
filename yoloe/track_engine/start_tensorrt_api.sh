@@ -7,8 +7,8 @@ YOLOE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${YOLOE_ROOT}"
 
 python track_engine/tensorrt-api.py \
-  --pt-model "${YOLOE_ROOT}/yoloe-v8m-seg-test.pt" \
-  --engine "${YOLOE_ROOT}/yoloe-v8m-seg-test.engine" \
+  --pt-model "${YOLOE_ROOT}/yoloe-v8m-seg.pt" \
+  --engine "${YOLOE_ROOT}/yoloe-v8m-seg.engine" \
   --classes "${YOLOE_ROOT}/prompt/prompt2.txt" \
   --tracker-dir "${YOLOE_ROOT}/ultralytics/cfg/trackers" \
   --host "127.0.0.1" \

@@ -213,14 +213,24 @@ class BOTSORT(BYTETracker):
             return []
         if self.args.with_reid and self.encoder is not None:
             features_keep = self.encoder.inference(img, dets)
+            valid_indices = getattr(self.encoder, "valid_indices", None)
+            if valid_indices is not None:
+                valid_indices = np.asarray(valid_indices, dtype=int)
+                dets = dets[valid_indices]
+                scores = scores[valid_indices]
+                cls = cls[valid_indices]
             encoder_stats = getattr(self.encoder, "last_stats", {}) or {}
             self.last_reid_stats = {
                 "enabled": True,
                 "backend": str(encoder_stats.get("backend", getattr(self.args, "reid_backend", "unknown"))),
+                "gpu": bool(encoder_stats.get("gpu", False)),
+                "gpu_idx": int(encoder_stats.get("gpu_idx", -1)),
                 "feature_count": int(encoder_stats.get("feature_count", len(features_keep))),
                 "feature_dim": int(encoder_stats.get("feature_dim", features_keep.shape[1] if features_keep.ndim >= 2 else 0)),
                 "inference_ms": float(encoder_stats.get("inference_ms", 0.0)),
             }
+            if len(dets) == 0 or len(features_keep) == 0:
+                return []
             return [BOTrack(xyxy, s, c, f) for (xyxy, s, c, f) in zip(dets, scores, cls, features_keep)]  # detections
         else:
             self.last_reid_stats = {

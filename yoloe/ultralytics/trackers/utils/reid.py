@@ -61,6 +61,8 @@ class FastReIDEncoder:
         self.backend = "fastreid"
         self.last_stats = {
             "backend": self.backend,
+            "gpu": str(self.device).startswith("cuda"),
+            "gpu_idx": int(str(self.device).split(":", 1)[1]) if str(self.device).startswith("cuda:") else -1,
             "feature_count": 0,
             "feature_dim": 0,
             "inference_ms": 0.0,
@@ -123,6 +125,8 @@ class FastReIDEncoder:
         """记录最近一次 ReID 推理统计，供 API 日志读取。"""
         self.last_stats = {
             "backend": self.backend,
+            "gpu": str(self.device).startswith("cuda"),
+            "gpu_idx": int(str(self.device).split(":", 1)[1]) if str(self.device).startswith("cuda:") else -1,
             "feature_count": int(features.shape[0]) if features.ndim >= 1 else 0,
             "feature_dim": int(features.shape[1]) if features.ndim >= 2 else 0,
             "inference_ms": round((time.perf_counter() - start_time) * 1000.0, 3),
@@ -137,8 +141,15 @@ class FastReIDEncoder:
     @staticmethod
     def _crop_detection(img: np.ndarray, det: np.ndarray) -> np.ndarray | None:
         """将 Ultralytics 的 xywh(+angle)+idx 检测结果转为图像裁剪区域。"""
+        if img is None or img.size == 0:
+            return None
+        det_xywh = np.asarray(det[:4], dtype=np.float32)
+        if det_xywh.shape[0] < 4 or not np.isfinite(det_xywh).all():
+            return None
         height, width = img.shape[:2]
-        cx, cy, box_w, box_h = [float(v) for v in det[:4]]
+        cx, cy, box_w, box_h = [float(v) for v in det_xywh]
+        if box_w <= 1.0 or box_h <= 1.0:
+            return None
         x1 = max(0, min(width - 1, int(round(cx - box_w / 2.0))))
         y1 = max(0, min(height - 1, int(round(cy - box_h / 2.0))))
         x2 = max(0, min(width, int(round(cx + box_w / 2.0))))
@@ -177,17 +188,38 @@ class TensorRTReIDEncoder:
         self.trt = trt
         self.trt_logger = trt.Logger(trt.Logger.ERROR)
         self.cuda.init()
-        self.device_ctx = self.cuda.Device(self.gpu_idx).make_context()
-        self.engine = self._load_engine()
-        self.context = self.engine.create_execution_context()
-        self.inputs, self.outputs, self.bindings, self.stream = self._allocate_buffers()
+        self.device_ctx = self.cuda.Device(self.gpu_idx).retain_primary_context()
+        self.device_ctx.push()
+        try:
+            self.engine = self._load_engine()
+            self.context = self.engine.create_execution_context()
+            self.inputs, self.outputs, self.bindings, self.stream = self._allocate_buffers()
+        finally:
+            self.device_ctx.pop()
+        self.input_shape = tuple(int(v) for v in self.inputs[0]["shape"])
+        self.engine_batch_size = int(self.input_shape[0])
+        self.batch_size = min(self.batch_size, self.engine_batch_size)
         self.backend = "tensorrt"
+        self.valid_indices = []
         self.last_stats = {
             "backend": self.backend,
             "feature_count": 0,
             "feature_dim": 0,
             "inference_ms": 0.0,
         }
+        print(
+            "[ReID][TensorRT] initialized",
+            f"engine={self.engine_path}",
+            f"gpu=True",
+            f"gpu_idx={self.gpu_idx}",
+            "cuda_context=primary",
+            f"requested_batch={batch_size}",
+            f"runtime_batch={self.batch_size}",
+            f"engine_batch={self.engine_batch_size}",
+            f"input_shape={self.input_shape}",
+            f"output_shape={tuple(int(v) for v in self.outputs[-1]['shape'])}",
+            flush=True,
+        )
 
     @staticmethod
     def _parse_gpu_idx(device: str) -> int:
@@ -215,19 +247,32 @@ class TensorRTReIDEncoder:
         return bool(self.engine.binding_is_input(binding))
 
     def _allocate_buffers(self):
-        inputs, outputs, bindings = [], [], []
-        stream = self.cuda.Stream()
+        input_shapes = {}
         for binding in self.engine:
+            if not self._binding_is_input(binding):
+                continue
+            index = self.engine.get_binding_index(binding)
             shape = self._binding_shape(binding)
             if any(dim < 0 for dim in shape):
                 shape = (self.batch_size, 3, self.input_size[0], self.input_size[1])
-                self.context.set_binding_shape(self.engine.get_binding_index(binding), shape)
+                self.context.set_binding_shape(index, shape)
+            input_shapes[index] = shape
+
+        inputs, outputs, bindings = [], [], []
+        stream = self.cuda.Stream()
+        for binding in self.engine:
+            index = self.engine.get_binding_index(binding)
+            shape = input_shapes.get(index)
+            if shape is None:
+                shape = tuple(int(v) for v in self.context.get_binding_shape(index))
+            if any(dim < 0 for dim in shape):
+                raise RuntimeError(f"TensorRT ReID binding has unresolved dynamic shape: {binding} {shape}")
             size = int(self.trt.volume(shape))
             dtype = self._binding_dtype(binding)
             host_mem = self.cuda.pagelocked_empty(size, dtype)
             device_mem = self.cuda.mem_alloc(host_mem.nbytes)
             bindings.append(int(device_mem))
-            item = {"host": host_mem, "device": device_mem, "shape": shape}
+            item = {"host": host_mem, "device": device_mem, "shape": shape, "dtype": dtype, "name": str(binding)}
             if self._binding_is_input(binding):
                 inputs.append(item)
             else:
@@ -242,13 +287,31 @@ class TensorRTReIDEncoder:
         if img is None:
             raise ValueError("TensorRT ReID inference requires the original image")
         if len(dets) == 0:
+            self.valid_indices = []
             self._record_stats(np.empty((0, 0), dtype=np.float32), infer_t0)
             return np.empty((0, 0), dtype=np.float32)
 
-        crops = [FastReIDEncoder._crop_detection(img, det) for det in dets]
-        valid_crops = [crop for crop in crops if crop is not None]
-        if len(valid_crops) != len(crops):
-            raise ValueError("TensorRT ReID received invalid detection boxes for image cropping")
+        valid_crops = []
+        self.valid_indices = []
+        for index, det in enumerate(dets):
+            crop = FastReIDEncoder._crop_detection(img, det)
+            if crop is None:
+                continue
+            valid_crops.append(crop)
+            self.valid_indices.append(index)
+        if not valid_crops:
+            self._record_stats(np.empty((0, 0), dtype=np.float32), infer_t0)
+            print(
+                "[ReID][TensorRT] inference",
+                "gpu=True",
+                f"gpu_idx={self.gpu_idx}",
+                f"dets={len(dets)}",
+                "valid=0",
+                "features=(0, 0)",
+                f"ms={self.last_stats['inference_ms']}",
+                flush=True,
+            )
+            return np.empty((0, 0), dtype=np.float32)
 
         chunks = []
         for start in range(0, len(valid_crops), self.batch_size):
@@ -257,6 +320,16 @@ class TensorRTReIDEncoder:
         features = np.concatenate(chunks, axis=0)
         result = self._l2_normalize(features.astype(np.float32))
         self._record_stats(result, infer_t0)
+        print(
+            "[ReID][TensorRT] inference",
+            "gpu=True",
+            f"gpu_idx={self.gpu_idx}",
+            f"dets={len(dets)}",
+            f"valid={len(valid_crops)}",
+            f"features={tuple(int(v) for v in result.shape)}",
+            f"ms={self.last_stats['inference_ms']}",
+            flush=True,
+        )
         return result
 
     def _record_stats(self, features: np.ndarray, start_time: float) -> None:
@@ -271,10 +344,12 @@ class TensorRTReIDEncoder:
     def _infer_batch(self, crops: list[np.ndarray]) -> np.ndarray:
         batch = np.stack([self._preprocess(crop) for crop in crops], axis=0)
         valid_bsz = batch.shape[0]
-        if valid_bsz < self.batch_size:
-            padding = np.zeros((self.batch_size - valid_bsz, 3, self.input_size[0], self.input_size[1]), dtype=np.float32)
+        if valid_bsz < self.engine_batch_size:
+            padding = np.zeros(
+                (self.engine_batch_size - valid_bsz, 3, self.input_size[0], self.input_size[1]), dtype=np.float32
+            )
             batch = np.concatenate([batch, padding], axis=0)
-        batch = np.ascontiguousarray(batch.astype(np.float32))
+        batch = np.ascontiguousarray(batch.astype(self.inputs[0]["dtype"]))
 
         self.device_ctx.push()
         try:
@@ -288,7 +363,7 @@ class TensorRTReIDEncoder:
             self.device_ctx.pop()
 
         output = self.outputs[-1]
-        features = output["host"].reshape(self.batch_size, -1)[:valid_bsz]
+        features = output["host"].reshape(self.engine_batch_size, -1)[:valid_bsz]
         return features.copy()
 
     def _preprocess(self, crop: np.ndarray) -> np.ndarray:
@@ -314,6 +389,7 @@ class TensorRTReIDEncoder:
 def build_reid_encoder(args):
     """根据 botsort.yaml 构造 ReID encoder。"""
     backend = str(getattr(args, "reid_backend", "fastreid") or "fastreid").strip().lower()
+    print(f"[ReID] build backend={backend} with_reid={getattr(args, 'with_reid', None)}", flush=True)
     if backend in {"fastreid", "pytorch"}:
         return FastReIDEncoder(
             config_path=args.fast_reid_config,

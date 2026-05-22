@@ -16,6 +16,7 @@ import os
 import sys
 import threading
 import time
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ if str(YOLOE_ROOT) not in sys.path:
     sys.path.insert(0, str(YOLOE_ROOT))
 
 from ultralytics import YOLO  # noqa: E402
+from ultralytics.trackers.track import on_predict_start  # noqa: E402
 
 
 def _now() -> float:
@@ -41,6 +43,11 @@ def _now() -> float:
 def _ms(seconds: float) -> float:
     """将秒转换为毫秒，便于 API 侧直接观察分段耗时。"""
     return round(float(seconds) * 1000.0, 3)
+
+
+def _uses_cuda_device(device: str) -> bool:
+    """判断请求设备是否为 CUDA GPU。"""
+    return str(device or "").strip().lower().startswith("cuda")
 
 
 def _decode_image_base64(image_base64: str) -> np.ndarray:
@@ -265,7 +272,13 @@ class YoloeTensorRtTrackEngine:
         """加载 TensorRT engine。"""
         if not self.engine_path.exists():
             raise FileNotFoundError(f"engine not found: {self.engine_path}")
-        print("[YOLOE_TRT_LOAD]", f"engine={self.engine_path}", flush=True)
+        print(
+            "[YOLOE_TRT_LOAD]",
+            f"engine={self.engine_path}",
+            f"device={self.device}",
+            f"gpu={_uses_cuda_device(self.device)}",
+            flush=True,
+        )
         return YOLO(str(self.engine_path))
 
     def _warmup_engine(self) -> None:
@@ -281,6 +294,7 @@ class YoloeTensorRtTrackEngine:
             "[YOLOE_TRT_WARMUP] start",
             f"shape={height}x{width}",
             f"device={self.device}",
+            f"gpu={_uses_cuda_device(self.device)}",
             flush=True,
         )
         with torch.no_grad():
@@ -314,9 +328,16 @@ class YoloeTensorRtTrackEngine:
     def _is_ultralytics_tracker_callback(self, callback) -> bool:
         """判断 callback 是否为 model.track() 自动注册的 tracker 回调。"""
         func = getattr(callback, "func", callback)
+        is_timed_tracker_callback = (
+            getattr(func, "__self__", None) is self
+            and getattr(func, "__name__", "") == "_on_predict_postprocess_end_with_timing"
+        )
         return (
-            getattr(func, "__module__", "") == "ultralytics.trackers.track"
-            and getattr(func, "__name__", "") in {"on_predict_start", "on_predict_postprocess_end"}
+            (
+                getattr(func, "__module__", "") == "ultralytics.trackers.track"
+                and getattr(func, "__name__", "") in {"on_predict_start", "on_predict_postprocess_end"}
+            )
+            or is_timed_tracker_callback
         )
 
     def _clear_ultralytics_tracker_callbacks(self) -> int:
@@ -345,6 +366,94 @@ class YoloeTensorRtTrackEngine:
         self._reset_ultralytics_trackers()
         removed_callbacks = self._clear_ultralytics_tracker_callbacks()
         return removed_callbacks
+
+    def _register_timed_tracker_callbacks(self, *, persist: bool, timings: dict[str, float]) -> None:
+        """注册带计时的 tracker callback，用于拆分 TensorRT YOLOE 和 tracker/ReID 耗时。"""
+        self._clear_ultralytics_tracker_callbacks()
+        self.model.add_callback("on_predict_start", partial(on_predict_start, persist=persist))
+        self.model.add_callback(
+            "on_predict_postprocess_end",
+            partial(self._on_predict_postprocess_end_with_timing, persist=persist, timings=timings),
+        )
+
+    def _on_predict_postprocess_end_with_timing(
+        self,
+        predictor: object,
+        persist: bool = False,
+        timings: dict[str, float] | None = None,
+    ) -> None:
+        """执行 Ultralytics tracker 后处理，并记录 BoT-SORT/ReID 统计。"""
+        callback_t0 = time.perf_counter()
+        timings = timings if timings is not None else {}
+        path, im0s = predictor.batch[:2]
+
+        is_obb = predictor.args.task == "obb"
+        is_stream = predictor.dataset.mode == "stream"
+        tracker_update_seconds = 0.0
+        total_tracker_input_dets = 0
+        total_tracker_output_tracks = 0
+        last_reid_stats: dict[str, Any] = {}
+        for i in range(len(im0s)):
+            tracker = predictor.trackers[i if is_stream else 0]
+            vid_path = predictor.save_dir / Path(path[i]).name
+            if not persist and predictor.vid_path[i if is_stream else 0] != vid_path:
+                tracker.reset()
+                predictor.vid_path[i if is_stream else 0] = vid_path
+
+            det = (predictor.results[i].obb if is_obb else predictor.results[i].boxes).cpu().numpy()
+            total_tracker_input_dets += int(len(det))
+            if len(det) == 0:
+                continue
+
+            update_t0 = time.perf_counter()
+            tracks = tracker.update(det, im0s[i])
+            tracker_update_seconds += time.perf_counter() - update_t0
+            total_tracker_output_tracks += int(len(tracks))
+            last_reid_stats = dict(getattr(tracker, "last_reid_stats", {}) or {})
+            if len(tracks) == 0:
+                continue
+            idx = tracks[:, -1].astype(int)
+            predictor.results[i] = predictor.results[i][idx]
+
+            update_args = {"obb" if is_obb else "boxes": torch.as_tensor(tracks[:, :-1])}
+            predictor.results[i].update(**update_args)
+
+        timings["tracker_update_ms"] = _ms(tracker_update_seconds)
+        timings["tracker_callback_ms"] = _ms(time.perf_counter() - callback_t0)
+        timings["tracker_input_det_count"] = float(total_tracker_input_dets)
+        timings["tracker_output_track_count"] = float(total_tracker_output_tracks)
+        timings["tracker_dropped_count"] = float(max(0, total_tracker_input_dets - total_tracker_output_tracks))
+        timings["tracker_reid_enabled"] = float(1 if last_reid_stats.get("enabled") else 0)
+        timings["tracker_reid_feature_count"] = float(last_reid_stats.get("feature_count", 0) or 0)
+        timings["tracker_reid_feature_dim"] = float(last_reid_stats.get("feature_dim", 0) or 0)
+        timings["tracker_reid_inference_ms"] = float(last_reid_stats.get("inference_ms", 0.0) or 0.0)
+        timings["tracker_reid_backend"] = str(last_reid_stats.get("backend", "none"))
+        timings["tracker_reid_gpu"] = float(1 if last_reid_stats.get("gpu") else 0)
+        timings["tracker_reid_gpu_idx"] = float(last_reid_stats.get("gpu_idx", -1))
+
+    def _track_with_timing(
+        self,
+        *,
+        source: np.ndarray,
+        tracker: str,
+        conf: float,
+        iou: float,
+        imgsz: int | tuple[int, int],
+        timings: dict[str, float],
+    ):
+        """调用 Ultralytics track mode，并把 tracker/ReID 统计写入 timings。"""
+        self._register_timed_tracker_callbacks(persist=True, timings=timings)
+        return self.model.predict(
+            source=source,
+            tracker=tracker,
+            conf=conf,
+            iou=iou,
+            imgsz=imgsz,
+            device=self.device,
+            verbose=False,
+            batch=1,
+            mode="track",
+        )
 
     def reset(self, reason: str = "") -> dict[str, Any]:
         with self.lock:
@@ -384,6 +493,8 @@ class YoloeTensorRtTrackEngine:
                 "class_count": len(self.class_names),
                 "imgsz": self.default_imgsz,
                 "engine_imgsz": self.engine_imgsz,
+                "device": self.device,
+                "gpu": _uses_cuda_device(self.device),
             }
 
     def latest(self) -> dict[str, Any]:
@@ -402,6 +513,9 @@ class YoloeTensorRtTrackEngine:
         lock_t0 = time.perf_counter()
         with self.lock:
             timings["lock_wait_ms"] = _ms(time.perf_counter() - lock_t0)
+            timings["yoloe_trt_gpu"] = float(1 if _uses_cuda_device(self.device) else 0)
+            timings["yoloe_trt_device"] = self.device
+            timings["yoloe_trt_engine"] = str(self.engine_path)
             tracker = req.tracker.strip().lower()
             label_changed = class_id != self.current_class_id
             tracker_changed = tracker != self.current_tracker
@@ -450,15 +564,13 @@ class YoloeTensorRtTrackEngine:
                 )
                 timings["model_predict_ms"] = _ms(time.perf_counter() - t0)
             else:
-                results = self.model.track(
+                results = self._track_with_timing(
                     source=image_rgb,
-                    persist=True,
                     tracker=tracker_cfg,
                     conf=conf,
                     iou=iou,
                     imgsz=imgsz,
-                    device=self.device,
-                    verbose=False,
+                    timings=timings,
                 )
                 timings["model_track_ms"] = _ms(time.perf_counter() - t0)
 

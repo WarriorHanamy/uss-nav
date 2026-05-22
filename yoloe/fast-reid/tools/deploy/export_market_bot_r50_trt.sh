@@ -10,9 +10,10 @@ python3 tools/deploy/onnx_export.py \
   --config-file configs/Market1501/bagtricks_R50.yml \
   --name market_bot_R50 \
   --output outputs/onnx_model \
+  --batch-size 16 \
   --opts MODEL.WEIGHTS weights/market_bot_R50.pth MODEL.DEVICE cuda:0
 
-python3 tools/deploy/trt_export.py \
+PYTHONPATH=$PWD:$PYTHONPATH python3 tools/deploy/trt_export.py \
   --name market_bot_R50 \
   --output outputs/trt_model \
   --mode fp16 \

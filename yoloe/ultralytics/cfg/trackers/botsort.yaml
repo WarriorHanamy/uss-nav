@@ -16,7 +16,7 @@ gmc_method: sparseOptFlow # method of global motion compensation
 proximity_thresh: 0.7
 appearance_thresh: 0.5
 with_reid: True
-reid_backend: fastreid # fastreid / tensorrt
+reid_backend: tensorrt # fastreid / tensorrt
 fast_reid_root: fast-reid
 fast_reid_config: fast-reid/configs/Market1501/bagtricks_R50.yml
 fast_reid_weights: fast-reid/weights/market_bot_R50.pth

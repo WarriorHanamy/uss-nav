@@ -175,7 +175,7 @@ class YoloeDetectorNode:
     def __init__(self):
         # 参数配置
         self.model_path          = rospy.get_param('~model_path', './prompt/yoloe_pretrain/yoloe-11m-seg-pf.pt')
-        self.prompt_model_path   = rospy.get_param('~prompt_model_path', './yoloe-v8m-seg-test.engine')
+        self.prompt_model_path   = rospy.get_param('~prompt_model_path', './yoloe-v8m-seg.pt')
         self.prompt_file_path     = rospy.get_param('~prompt_file_path', './prompt/prompt2.txt')
 
         self.clip_model_type     = rospy.get_param('~clip_model_type','mobileclip_b')
@@ -198,7 +198,7 @@ class YoloeDetectorNode:
         self.debug               = rospy.get_param('~debug', False)
         self.time_slop           = rospy.get_param('~time_slop', 0.005) # RGB-D 同步容差
 
-        self.export_mode         = rospy.get_param('~export_mode', False)
+        self.export_mode         = rospy.get_param('~export_mode', True)
 
         # [修改] 新增参数：Odom同步的最大时间差容限
         self.odom_sync_slop      = rospy.get_param('~odom_sync_slop', 0.005)
