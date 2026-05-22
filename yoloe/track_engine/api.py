@@ -353,6 +353,9 @@ class YoloeTrackEngine:
         is_obb = predictor.args.task == "obb"
         is_stream = predictor.dataset.mode == "stream"
         tracker_update_seconds = 0.0
+        total_tracker_input_dets = 0
+        total_tracker_output_tracks = 0
+        last_reid_stats: dict[str, Any] = {}
         for i in range(len(im0s)):
             tracker = predictor.trackers[i if is_stream else 0]
             vid_path = predictor.save_dir / Path(path[i]).name
@@ -361,6 +364,7 @@ class YoloeTrackEngine:
                 predictor.vid_path[i if is_stream else 0] = vid_path
 
             det = (predictor.results[i].obb if is_obb else predictor.results[i].boxes).cpu().numpy()
+            total_tracker_input_dets += int(len(det))
             if len(det) == 0:
                 continue
 
@@ -368,6 +372,8 @@ class YoloeTrackEngine:
             update_t0 = time.perf_counter()
             tracks = tracker.update(det, im0s[i])
             tracker_update_seconds += time.perf_counter() - update_t0
+            total_tracker_output_tracks += int(len(tracks))
+            last_reid_stats = dict(getattr(tracker, "last_reid_stats", {}) or {})
             if len(tracks) == 0:
                 continue
             idx = tracks[:, -1].astype(int)
@@ -378,6 +384,14 @@ class YoloeTrackEngine:
 
         timings["tracker_update_ms"] = _ms(tracker_update_seconds)
         timings["tracker_callback_ms"] = _ms(time.perf_counter() - callback_t0)
+        timings["tracker_input_det_count"] = float(total_tracker_input_dets)
+        timings["tracker_output_track_count"] = float(total_tracker_output_tracks)
+        timings["tracker_dropped_count"] = float(max(0, total_tracker_input_dets - total_tracker_output_tracks))
+        timings["tracker_reid_enabled"] = float(1 if last_reid_stats.get("enabled") else 0)
+        timings["tracker_reid_feature_count"] = float(last_reid_stats.get("feature_count", 0) or 0)
+        timings["tracker_reid_feature_dim"] = float(last_reid_stats.get("feature_dim", 0) or 0)
+        timings["tracker_reid_inference_ms"] = float(last_reid_stats.get("inference_ms", 0.0) or 0.0)
+        timings["tracker_reid_backend"] = str(last_reid_stats.get("backend", "none"))
 
     def _track_with_timing(
         self,
@@ -435,6 +449,14 @@ class YoloeTrackEngine:
             f"model_track_ms={timings.get('model_track_ms', 0.0)}",
             f"total_ms={timings.get('total_ms', 0.0)}",
             f"candidate_count={int(timings.get('candidate_count', 0.0))}",
+            f"tracker_dets={int(timings.get('tracker_input_det_count', 0.0))}",
+            f"tracker_tracks={int(timings.get('tracker_output_track_count', 0.0))}",
+            f"tracker_dropped={int(timings.get('tracker_dropped_count', 0.0))}",
+            f"reid_enabled={bool(timings.get('tracker_reid_enabled', 0.0))}",
+            f"reid_backend={timings.get('tracker_reid_backend', 'none')}",
+            f"reid_features={int(timings.get('tracker_reid_feature_count', 0.0))}",
+            f"reid_dim={int(timings.get('tracker_reid_feature_dim', 0.0))}",
+            f"reid_ms={timings.get('tracker_reid_inference_ms', 0.0)}",
             flush=True,
         )
 

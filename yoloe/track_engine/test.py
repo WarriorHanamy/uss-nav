@@ -160,7 +160,7 @@ class YoloeTrackTestClient:
         score = float(result.get("score") or 0.0)
         track_id = result.get("track_id")
 
-        color = (0, 220, 0) if ok else (0, 170, 255)
+        color = (0, 220, 0) if ok else (0, 0, 255)
         if bbox is not None and len(bbox) >= 4:
             x1, y1, x2, y2 = [int(v) for v in bbox[:4]]
             cv2.rectangle(image_bgr, (x1, y1), (x2, y2), color, 2)
@@ -176,6 +176,7 @@ class YoloeTrackTestClient:
                 cv2.LINE_AA,
             )
 
+        timings = result.get("timings") or {}
         status = f"{state}: {reason}" if reason else state
         cv2.putText(
             image_bgr,
@@ -183,6 +184,22 @@ class YoloeTrackTestClient:
             (12, 28),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
+            color,
+            2,
+            cv2.LINE_AA,
+        )
+        reid_line = (
+            f"drop={int(timings.get('tracker_dropped_count') or 0)} "
+            f"reid={timings.get('tracker_reid_backend', 'none')} "
+            f"{int(timings.get('tracker_reid_feature_count') or 0)}x{int(timings.get('tracker_reid_feature_dim') or 0)} "
+            f"{float(timings.get('tracker_reid_inference_ms') or 0.0):.1f}ms"
+        )
+        cv2.putText(
+            image_bgr,
+            reid_line,
+            (12, 56),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.62,
             color,
             2,
             cv2.LINE_AA,

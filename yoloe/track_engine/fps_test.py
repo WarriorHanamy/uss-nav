@@ -252,7 +252,7 @@ class YoloeTrackFpsClient:
         track_id = result.get("track_id")
         timings = result.get("timings") or {}
 
-        color = (0, 220, 0) if ok else (0, 170, 255)
+        color = (0, 220, 0) if ok else (0, 0, 255)
         if bbox is not None and len(bbox) >= 4:
             x1, y1, x2, y2 = [int(v) for v in bbox[:4]]
             cv2.rectangle(image_bgr, (x1, y1), (x2, y2), color, 2)
@@ -262,7 +262,8 @@ class YoloeTrackFpsClient:
         lines = [
             f"in={self.input_stats.fps():.1f}Hz api={self.process_stats.fps():.1f}Hz rtt={rtt_ms:.1f}ms",
             f"srv_total={float(timings.get('total_ms') or 0.0):.1f}ms model={float(timings.get('model_track_ms') or 0.0):.1f}ms",
-            f"decode={float(timings.get('decode_ms') or 0.0):.1f}ms candidates={int(timings.get('candidate_count') or 0)}",
+            f"decode={float(timings.get('decode_ms') or 0.0):.1f}ms candidates={int(timings.get('candidate_count') or 0)} dropped={int(timings.get('tracker_dropped_count') or 0)}",
+            f"reid={timings.get('tracker_reid_backend', 'none')} feat={int(timings.get('tracker_reid_feature_count') or 0)}x{int(timings.get('tracker_reid_feature_dim') or 0)} {float(timings.get('tracker_reid_inference_ms') or 0.0):.1f}ms",
             f"{state}: {reason}" if reason else state,
         ]
         y = 26

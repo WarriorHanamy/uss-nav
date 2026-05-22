@@ -190,15 +190,17 @@ class BOTSORT(BYTETracker):
         self.appearance_thresh = args.appearance_thresh
 
         self.encoder = None
+        self.last_reid_stats = {
+            "enabled": False,
+            "backend": "none",
+            "feature_count": 0,
+            "feature_dim": 0,
+            "inference_ms": 0.0,
+        }
         if args.with_reid:
-            from .utils.reid import FastReIDEncoder
+            from .utils.reid import build_reid_encoder
 
-            self.encoder = FastReIDEncoder(
-                config_path=args.fast_reid_config,
-                weights_path=args.fast_reid_weights,
-                device=getattr(args, "reid_device", "cuda:0"),
-                root_path=getattr(args, "fast_reid_root", "fast-reid"),
-            )
+            self.encoder = build_reid_encoder(args)
         self.gmc = GMC(method=args.gmc_method)
 
     def get_kalmanfilter(self):
@@ -211,8 +213,23 @@ class BOTSORT(BYTETracker):
             return []
         if self.args.with_reid and self.encoder is not None:
             features_keep = self.encoder.inference(img, dets)
+            encoder_stats = getattr(self.encoder, "last_stats", {}) or {}
+            self.last_reid_stats = {
+                "enabled": True,
+                "backend": str(encoder_stats.get("backend", getattr(self.args, "reid_backend", "unknown"))),
+                "feature_count": int(encoder_stats.get("feature_count", len(features_keep))),
+                "feature_dim": int(encoder_stats.get("feature_dim", features_keep.shape[1] if features_keep.ndim >= 2 else 0)),
+                "inference_ms": float(encoder_stats.get("inference_ms", 0.0)),
+            }
             return [BOTrack(xyxy, s, c, f) for (xyxy, s, c, f) in zip(dets, scores, cls, features_keep)]  # detections
         else:
+            self.last_reid_stats = {
+                "enabled": False,
+                "backend": "none",
+                "feature_count": 0,
+                "feature_dim": 0,
+                "inference_ms": 0.0,
+            }
             return [BOTrack(xyxy, s, c) for (xyxy, s, c) in zip(dets, scores, cls)]  # detections
 
     def get_dists(self, tracks, detections):
