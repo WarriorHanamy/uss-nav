@@ -237,6 +237,7 @@ class YoloeTensorRtTrackEngine:
         self._pipeline_generation = 0
         self._pipeline_tracker = None
         self._pipeline_tracker_name = ""
+        self._pipeline_tracker_lock = threading.Lock()
         self._pipeline_detector_thread = None
         self._pipeline_tracker_thread = None
         if self.pipeline_track:
@@ -382,8 +383,8 @@ class YoloeTensorRtTrackEngine:
             raise ValueError(f"unsupported tracker type: {cfg.tracker_type}")
         return TRACKER_MAP[cfg.tracker_type](args=cfg, frame_rate=30)
 
-    def _reset_pipeline_locked(self) -> None:
-        """清空服务端流水线排队帧；tracker 状态由下一帧按需重建。"""
+    def _clear_pipeline_queues_locked(self) -> None:
+        """清空服务端流水线排队帧，并让正在处理的旧帧失效。"""
         self._pipeline_generation += 1
         with self._pipeline_cond:
             self._pipeline_pending_frame = None
@@ -391,8 +392,44 @@ class YoloeTensorRtTrackEngine:
         with self._pipeline_det_cond:
             self._pipeline_pending_detection = None
             self._pipeline_det_cond.notify_all()
+
+    def _drop_pipeline_tracker_locked(self) -> None:
+        """彻底丢弃 pipeline tracker；仅用于 tracker 类型切换等必须重建的场景。"""
         self._pipeline_tracker = None
         self._pipeline_tracker_name = ""
+
+    def _reset_pipeline_tracker_state_locked(self, timings: dict[str, float] | None = None) -> None:
+        """重置 tracker 轨迹/GMC 状态，但保留 ReID encoder，避免 TensorRT ReID 反复初始化。"""
+        tracker = self._pipeline_tracker
+        if tracker is None:
+            if timings is not None:
+                timings["pipeline_tracker_reset"] = 0.0
+            return
+        reset_t0 = time.perf_counter()
+        with self._pipeline_tracker_lock:
+            if hasattr(tracker, "reset"):
+                tracker.reset()
+        if timings is not None:
+            timings["pipeline_tracker_reset"] = 1.0
+            timings["pipeline_tracker_reset_ms"] = _ms(time.perf_counter() - reset_t0)
+
+    def _reset_pipeline_locked(
+        self,
+        *,
+        reset_tracker_state: bool = True,
+        drop_tracker: bool = False,
+        timings: dict[str, float] | None = None,
+    ) -> None:
+        """清空错帧队列；按需重置轨迹状态或丢弃 tracker 对象。"""
+        self._clear_pipeline_queues_locked()
+        if drop_tracker:
+            with self._pipeline_tracker_lock:
+                self._drop_pipeline_tracker_locked()
+            if timings is not None:
+                timings["pipeline_tracker_dropped"] = 1.0
+            return
+        if reset_tracker_state:
+            self._reset_pipeline_tracker_state_locked(timings=timings)
 
     def _submit_pipeline_frame(
         self,
@@ -519,15 +556,41 @@ class YoloeTensorRtTrackEngine:
             with self.lock:
                 if frame.generation != self._pipeline_generation:
                     return
-                if self._pipeline_tracker is None or self._pipeline_tracker_name != frame.tracker:
+            with self._pipeline_tracker_lock:
+                if frame.generation != self._pipeline_generation:
+                    return
+                build_t0 = time.perf_counter()
+                tracker_reused = self._pipeline_tracker is not None and self._pipeline_tracker_name == frame.tracker
+                if not tracker_reused:
                     self._pipeline_tracker = self._build_pipeline_tracker(frame.tracker)
                     self._pipeline_tracker_name = frame.tracker
+                    timings["pipeline_tracker_build_ms"] = _ms(time.perf_counter() - build_t0)
+                timings["pipeline_tracker_reused"] = float(1 if tracker_reused else 0)
                 tracker = self._pipeline_tracker
 
-            boxes = detection.boxes
+                boxes = detection.boxes
+                if boxes is None or len(boxes) == 0:
+                    tracks = []
+                    timings["tracker_input_det_count"] = 0.0
+                    timings["tracker_output_track_count"] = 0.0
+                    timings["tracker_update_ms"] = 0.0
+                else:
+                    tracker_t0 = time.perf_counter()
+                    tracks = tracker.update(boxes, frame.image_rgb)
+                    timings["tracker_update_ms"] = _ms(time.perf_counter() - tracker_t0)
+                    reid_stats = dict(getattr(tracker, "last_reid_stats", {}) or {})
+                    timings["tracker_reid_enabled"] = float(1 if reid_stats.get("enabled") else 0)
+                    timings["tracker_reid_feature_count"] = float(reid_stats.get("feature_count", 0) or 0)
+                    timings["tracker_reid_feature_dim"] = float(reid_stats.get("feature_dim", 0) or 0)
+                    timings["tracker_reid_inference_ms"] = float(reid_stats.get("inference_ms", 0.0) or 0.0)
+                    timings["tracker_reid_backend"] = str(reid_stats.get("backend", "none"))
+                    timings["tracker_reid_gpu"] = float(1 if reid_stats.get("gpu") else 0)
+                    timings["tracker_reid_gpu_idx"] = float(reid_stats.get("gpu_idx", -1))
+                    timings["tracker_input_det_count"] = float(len(boxes))
+                    timings["tracker_output_track_count"] = float(len(tracks))
+                    timings["tracker_dropped_count"] = float(max(0, len(boxes) - len(tracks)))
+
             if boxes is None or len(boxes) == 0:
-                timings["tracker_input_det_count"] = 0.0
-                timings["tracker_output_track_count"] = 0.0
                 timings["total_ms"] = _ms(time.perf_counter() - total_t0)
                 with self.lock:
                     if frame.generation != self._pipeline_generation:
@@ -539,21 +602,6 @@ class YoloeTensorRtTrackEngine:
                         timings=timings,
                     )
                 return
-
-            tracker_t0 = time.perf_counter()
-            tracks = tracker.update(boxes, frame.image_rgb)
-            timings["tracker_update_ms"] = _ms(time.perf_counter() - tracker_t0)
-            reid_stats = dict(getattr(tracker, "last_reid_stats", {}) or {})
-            timings["tracker_reid_enabled"] = float(1 if reid_stats.get("enabled") else 0)
-            timings["tracker_reid_feature_count"] = float(reid_stats.get("feature_count", 0) or 0)
-            timings["tracker_reid_feature_dim"] = float(reid_stats.get("feature_dim", 0) or 0)
-            timings["tracker_reid_inference_ms"] = float(reid_stats.get("inference_ms", 0.0) or 0.0)
-            timings["tracker_reid_backend"] = str(reid_stats.get("backend", "none"))
-            timings["tracker_reid_gpu"] = float(1 if reid_stats.get("gpu") else 0)
-            timings["tracker_reid_gpu_idx"] = float(reid_stats.get("gpu_idx", -1))
-            timings["tracker_input_det_count"] = float(len(boxes))
-            timings["tracker_output_track_count"] = float(len(tracks))
-            timings["tracker_dropped_count"] = float(max(0, len(boxes) - len(tracks)))
 
             candidates = self._extract_candidates_from_tracks(tracks, frame.image_rgb)
             candidates = [item for item in candidates if int(item["cls"]) == int(frame.class_id)]
@@ -847,10 +895,10 @@ class YoloeTensorRtTrackEngine:
             new_target_started = False
 
             if pipeline_rebind:
-                self._reset_pipeline_locked()
+                self._reset_pipeline_locked(timings=timings)
             if req.reset or label_changed or tracker_changed:
                 t0 = time.perf_counter()
-                self._reset_pipeline_locked()
+                self._reset_pipeline_locked(drop_tracker=tracker_changed, timings=timings)
                 removed_callbacks = self._reset_predictor_and_tracker_state()
                 timings["clear_tracker_callbacks"] = float(removed_callbacks)
                 timings["clear_state_ms"] = _ms(time.perf_counter() - t0)
