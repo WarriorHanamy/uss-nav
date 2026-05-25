@@ -13,6 +13,7 @@ python3 tools/deploy/onnx_export.py \
   --batch-size 16 \
   --opts MODEL.WEIGHTS weights/market_bot_R50.pth MODEL.DEVICE cuda:0
 
+export PYTHONPATH=$PWD:$PYTHONPATH
 PYTHONPATH=$PWD:$PYTHONPATH python3 tools/deploy/trt_export.py \
   --name market_bot_R50 \
   --output outputs/trt_model \

@@ -73,74 +73,144 @@ class HostDeviceMem(object):
 class TrtEngine:
 
     def __init__(self, trt_file=None, gpu_idx=0, batch_size=1):
+        print("[DEBUG] LOADED PATCHED TrtEngine from fast-reid/tools/deploy/trt_inference.py")
         cuda.init()
         self._batch_size = batch_size
         self._device_ctx = cuda.Device(gpu_idx).make_context()
         self._engine = self._load_engine(trt_file)
         self._context = self._engine.create_execution_context()
-        self._input, self._output, self._bindings, self._stream = self._allocate_buffers(self._context)
+
+        self._is_trt10 = hasattr(self._engine, "num_io_tensors")
+
+        self._input, self._output, self._bindings, self._stream, self._tensor_names = \
+            self._allocate_buffers(self._context)
 
     def _load_engine(self, trt_file):
-        """
-        Load tensorrt engine.
-        :param trt_file:    tensorrt file.
-        :return:
-            ICudaEngine
-        """
-        with open(trt_file, "rb") as f, \
-                trt.Runtime(TRT_LOGGER) as runtime:
+        with open(trt_file, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
             engine = runtime.deserialize_cuda_engine(f.read())
+        if engine is None:
+            raise RuntimeError("Failed to deserialize TensorRT engine: {}".format(trt_file))
         return engine
 
+    def _get_io_tensors(self):
+        """
+        Return list of (index, name, is_input, dtype, shape)
+        compatible with TensorRT 8.x and TensorRT 10.x.
+        """
+        tensors = []
+
+        if hasattr(self._engine, "num_io_tensors"):
+            # TensorRT 10.x
+            for i in range(self._engine.num_io_tensors):
+                name = self._engine.get_tensor_name(i)
+                mode = self._engine.get_tensor_mode(name)
+                is_input = mode == trt.TensorIOMode.INPUT
+                dtype = trt.nptype(self._engine.get_tensor_dtype(name))
+                shape = tuple(self._engine.get_tensor_shape(name))
+                tensors.append((i, name, is_input, dtype, shape))
+        else:
+            # TensorRT 8.x
+            for i in range(self._engine.num_bindings):
+                name = self._engine.get_binding_name(i)
+                is_input = self._engine.binding_is_input(i)
+                dtype = trt.nptype(self._engine.get_binding_dtype(i))
+                shape = tuple(self._engine.get_binding_shape(i))
+                tensors.append((i, name, is_input, dtype, shape))
+
+        return tensors
+
+    def _fix_shape(self, shape):
+        """
+        Replace dynamic dims like -1 with current batch size.
+        For ReID model, expected input is usually [B, 3, 256, 128].
+        """
+        fixed = []
+        for dim in shape:
+            if dim < 0:
+                fixed.append(self._batch_size)
+            else:
+                fixed.append(dim)
+        return tuple(fixed)
+
     def _allocate_buffers(self, context):
-        """
-        Allocate device memory space for data.
-        :param context:
-        :return:
-        """
         inputs = []
         outputs = []
         bindings = []
+        tensor_names = []
         stream = cuda.Stream()
-        for binding in self._engine:
-            size = trt.volume(self._engine.get_binding_shape(binding)) * self._engine.max_batch_size
-            dtype = trt.nptype(self._engine.get_binding_dtype(binding))
-            # Allocate host and device buffers
+
+        io_tensors = self._get_io_tensors()
+
+        # TensorRT 10: if input shape is dynamic, set it before allocating.
+        if self._is_trt10:
+            for _, name, is_input, _, shape in io_tensors:
+                if is_input and any(d < 0 for d in shape):
+                    fixed_shape = self._fix_shape(shape)
+                    context.set_input_shape(name, fixed_shape)
+
+        for idx, name, is_input, dtype, shape in io_tensors:
+            if self._is_trt10:
+                # After setting input shape, query context shape when possible.
+                try:
+                    real_shape = tuple(context.get_tensor_shape(name))
+                except Exception:
+                    real_shape = shape
+            else:
+                real_shape = shape
+
+            real_shape = self._fix_shape(real_shape)
+
+            size = trt.volume(real_shape)
+            if size <= 0:
+                raise RuntimeError(
+                    "Invalid TensorRT tensor shape: name={}, shape={}, real_shape={}".format(
+                        name, shape, real_shape
+                    )
+                )
+
             host_mem = cuda.pagelocked_empty(size, dtype)
             device_mem = cuda.mem_alloc(host_mem.nbytes)
-            # Append the device buffer to device bindings.
+
             bindings.append(int(device_mem))
-            # Append to the appropriate list.
-            if self._engine.binding_is_input(binding):
+            tensor_names.append(name)
+
+            if is_input:
                 inputs.append(HostDeviceMem(host_mem, device_mem))
             else:
                 outputs.append(HostDeviceMem(host_mem, device_mem))
-        return inputs, outputs, bindings, stream
+
+            print("[TRT_IO] name={}, is_input={}, dtype={}, shape={}, size={}".format(
+                name, is_input, dtype, real_shape, size
+            ))
+
+        return inputs, outputs, bindings, stream, tensor_names
 
     def infer(self, data):
-        """
-        Real inference process.
-        :param model:   Model objects
-        :param data:    Preprocessed data
-        :return:
-            output
-        """
-        # Copy data to input memory buffer
         [np.copyto(_inp.host, data.ravel()) for _inp in self._input]
-        # Push to device
+
         self._device_ctx.push()
-        # Transfer input data to the GPU.
-        # cuda.memcpy_htod_async(self._input.device, self._input.host, self._stream)
-        [cuda.memcpy_htod_async(inp.device, inp.host, self._stream) for inp in self._input]
-        # Run inference.
-        self._context.execute_async_v2(bindings=self._bindings, stream_handle=self._stream.handle)
-        # Transfer predictions back from the GPU.
-        # cuda.memcpy_dtoh_async(self._output.host, self._output.device, self._stream)
-        [cuda.memcpy_dtoh_async(out.host, out.device, self._stream) for out in self._output]
-        # Synchronize the stream
-        self._stream.synchronize()
-        # Pop the device
-        self._device_ctx.pop()
+
+        try:
+            [cuda.memcpy_htod_async(inp.device, inp.host, self._stream) for inp in self._input]
+
+            if self._is_trt10:
+                # TensorRT 10.x: bind tensor addresses by name.
+                for name, ptr in zip(self._tensor_names, self._bindings):
+                    self._context.set_tensor_address(name, int(ptr))
+
+                self._context.execute_async_v3(stream_handle=self._stream.handle)
+            else:
+                # TensorRT 8.x
+                self._context.execute_async_v2(
+                    bindings=self._bindings,
+                    stream_handle=self._stream.handle
+                )
+
+            [cuda.memcpy_dtoh_async(out.host, out.device, self._stream) for out in self._output]
+            self._stream.synchronize()
+
+        finally:
+            self._device_ctx.pop()
 
         return [out.host.reshape(self._batch_size, -1) for out in self._output[::-1]]
 
@@ -153,7 +223,13 @@ class TrtEngine:
 
         valid_bsz = trt_inputs.shape[0]
         if valid_bsz < self._batch_size:
-            trt_inputs = np.vstack([trt_inputs, np.zeros((self._batch_size - valid_bsz, 3, *new_size))])
+            trt_inputs = np.vstack([
+                trt_inputs,
+                np.zeros(
+                    (self._batch_size - valid_bsz, 3, *new_size),
+                    dtype=np.float32
+                )
+            ])
 
         result, = self.infer(trt_inputs)
         result = result[:valid_bsz]
@@ -162,22 +238,23 @@ class TrtEngine:
 
     @classmethod
     def preprocess(cls, img, img_height, img_width):
-        # Apply pre-processing to image.
         resize_img = cv2.resize(img, (img_width, img_height), interpolation=cv2.INTER_CUBIC)
-        type_img = resize_img.astype("float32").transpose(2, 0, 1)[np.newaxis]  # (1, 3, h, w)
+        type_img = resize_img.astype("float32").transpose(2, 0, 1)[np.newaxis]
         return type_img
 
     @classmethod
     def postprocess(cls, nparray, order=2, axis=-1):
-        """Normalize a N-D numpy array along the specified axis."""
         norm = np.linalg.norm(nparray, ord=order, axis=axis, keepdims=True)
         return nparray / (norm + np.finfo(np.float32).eps)
 
     def __del__(self):
-        del self._input
-        del self._output
-        del self._stream
-        self._device_ctx.detach()  # release device context
+        try:
+            del self._input
+            del self._output
+            del self._stream
+            self._device_ctx.detach()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

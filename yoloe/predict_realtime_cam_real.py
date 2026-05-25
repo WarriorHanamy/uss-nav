@@ -174,9 +174,9 @@ class OdometryBuffer:
 class YoloeDetectorNode:
     def __init__(self):
         # 参数配置
-        self.model_path          = rospy.get_param('~model_path', './prompt/yoloe_pretrain/yoloe-11m-seg-pf.pt')
-        self.prompt_model_path   = rospy.get_param('~prompt_model_path', './yoloe-v8m-seg.pt')
-        self.prompt_file_path     = rospy.get_param('~prompt_file_path', './prompt/prompt2.txt')
+        self.model_path          = rospy.get_param('~model_path', './yoloe-v8m-seg2.pt')
+        self.prompt_model_path   = rospy.get_param('~prompt_model_path', './yoloe-v8m-seg2.pt')
+        self.prompt_file_path     = rospy.get_param('~prompt_file_path', './prompt/prompt.txt')
 
         self.clip_model_type     = rospy.get_param('~clip_model_type','mobileclip_b')
         self.clip_model_path     = rospy.get_param('~clip_model_path', './mobileclip_blt.pt')

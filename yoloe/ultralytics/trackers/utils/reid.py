@@ -187,18 +187,23 @@ class TensorRTReIDEncoder:
         self.cuda = cuda
         self.trt = trt
         self.trt_logger = trt.Logger(trt.Logger.ERROR)
+
         self.cuda.init()
         self.device_ctx = self.cuda.Device(self.gpu_idx).retain_primary_context()
+
         self.device_ctx.push()
         try:
             self.engine = self._load_engine()
             self.context = self.engine.create_execution_context()
+            self.trt10 = self._is_trt10()
             self.inputs, self.outputs, self.bindings, self.stream = self._allocate_buffers()
         finally:
             self.device_ctx.pop()
+
         self.input_shape = tuple(int(v) for v in self.inputs[0]["shape"])
         self.engine_batch_size = int(self.input_shape[0])
         self.batch_size = min(self.batch_size, self.engine_batch_size)
+
         self.backend = "tensorrt"
         self.valid_indices = []
         self.last_stats = {
@@ -207,9 +212,12 @@ class TensorRTReIDEncoder:
             "feature_dim": 0,
             "inference_ms": 0.0,
         }
+
         print(
             "[ReID][TensorRT] initialized",
             f"engine={self.engine_path}",
+            f"trt_version={self.trt.__version__}",
+            f"trt10={self.trt10}",
             f"gpu=True",
             f"gpu_idx={self.gpu_idx}",
             "cuda_context=primary",
@@ -235,50 +243,198 @@ class TensorRTReIDEncoder:
             raise RuntimeError(f"failed to deserialize TensorRT ReID engine: {self.engine_path}")
         return engine
 
-    def _binding_shape(self, binding):
-        if isinstance(binding, int):
-            return tuple(int(v) for v in self.engine.get_binding_shape(binding))
-        return tuple(int(v) for v in self.engine.get_binding_shape(binding))
+    def _is_trt10(self) -> bool:
+        """
+        TensorRT 10 使用 tensor API：
+          engine.num_io_tensors
+          engine.get_tensor_name()
+          engine.get_tensor_mode()
+          context.set_tensor_address()
+          context.execute_async_v3()
 
-    def _binding_dtype(self, binding):
-        return self.trt.nptype(self.engine.get_binding_dtype(binding))
+        TensorRT 8 使用 binding API：
+          engine.num_bindings
+          engine.get_binding_name()
+          engine.binding_is_input()
+          context.execute_async_v2()
+        """
+        return hasattr(self.engine, "num_io_tensors")
 
-    def _binding_is_input(self, binding) -> bool:
-        return bool(self.engine.binding_is_input(binding))
+    def _engine_io(self) -> list[dict]:
+        """返回 engine 的输入输出信息，兼容 TensorRT 8 和 TensorRT 10。"""
+        items = []
+
+        if self._is_trt10():
+            for i in range(self.engine.num_io_tensors):
+                name = self.engine.get_tensor_name(i)
+                is_input = self.engine.get_tensor_mode(name) == self.trt.TensorIOMode.INPUT
+                shape = tuple(int(v) for v in self.engine.get_tensor_shape(name))
+                dtype = self.trt.nptype(self.engine.get_tensor_dtype(name))
+                items.append(
+                    {
+                        "index": i,
+                        "name": name,
+                        "is_input": bool(is_input),
+                        "shape": shape,
+                        "dtype": dtype,
+                    }
+                )
+        else:
+            for i in range(self.engine.num_bindings):
+                name = self.engine.get_binding_name(i)
+                is_input = bool(self.engine.binding_is_input(i))
+                shape = tuple(int(v) for v in self.engine.get_binding_shape(i))
+                dtype = self.trt.nptype(self.engine.get_binding_dtype(i))
+                items.append(
+                    {
+                        "index": i,
+                        "name": name,
+                        "is_input": is_input,
+                        "shape": shape,
+                        "dtype": dtype,
+                    }
+                )
+
+        if not items:
+            raise RuntimeError("TensorRT ReID engine has no IO tensors/bindings")
+
+        return items
+
+    def _fix_dynamic_input_shape(self, shape: tuple[int, ...]) -> tuple[int, ...]:
+        """
+        修复动态输入 shape。
+        FastReID TensorRT engine 通常是 BCHW：
+          B, 3, H, W
+        """
+        if len(shape) != 4:
+            raise RuntimeError(f"Unsupported TensorRT ReID input shape: {shape}")
+
+        fixed = []
+        for i, dim in enumerate(shape):
+            if dim >= 0:
+                fixed.append(int(dim))
+                continue
+
+            if i == 0:
+                fixed.append(int(self.batch_size))
+            elif i == 1:
+                fixed.append(3)
+            elif i == 2:
+                fixed.append(int(self.input_size[0]))
+            elif i == 3:
+                fixed.append(int(self.input_size[1]))
+            else:
+                raise RuntimeError(f"Unsupported dynamic TensorRT ReID input shape: {shape}")
+
+        return tuple(fixed)
+
+    def _get_context_shape(self, item: dict) -> tuple[int, ...]:
+        """读取 context 中当前 tensor/binding shape。"""
+        if self._is_trt10():
+            return tuple(int(v) for v in self.context.get_tensor_shape(item["name"]))
+        return tuple(int(v) for v in self.context.get_binding_shape(item["index"]))
+
+    def _set_input_shape_if_dynamic(self, item: dict) -> tuple[int, ...]:
+        """如果输入是动态 shape，则设置运行时 shape，并返回最终 shape。"""
+        shape = tuple(int(v) for v in item["shape"])
+
+        if any(dim < 0 for dim in shape):
+            fixed_shape = self._fix_dynamic_input_shape(shape)
+            if self._is_trt10():
+                ok = self.context.set_input_shape(item["name"], fixed_shape)
+                if ok is False:
+                    raise RuntimeError(
+                        f"TensorRT ReID set_input_shape failed: name={item['name']}, shape={fixed_shape}"
+                    )
+            else:
+                self.context.set_binding_shape(item["index"], fixed_shape)
+
+        final_shape = self._get_context_shape(item)
+
+        if any(dim < 0 for dim in final_shape):
+            raise RuntimeError(
+                f"TensorRT ReID input has unresolved dynamic shape: "
+                f"name={item['name']}, original={shape}, final={final_shape}"
+            )
+
+        return final_shape
 
     def _allocate_buffers(self):
-        input_shapes = {}
-        for binding in self.engine:
-            if not self._binding_is_input(binding):
-                continue
-            index = self.engine.get_binding_index(binding)
-            shape = self._binding_shape(binding)
-            if any(dim < 0 for dim in shape):
-                shape = (self.batch_size, 3, self.input_size[0], self.input_size[1])
-                self.context.set_binding_shape(index, shape)
-            input_shapes[index] = shape
+        """
+        分配 TensorRT 输入输出显存/页锁定内存。
 
+        兼容：
+        - TensorRT 8: binding API + execute_async_v2
+        - TensorRT 10: tensor API + set_tensor_address + execute_async_v3
+        """
         inputs, outputs, bindings = [], [], []
         stream = self.cuda.Stream()
-        for binding in self.engine:
-            index = self.engine.get_binding_index(binding)
-            shape = input_shapes.get(index)
-            if shape is None:
-                shape = tuple(int(v) for v in self.context.get_binding_shape(index))
-            if any(dim < 0 for dim in shape):
-                raise RuntimeError(f"TensorRT ReID binding has unresolved dynamic shape: {binding} {shape}")
-            size = int(self.trt.volume(shape))
-            dtype = self._binding_dtype(binding)
-            host_mem = self.cuda.pagelocked_empty(size, dtype)
-            device_mem = self.cuda.mem_alloc(host_mem.nbytes)
-            bindings.append(int(device_mem))
-            item = {"host": host_mem, "device": device_mem, "shape": shape, "dtype": dtype, "name": str(binding)}
-            if self._binding_is_input(binding):
-                inputs.append(item)
+
+        io_items = self._engine_io()
+
+        # 1. 先设置输入 shape。输出 shape 需要在输入 shape 确定之后读取。
+        for item in io_items:
+            if not item["is_input"]:
+                continue
+            item["shape"] = self._set_input_shape_if_dynamic(item)
+
+        # 2. 再读取输出 shape，并分配 buffer。
+        for item in io_items:
+            if item["is_input"]:
+                shape = tuple(int(v) for v in item["shape"])
             else:
-                outputs.append(item)
+                shape = self._get_context_shape(item)
+                item["shape"] = shape
+
+            if any(dim < 0 for dim in shape):
+                raise RuntimeError(
+                    f"TensorRT ReID tensor has unresolved dynamic shape: "
+                    f"name={item['name']}, shape={shape}"
+                )
+
+            size = int(self.trt.volume(shape))
+            if size <= 0:
+                raise RuntimeError(
+                    f"TensorRT ReID tensor has invalid size: "
+                    f"name={item['name']}, shape={shape}, size={size}"
+                )
+
+            host_mem = self.cuda.pagelocked_empty(size, item["dtype"])
+            device_mem = self.cuda.mem_alloc(host_mem.nbytes)
+
+            bindings.append(int(device_mem))
+
+            mem_item = {
+                "host": host_mem,
+                "device": device_mem,
+                "shape": shape,
+                "dtype": item["dtype"],
+                "name": item["name"],
+                "index": item["index"],
+                "is_input": item["is_input"],
+            }
+
+            if item["is_input"]:
+                inputs.append(mem_item)
+            else:
+                outputs.append(mem_item)
+
+            print(
+                "[ReID][TensorRT][IO]",
+                f"name={item['name']}",
+                f"is_input={item['is_input']}",
+                f"dtype={item['dtype']}",
+                f"shape={shape}",
+                f"size={size}",
+                flush=True,
+            )
+
         if len(inputs) != 1 or len(outputs) < 1:
-            raise RuntimeError("TensorRT ReID engine must have one input and at least one output")
+            raise RuntimeError(
+                f"TensorRT ReID engine must have one input and at least one output, "
+                f"got inputs={len(inputs)}, outputs={len(outputs)}"
+            )
+
         return inputs, outputs, bindings, stream
 
     def inference(self, img: np.ndarray, dets: np.ndarray) -> np.ndarray:
@@ -299,6 +455,7 @@ class TensorRTReIDEncoder:
                 continue
             valid_crops.append(crop)
             self.valid_indices.append(index)
+
         if not valid_crops:
             self._record_stats(np.empty((0, 0), dtype=np.float32), infer_t0)
             print(
@@ -317,9 +474,11 @@ class TensorRTReIDEncoder:
         for start in range(0, len(valid_crops), self.batch_size):
             batch_crops = valid_crops[start : start + self.batch_size]
             chunks.append(self._infer_batch(batch_crops))
+
         features = np.concatenate(chunks, axis=0)
         result = self._l2_normalize(features.astype(np.float32))
         self._record_stats(result, infer_t0)
+
         print(
             "[ReID][TensorRT] inference",
             "gpu=True",
@@ -344,21 +503,64 @@ class TensorRTReIDEncoder:
     def _infer_batch(self, crops: list[np.ndarray]) -> np.ndarray:
         batch = np.stack([self._preprocess(crop) for crop in crops], axis=0)
         valid_bsz = batch.shape[0]
+
+        if valid_bsz > self.engine_batch_size:
+            raise RuntimeError(
+                f"TensorRT ReID batch too large: valid_bsz={valid_bsz}, engine_batch_size={self.engine_batch_size}"
+            )
+
         if valid_bsz < self.engine_batch_size:
             padding = np.zeros(
-                (self.engine_batch_size - valid_bsz, 3, self.input_size[0], self.input_size[1]), dtype=np.float32
+                (self.engine_batch_size - valid_bsz, 3, self.input_size[0], self.input_size[1]),
+                dtype=np.float32,
             )
             batch = np.concatenate([batch, padding], axis=0)
+
         batch = np.ascontiguousarray(batch.astype(self.inputs[0]["dtype"]))
+
+        expected_input_size = int(np.prod(self.inputs[0]["shape"]))
+        if batch.size != expected_input_size:
+            raise RuntimeError(
+                f"TensorRT ReID input size mismatch: "
+                f"batch.shape={batch.shape}, batch.size={batch.size}, "
+                f"engine_input_shape={self.inputs[0]['shape']}, expected_size={expected_input_size}"
+            )
 
         self.device_ctx.push()
         try:
             np.copyto(self.inputs[0]["host"], batch.ravel())
-            self.cuda.memcpy_htod_async(self.inputs[0]["device"], self.inputs[0]["host"], self.stream)
-            self.context.execute_async_v2(bindings=self.bindings, stream_handle=self.stream.handle)
+
+            self.cuda.memcpy_htod_async(
+                self.inputs[0]["device"],
+                self.inputs[0]["host"],
+                self.stream,
+            )
+
+            if self._is_trt10():
+                # TensorRT 10: 使用 tensor name 绑定 device address。
+                for item in self.inputs + self.outputs:
+                    ok = self.context.set_tensor_address(item["name"], int(item["device"]))
+                    if ok is False:
+                        raise RuntimeError(
+                            f"TensorRT ReID set_tensor_address failed: name={item['name']}"
+                        )
+
+                ok = self.context.execute_async_v3(stream_handle=self.stream.handle)
+            else:
+                # TensorRT 8: 使用 binding list。
+                ok = self.context.execute_async_v2(
+                    bindings=self.bindings,
+                    stream_handle=self.stream.handle,
+                )
+
+            if ok is False:
+                raise RuntimeError("TensorRT ReID execution failed")
+
             for output in self.outputs:
                 self.cuda.memcpy_dtoh_async(output["host"], output["device"], self.stream)
+
             self.stream.synchronize()
+
         finally:
             self.device_ctx.pop()
 
@@ -390,6 +592,7 @@ def build_reid_encoder(args):
     """根据 botsort.yaml 构造 ReID encoder。"""
     backend = str(getattr(args, "reid_backend", "fastreid") or "fastreid").strip().lower()
     print(f"[ReID] build backend={backend} with_reid={getattr(args, 'with_reid', None)}", flush=True)
+
     if backend in {"fastreid", "pytorch"}:
         return FastReIDEncoder(
             config_path=args.fast_reid_config,
@@ -397,6 +600,7 @@ def build_reid_encoder(args):
             device=getattr(args, "reid_device", "cuda:0"),
             root_path=getattr(args, "fast_reid_root", "fast-reid"),
         )
+
     if backend in {"tensorrt", "trt"}:
         return TensorRTReIDEncoder(
             engine_path=args.fast_reid_engine,
@@ -404,4 +608,5 @@ def build_reid_encoder(args):
             input_size=tuple(getattr(args, "reid_input_size", [256, 128])),
             device=getattr(args, "reid_device", "cuda:0"),
         )
+
     raise ValueError(f"unsupported BoT-SORT ReID backend: {backend}")
