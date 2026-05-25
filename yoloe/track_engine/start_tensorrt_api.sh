@@ -17,4 +17,5 @@ python track_engine/tensorrt-api.py \
   --iou 0.5 \
   --imgsz 480,640 \
   --engine-imgsz 480,640 \
+  --pipeline-track \
   "$@"

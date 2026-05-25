@@ -16,6 +16,7 @@ import os
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,9 @@ if str(YOLOE_ROOT) not in sys.path:
     sys.path.insert(0, str(YOLOE_ROOT))
 
 from ultralytics import YOLO  # noqa: E402
-from ultralytics.trackers.track import on_predict_start  # noqa: E402
+from ultralytics.trackers.track import TRACKER_MAP, on_predict_start  # noqa: E402
+from ultralytics.utils import IterableSimpleNamespace, yaml_load  # noqa: E402
+from ultralytics.utils.checks import check_yaml  # noqa: E402
 
 
 def _now() -> float:
@@ -143,6 +146,33 @@ class ResetRequest(BaseModel):
     reason: str = ""
 
 
+@dataclass
+class PipelineFrame:
+    """服务端错帧流水线中的待检测帧。"""
+
+    seq: int
+    generation: int
+    stamp: float
+    image_rgb: np.ndarray
+    label: str
+    class_id: int
+    tracker: str
+    conf: float
+    iou: float
+    strict_identity: bool
+    submit_wall: float
+
+
+@dataclass
+class PipelineDetection:
+    """YOLOE 检测完成后交给 tracker 的中间结果。"""
+
+    frame: PipelineFrame
+    boxes: Any
+    model_predict_ms: float
+    detect_total_ms: float
+
+
 class YoloeTensorRtTrackEngine:
     """YOLOE TensorRT 固定词表单目标跟踪引擎。"""
 
@@ -161,6 +191,7 @@ class YoloeTensorRtTrackEngine:
         rebuild_engine: bool,
         rebind_iou_threshold: float,
         rebind_score_threshold: float,
+        pipeline_track: bool,
     ) -> None:
         self.pt_model_path = Path(pt_model_path)
         self.engine_path = Path(engine_path)
@@ -173,11 +204,13 @@ class YoloeTensorRtTrackEngine:
         self.engine_imgsz = engine_imgsz
         self.rebind_iou_threshold = float(rebind_iou_threshold)
         self.rebind_score_threshold = float(rebind_score_threshold)
+        self.pipeline_track = bool(pipeline_track)
 
         self.class_names = self._load_classes(self.classes_path)
         self.label_to_class_id = self._build_label_index(self.class_names)
 
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
+        self.model_lock = threading.Lock()
         self._ensure_engine(rebuild=bool(rebuild_engine))
         self.model = self._load_engine()
         self._warmup_engine()
@@ -196,6 +229,29 @@ class YoloeTensorRtTrackEngine:
         self.reason = "not_started"
         self.frame_seq = 0
         self.latest_result = self._make_result(ok=False, reason=self.reason)
+        self._pipeline_cond = threading.Condition()
+        self._pipeline_det_cond = threading.Condition()
+        self._pipeline_pending_frame: PipelineFrame | None = None
+        self._pipeline_pending_detection: PipelineDetection | None = None
+        self._pipeline_stop = False
+        self._pipeline_generation = 0
+        self._pipeline_tracker = None
+        self._pipeline_tracker_name = ""
+        self._pipeline_detector_thread = None
+        self._pipeline_tracker_thread = None
+        if self.pipeline_track:
+            self._pipeline_detector_thread = threading.Thread(
+                target=self._pipeline_detector_loop,
+                name="yoloe-trt-detector",
+                daemon=True,
+            )
+            self._pipeline_tracker_thread = threading.Thread(
+                target=self._pipeline_tracker_loop,
+                name="yoloe-trt-tracker",
+                daemon=True,
+            )
+            self._pipeline_detector_thread.start()
+            self._pipeline_tracker_thread.start()
 
     def _load_classes(self, classes_path: Path) -> list[str]:
         """读取固定词表；词表顺序必须与导出 engine 时完全一致。"""
@@ -298,14 +354,15 @@ class YoloeTensorRtTrackEngine:
             flush=True,
         )
         with torch.no_grad():
-            self.model.predict(
-                source=warmup_image,
-                conf=self.default_conf,
-                iou=self.default_iou,
-                imgsz=self.default_imgsz,
-                device=self.device,
-                verbose=False,
-            )
+            with self.model_lock:
+                self.model.predict(
+                    source=warmup_image,
+                    conf=self.default_conf,
+                    iou=self.default_iou,
+                    imgsz=self.default_imgsz,
+                    device=self.device,
+                    verbose=False,
+                )
         print("[YOLOE_TRT_WARMUP] done", flush=True)
 
     def _tracker_cfg_path(self, tracker: str) -> str:
@@ -316,6 +373,248 @@ class YoloeTensorRtTrackEngine:
         if not cfg.exists():
             raise FileNotFoundError(f"tracker config not found: {cfg}")
         return str(cfg)
+
+    def _build_pipeline_tracker(self, tracker: str):
+        """创建独立于 Ultralytics predictor callback 的 tracker 实例。"""
+        cfg_path = self._tracker_cfg_path(tracker)
+        cfg = IterableSimpleNamespace(**yaml_load(check_yaml(cfg_path)))
+        if cfg.tracker_type not in TRACKER_MAP:
+            raise ValueError(f"unsupported tracker type: {cfg.tracker_type}")
+        return TRACKER_MAP[cfg.tracker_type](args=cfg, frame_rate=30)
+
+    def _reset_pipeline_locked(self) -> None:
+        """清空服务端流水线排队帧；tracker 状态由下一帧按需重建。"""
+        self._pipeline_generation += 1
+        with self._pipeline_cond:
+            self._pipeline_pending_frame = None
+            self._pipeline_cond.notify_all()
+        with self._pipeline_det_cond:
+            self._pipeline_pending_detection = None
+            self._pipeline_det_cond.notify_all()
+        self._pipeline_tracker = None
+        self._pipeline_tracker_name = ""
+
+    def _submit_pipeline_frame(
+        self,
+        *,
+        image_rgb: np.ndarray,
+        label: str,
+        class_id: int,
+        tracker: str,
+        stamp: float,
+        conf: float,
+        iou: float,
+        strict_identity: bool,
+    ) -> dict[str, Any]:
+        """提交普通连续 update 帧，并立即返回最近完成的 tracking 结果。"""
+        with self.lock:
+            self.frame_seq += 1
+            frame = PipelineFrame(
+                seq=int(self.frame_seq),
+                generation=int(self._pipeline_generation),
+                stamp=float(stamp),
+                image_rgb=image_rgb,
+                label=str(label),
+                class_id=int(class_id),
+                tracker=str(tracker),
+                conf=float(conf),
+                iou=float(iou),
+                strict_identity=bool(strict_identity),
+                submit_wall=time.perf_counter(),
+            )
+        with self._pipeline_cond:
+            self._pipeline_pending_frame = frame
+            self._pipeline_cond.notify()
+        result = self.latest()
+        timings = dict(result.get("timings") or {})
+        timings["pipeline_submit_ms"] = 0.0
+        timings["pipeline_return_latest"] = 1.0
+        result["timings"] = timings
+        return result
+
+    def _pipeline_detector_loop(self) -> None:
+        """检测线程：只保留最新帧，执行 YOLOE TensorRT predict。"""
+        while True:
+            with self._pipeline_cond:
+                while self._pipeline_pending_frame is None and not self._pipeline_stop:
+                    self._pipeline_cond.wait()
+                if self._pipeline_stop:
+                    return
+                frame = self._pipeline_pending_frame
+                self._pipeline_pending_frame = None
+
+            detect_t0 = time.perf_counter()
+            try:
+                predict_t0 = time.perf_counter()
+                with torch.no_grad():
+                    with self.model_lock:
+                        results = self.model.predict(
+                            source=frame.image_rgb,
+                            conf=frame.conf,
+                            iou=frame.iou,
+                            imgsz=self.default_imgsz,
+                            device=self.device,
+                            verbose=False,
+                        )
+                model_predict_ms = _ms(time.perf_counter() - predict_t0)
+                result = results[0] if results else None
+                boxes = None if result is None or result.boxes is None else result.boxes.cpu().numpy()
+                detection = PipelineDetection(
+                    frame=frame,
+                    boxes=boxes,
+                    model_predict_ms=model_predict_ms,
+                    detect_total_ms=_ms(time.perf_counter() - detect_t0),
+                )
+            except Exception as exc:
+                self._mark_pipeline_error(frame, f"pipeline_detect_error:{exc}")
+                continue
+
+            with self.lock:
+                # reset / rebind 后，正在检测线程中的旧帧可能已经失效，避免旧结果覆盖新目标状态。
+                if frame.generation != self._pipeline_generation:
+                    continue
+            with self._pipeline_det_cond:
+                self._pipeline_pending_detection = detection
+                self._pipeline_det_cond.notify()
+
+    def _pipeline_tracker_loop(self) -> None:
+        """Tracker 线程：按检测完成顺序更新 BoT-SORT/ByteTrack 状态。"""
+        while True:
+            with self._pipeline_det_cond:
+                while self._pipeline_pending_detection is None and not self._pipeline_stop:
+                    self._pipeline_det_cond.wait()
+                if self._pipeline_stop:
+                    return
+                detection = self._pipeline_pending_detection
+                self._pipeline_pending_detection = None
+            self._process_pipeline_detection(detection)
+
+    def _mark_pipeline_error(self, frame: PipelineFrame, reason: str) -> None:
+        timings = {
+            "pipeline": 1.0,
+            "total_ms": _ms(time.perf_counter() - frame.submit_wall),
+        }
+        with self.lock:
+            if frame.generation != self._pipeline_generation:
+                return
+            self._mark_lost(
+                stamp=frame.stamp,
+                frame_seq=frame.seq,
+                reason=reason,
+                timings=timings,
+            )
+
+    def _process_pipeline_detection(self, detection: PipelineDetection) -> None:
+        frame = detection.frame
+        total_t0 = frame.submit_wall
+        timings: dict[str, float] = {
+            "pipeline": 1.0,
+            "model_predict_ms": float(detection.model_predict_ms),
+            "pipeline_detect_total_ms": float(detection.detect_total_ms),
+            "yoloe_trt_gpu": float(1 if _uses_cuda_device(self.device) else 0),
+            "yoloe_trt_device": self.device,
+            "yoloe_trt_engine": str(self.engine_path),
+        }
+        try:
+            with self.lock:
+                if frame.generation != self._pipeline_generation:
+                    return
+                if self._pipeline_tracker is None or self._pipeline_tracker_name != frame.tracker:
+                    self._pipeline_tracker = self._build_pipeline_tracker(frame.tracker)
+                    self._pipeline_tracker_name = frame.tracker
+                tracker = self._pipeline_tracker
+
+            boxes = detection.boxes
+            if boxes is None or len(boxes) == 0:
+                timings["tracker_input_det_count"] = 0.0
+                timings["tracker_output_track_count"] = 0.0
+                timings["total_ms"] = _ms(time.perf_counter() - total_t0)
+                with self.lock:
+                    if frame.generation != self._pipeline_generation:
+                        return
+                    self._mark_lost(
+                        stamp=frame.stamp,
+                        frame_seq=frame.seq,
+                        reason="no_target_class_candidates",
+                        timings=timings,
+                    )
+                return
+
+            tracker_t0 = time.perf_counter()
+            tracks = tracker.update(boxes, frame.image_rgb)
+            timings["tracker_update_ms"] = _ms(time.perf_counter() - tracker_t0)
+            reid_stats = dict(getattr(tracker, "last_reid_stats", {}) or {})
+            timings["tracker_reid_enabled"] = float(1 if reid_stats.get("enabled") else 0)
+            timings["tracker_reid_feature_count"] = float(reid_stats.get("feature_count", 0) or 0)
+            timings["tracker_reid_feature_dim"] = float(reid_stats.get("feature_dim", 0) or 0)
+            timings["tracker_reid_inference_ms"] = float(reid_stats.get("inference_ms", 0.0) or 0.0)
+            timings["tracker_reid_backend"] = str(reid_stats.get("backend", "none"))
+            timings["tracker_reid_gpu"] = float(1 if reid_stats.get("gpu") else 0)
+            timings["tracker_reid_gpu_idx"] = float(reid_stats.get("gpu_idx", -1))
+            timings["tracker_input_det_count"] = float(len(boxes))
+            timings["tracker_output_track_count"] = float(len(tracks))
+            timings["tracker_dropped_count"] = float(max(0, len(boxes) - len(tracks)))
+
+            candidates = self._extract_candidates_from_tracks(tracks, frame.image_rgb)
+            candidates = [item for item in candidates if int(item["cls"]) == int(frame.class_id)]
+            timings["candidate_count"] = float(len(candidates))
+            timings["all_candidate_count"] = float(len(tracks))
+            with self.lock:
+                if frame.generation != self._pipeline_generation:
+                    return
+                if not candidates:
+                    timings["total_ms"] = _ms(time.perf_counter() - total_t0)
+                    self._mark_lost(
+                        stamp=frame.stamp,
+                        frame_seq=frame.seq,
+                        reason="no_target_class_candidates",
+                        timings=timings,
+                    )
+                    return
+
+                selected = self._select_target(
+                    candidates,
+                    init_bbox=None,
+                    strict_identity=frame.strict_identity,
+                    allow_rebind=False,
+                )
+                if selected is None:
+                    timings["total_ms"] = _ms(time.perf_counter() - total_t0)
+                    self._mark_lost(
+                        stamp=frame.stamp,
+                        frame_seq=frame.seq,
+                        reason="target_missing",
+                        timings=timings,
+                    )
+                    return
+
+                selected_track_id = int(selected["track_id"])
+                self.current_label = frame.label
+                self.current_class_id = frame.class_id
+                self.current_tracker = frame.tracker
+                self.target_id = None if selected_track_id < 0 else selected_track_id
+                self.last_bbox = list(selected["bbox"])
+                self.last_score = float(selected["score"])
+                self.lost_since = 0.0
+                self.last_seen_stamp = frame.stamp
+                self.state = "active"
+                self.reason = ""
+                timings["model_track_ms"] = float(detection.model_predict_ms) + float(timings["tracker_update_ms"])
+                timings["total_ms"] = _ms(time.perf_counter() - total_t0)
+                self.latest_result = self._make_result(
+                    ok=True,
+                    stamp=frame.stamp,
+                    frame_seq=frame.seq,
+                    bbox=self.last_bbox,
+                    track_id=self.target_id,
+                    score=self.last_score,
+                    cls=selected["cls"],
+                    has_mask=False,
+                    reason="",
+                    timings=timings,
+                )
+        except Exception as exc:
+            self._mark_pipeline_error(frame, f"pipeline_tracker_error:{exc}")
 
     def _reset_ultralytics_trackers(self) -> None:
         predictor = getattr(self.model, "predictor", None)
@@ -457,6 +756,7 @@ class YoloeTensorRtTrackEngine:
 
     def reset(self, reason: str = "") -> dict[str, Any]:
         with self.lock:
+            self._reset_pipeline_locked()
             self._reset_predictor_and_tracker_state()
             self.current_label = ""
             self.current_class_id = None
@@ -495,6 +795,7 @@ class YoloeTensorRtTrackEngine:
                 "engine_imgsz": self.engine_imgsz,
                 "device": self.device,
                 "gpu": _uses_cuda_device(self.device),
+                "pipeline_track": bool(self.pipeline_track),
             }
 
     def latest(self) -> dict[str, Any]:
@@ -510,20 +811,46 @@ class YoloeTensorRtTrackEngine:
         stamp = float(req.stamp if req.stamp is not None else _now())
         label, class_id = self._resolve_label(req.label)
 
+        tracker = req.tracker.strip().lower()
+        conf = float(req.conf if req.conf is not None else self.default_conf)
+        iou = float(req.iou if req.iou is not None else self.default_iou)
+        if (
+            self.pipeline_track
+            and not req.reset
+            and req.init_bbox is None
+            and not req.allow_rebind
+            and not req.lost_rebind
+            and class_id == self.current_class_id
+            and tracker == self.current_tracker
+        ):
+            return self._submit_pipeline_frame(
+                image_rgb=image_rgb,
+                label=label,
+                class_id=class_id,
+                tracker=tracker,
+                stamp=stamp,
+                conf=conf,
+                iou=iou,
+                strict_identity=bool(req.strict_identity),
+            )
+
         lock_t0 = time.perf_counter()
         with self.lock:
             timings["lock_wait_ms"] = _ms(time.perf_counter() - lock_t0)
             timings["yoloe_trt_gpu"] = float(1 if _uses_cuda_device(self.device) else 0)
             timings["yoloe_trt_device"] = self.device
             timings["yoloe_trt_engine"] = str(self.engine_path)
-            tracker = req.tracker.strip().lower()
             label_changed = class_id != self.current_class_id
             tracker_changed = tracker != self.current_tracker
             init_bbox = _clip_bbox(req.init_bbox, image_rgb) if req.init_bbox is not None else None
+            pipeline_rebind = bool(self.pipeline_track and (init_bbox is not None or req.allow_rebind or req.lost_rebind))
             new_target_started = False
 
+            if pipeline_rebind:
+                self._reset_pipeline_locked()
             if req.reset or label_changed or tracker_changed:
                 t0 = time.perf_counter()
+                self._reset_pipeline_locked()
                 removed_callbacks = self._reset_predictor_and_tracker_state()
                 timings["clear_tracker_callbacks"] = float(removed_callbacks)
                 timings["clear_state_ms"] = _ms(time.perf_counter() - t0)
@@ -544,8 +871,6 @@ class YoloeTensorRtTrackEngine:
 
             self.frame_seq += 1
             frame_seq = self.frame_seq
-            conf = float(req.conf if req.conf is not None else self.default_conf)
-            iou = float(req.iou if req.iou is not None else self.default_iou)
             imgsz = self.default_imgsz
             if req.imgsz is not None and req.imgsz != self.default_imgsz:
                 # TensorRT engine 是固定形状导出，保持服务端启动时的 imgsz，避免请求覆盖导致 shape 不匹配。
@@ -553,25 +878,27 @@ class YoloeTensorRtTrackEngine:
             tracker_cfg = self._tracker_cfg_path(self.current_tracker)
 
             t0 = time.perf_counter()
-            if new_target_started:
-                results = self.model.predict(
-                    source=image_rgb,
-                    conf=conf,
-                    iou=iou,
-                    imgsz=imgsz,
-                    device=self.device,
-                    verbose=False,
-                )
+            if new_target_started or pipeline_rebind:
+                with self.model_lock:
+                    results = self.model.predict(
+                        source=image_rgb,
+                        conf=conf,
+                        iou=iou,
+                        imgsz=imgsz,
+                        device=self.device,
+                        verbose=False,
+                    )
                 timings["model_predict_ms"] = _ms(time.perf_counter() - t0)
             else:
-                results = self._track_with_timing(
-                    source=image_rgb,
-                    tracker=tracker_cfg,
-                    conf=conf,
-                    iou=iou,
-                    imgsz=imgsz,
-                    timings=timings,
-                )
+                with self.model_lock:
+                    results = self._track_with_timing(
+                        source=image_rgb,
+                        tracker=tracker_cfg,
+                        conf=conf,
+                        iou=iou,
+                        imgsz=imgsz,
+                        timings=timings,
+                    )
                 timings["model_track_ms"] = _ms(time.perf_counter() - t0)
 
             result = results[0] if results else None
@@ -661,6 +988,29 @@ class YoloeTensorRtTrackEngine:
                     "score": float(score),
                     "cls": int(cls),
                     "has_mask": bool(has_masks),
+                }
+            )
+        return candidates
+
+    def _extract_candidates_from_tracks(self, tracks, image_rgb: np.ndarray) -> list[dict[str, Any]]:
+        """将 tracker.update 返回的 ndarray 转为统一候选列表。"""
+        if tracks is None or len(tracks) == 0:
+            return []
+        candidates = []
+        for row in np.asarray(tracks):
+            if len(row) < 7:
+                continue
+            bbox = row[:4].tolist()
+            clipped = _clip_bbox(bbox, image_rgb)
+            if clipped is None:
+                continue
+            candidates.append(
+                {
+                    "track_id": int(row[4]),
+                    "bbox": clipped,
+                    "score": float(row[5]),
+                    "cls": int(row[6]),
+                    "has_mask": False,
                 }
             )
         return candidates
@@ -814,6 +1164,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rebuild-engine", action="store_true", help="忽略已有 engine，重新从 pt 和 classes 导出")
     parser.add_argument("--rebind-iou-threshold", type=float, default=0.05)
     parser.add_argument("--rebind-score-threshold", type=float, default=0.15)
+    parser.add_argument("--pipeline-track", action="store_true", help="普通连续 update 使用服务端 YOLOE/tracker 错帧流水线")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=2250)
     return parser.parse_args()
@@ -834,6 +1185,7 @@ def main() -> None:
         rebuild_engine=args.rebuild_engine,
         rebind_iou_threshold=args.rebind_iou_threshold,
         rebind_score_threshold=args.rebind_score_threshold,
+        pipeline_track=args.pipeline_track,
     )
     app = create_app(engine)
     uvicorn.run(app, host=args.host, port=args.port, reload=False, workers=1)
