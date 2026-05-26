@@ -4,7 +4,9 @@
 #include <ros/ros.h>
 
 #include <Eigen/Core>
+#include <iostream>
 #include <queue>
+#include <string>
 
 namespace prediction {
 
@@ -31,6 +33,9 @@ struct Predict {
   double pre_dur;
   double rho_a;
   double car_z, vmax;
+  bool debug_search_ = false;
+  double debug_throttle_ = 0.5;
+  ros::Time last_debug_log_;
   mapping::OccGridMap map;
   NodePtr data[MAX_MEMORY];
   int stack_top;
@@ -39,12 +44,54 @@ struct Predict {
     return (v.norm() < vmax) && (!map.isOccupied(p));
   }
 
+  inline bool debugDue() {
+    if (!debug_search_) {
+      return false;
+    }
+    const ros::Time now = ros::Time::now();
+    if (!last_debug_log_.isZero() && (now - last_debug_log_).toSec() < debug_throttle_) {
+      return false;
+    }
+    last_debug_log_ = now;
+    return true;
+  }
+
+  inline void logFailure(const std::string& reason,
+                         const Eigen::Vector3d& target_p,
+                         const Eigen::Vector3d& target_v,
+                         const NodePtr& curPtr,
+                         const size_t open_set_size) {
+    if (!debugDue()) {
+      return;
+    }
+    std::cout << "[prediction][" << reason << "]"
+              << " target_p=[" << target_p.transpose() << "]"
+              << " target_v=[" << target_v.transpose() << "]"
+              << " target_speed=" << target_v.norm()
+              << " pre_dur=" << pre_dur
+              << " dt=" << dt
+              << " vmax=" << vmax
+              << " stack_top=" << stack_top
+              << " max_memory=" << MAX_MEMORY
+              << " open_set=" << open_set_size;
+    if (curPtr != nullptr) {
+      std::cout << " current_p=[" << curPtr->p.transpose() << "]"
+                << " current_v=[" << curPtr->v.transpose() << "]"
+                << " current_t=" << curPtr->t
+                << " current_speed=" << curPtr->v.norm()
+                << " current_occupied=" << map.isOccupied(curPtr->p);
+    }
+    std::cout << std::endl;
+  }
+
  public:
   inline Predict(ros::NodeHandle& nh) {
     nh.getParam("tracking_dur", pre_dur);
     nh.getParam("tracking_dt", dt);
     nh.getParam("prediction/rho_a", rho_a);
     nh.getParam("prediction/vmax", vmax);
+    nh.param("debug_search", debug_search_, false);
+    nh.param("debug_throttle", debug_throttle_, 0.5);
     for (int i = 0; i < MAX_MEMORY; ++i) {
       data[i] = new Node;
     }
@@ -90,11 +137,13 @@ struct Predict {
           }
           if (stack_top == MAX_MEMORY) {
             std::cout << "[prediction] out of memory!" << std::endl;
+            logFailure("out_of_memory", target_p, target_v, curPtr, open_set.size());
             return false;
           }
           double t_cost = (ros::Time::now() - t_start).toSec();
           if (t_cost > max_time) {
             std::cout << "[prediction] too slow!" << std::endl;
+            logFailure("too_slow", target_p, target_v, curPtr, open_set.size());
             return false;
           }
           NodePtr ptr = data[stack_top++];
@@ -110,6 +159,7 @@ struct Predict {
         }
       if (open_set.empty()) {
         std::cout << "[prediction] no way!" << std::endl;
+        logFailure("no_way", target_p, target_v, curPtr, open_set.size());
         return false;
       }
       curPtr = open_set.top();

@@ -47,6 +47,8 @@ class Nodelet : public nodelet::Nodelet {
 
   // NOTE just for debug
   bool debug_ = false;
+  bool debug_replan_ = false;
+  double debug_throttle_ = 0.5;
   quadrotor_msgs::ReplanState replanStateMsg_;
   ros::Publisher gridmap_pub_, inflate_gridmap_pub_;
   quadrotor_msgs::OccMap3d occmap_msg_;
@@ -335,9 +337,25 @@ class Nodelet : public nodelet::Nodelet {
     replanStateMsg_.occmap = map_msg_;
     gridmap_lock_.clear();
     prePtr_->setMap(*gridmapPtr_);
+    if (debug_replan_) {
+      ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+          "[elastic][replan_input] odom_p=[" << odom_p.transpose()
+          << "] odom_v=[" << odom_v.transpose()
+          << "] target_p=[" << target_p.transpose()
+          << "] target_v=[" << target_v.transpose()
+          << "] target_dist=" << (target_p - odom_p).norm()
+          << " force_hover=" << force_hover_
+          << " land_trigger=" << land_triger_received_
+          << " map_res=" << map_msg_.resolution
+          << " map_size=(" << map_msg_.size_x << "," << map_msg_.size_y << "," << map_msg_.size_z << ")"
+          << " map_inflate=" << map_msg_.inflate_size
+          << " tracking_dist=" << tracking_dist_
+          << " tracking_dur=" << tracking_dur_);
+    }
 
     // visualize the ray from drone to target
-    if (envPtr_->checkRayValid(odom_p, target_p)) {
+    const bool direct_ray_valid = envPtr_->checkRayValid(odom_p, target_p);
+    if (direct_ray_valid) {
       visPtr_->visualize_arrow(odom_p, target_p, "ray", visualization::yellow);
     } else {
       visPtr_->visualize_arrow(odom_p, target_p, "ray", visualization::red);
@@ -345,10 +363,18 @@ class Nodelet : public nodelet::Nodelet {
 
     // NOTE prediction
     std::vector<Eigen::Vector3d> target_predcit;
-    // ros::Time t_start = ros::Time::now();
+    ros::Time t_stage = ros::Time::now();
     bool generate_new_traj_success = prePtr_->predict(target_p, target_v, target_predcit);
-    // ros::Time t_stop = ros::Time::now();
-    // std::cout << "predict costs: " << (t_stop - t_start).toSec() * 1e3 << "ms" << std::endl;
+    const double prediction_ms = (ros::Time::now() - t_stage).toSec() * 1e3;
+    if (debug_replan_) {
+      ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+          "[elastic][prediction] ok=" << generate_new_traj_success
+          << " cost_ms=" << prediction_ms
+          << " target_predict_size=" << target_predcit.size()
+          << " direct_ray_valid=" << direct_ray_valid
+          << " first_pred=[" << (target_predcit.empty() ? target_p : target_predcit.front()).transpose()
+          << "] last_pred=[" << (target_predcit.empty() ? target_p : target_predcit.back()).transpose() << "]");
+    }
     if (generate_new_traj_success) {
       Eigen::Vector3d observable_p = target_predcit.back();
       visPtr_->visualize_path(target_predcit, "car_predict");
@@ -393,14 +419,23 @@ class Nodelet : public nodelet::Nodelet {
     // double t_path = 0;
 
     if (generate_new_traj_success) {
-      // ros::Time t_front0 = ros::Time::now();
+      t_stage = ros::Time::now();
       if (land_triger_received_) {
         generate_new_traj_success = envPtr_->short_astar(p_start, target_p, path);
       } else {
         generate_new_traj_success = envPtr_->findVisiblePath(p_start, target_predcit, way_pts, path);
       }
-      // ros::Time t_end0 = ros::Time::now();
-      // t_path += (t_end0 - t_front0).toSec() * 1e3;
+      if (debug_replan_) {
+        ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+            "[elastic][path_search] ok=" << generate_new_traj_success
+            << " cost_ms=" << (ros::Time::now() - t_stage).toSec() * 1e3
+            << " p_start=[" << p_start.transpose()
+            << "] target_p=[" << target_p.transpose()
+            << "] predict_size=" << target_predcit.size()
+            << " path_size=" << path.size()
+            << " way_pts_size=" << way_pts.size()
+            << " land_trigger=" << land_triger_received_);
+      }
     }
 
     std::vector<Eigen::Vector3d> visible_ps;
@@ -440,10 +475,15 @@ class Nodelet : public nodelet::Nodelet {
       std::vector<Eigen::MatrixXd> hPolys;
       std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> keyPts;
 
-      // ros::Time t_front3 = ros::Time::now();
+      t_stage = ros::Time::now();
       envPtr_->generateSFC(path, 2.0, hPolys, keyPts);
-      // ros::Time t_end3 = ros::Time::now();
-      // double t_corridor = (t_end3 - t_front3).toSec() * 1e3;
+      if (debug_replan_) {
+        ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+            "[elastic][corridor] cost_ms=" << (ros::Time::now() - t_stage).toSec() * 1e3
+            << " path_size=" << path.size()
+            << " hpoly_count=" << hPolys.size()
+            << " key_pts_count=" << keyPts.size());
+      }
 
       envPtr_->visCorridor(hPolys);
       visPtr_->visualize_pairline(keyPts, "keyPts");
@@ -453,7 +493,7 @@ class Nodelet : public nodelet::Nodelet {
       finState.setZero(3, 3);
       finState.col(0) = path.back();
       finState.col(1) = target_v;
-      // ros::Time t_front4 = ros::Time::now();
+      t_stage = ros::Time::now();
       if (land_triger_received_) {
         finState.col(0) = target_predcit.back();
         generate_new_traj_success = trajOptPtr_->generate_traj(iniState, finState, target_predcit, hPolys, traj);
@@ -462,8 +502,14 @@ class Nodelet : public nodelet::Nodelet {
                                                                target_predcit, visible_ps, thetas,
                                                                hPolys, traj);
       }
-      // ros::Time t_end4 = ros::Time::now();
-      // double t_optimization = (t_end4 - t_front4).toSec() * 1e3;
+      if (debug_replan_) {
+        ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+            "[elastic][traj_opt] ok=" << generate_new_traj_success
+            << " cost_ms=" << (ros::Time::now() - t_stage).toSec() * 1e3
+            << " traj_duration=" << (generate_new_traj_success ? traj.getTotalDuration() : 0.0)
+            << " visible_ps=" << visible_ps.size()
+            << " theta_count=" << thetas.size());
+      }
 
       // NOTE average calculating time of path searching, corridor generation and optimization
 
@@ -481,7 +527,14 @@ class Nodelet : public nodelet::Nodelet {
     // NOTE collision check
     bool valid = false;
     if (generate_new_traj_success) {
+      t_stage = ros::Time::now();
       valid = validcheck(traj, replan_stamp);
+      if (debug_replan_) {
+        ROS_INFO_STREAM_THROTTLE(debug_throttle_,
+            "[elastic][validcheck] valid=" << valid
+            << " cost_ms=" << (ros::Time::now() - t_stage).toSec() * 1e3
+            << " replan_stamp_delay=" << (replan_stamp - ros::Time::now()).toSec());
+      }
     } else {
       replanStateMsg_.state = -2;
       replanState_pub_.publish(replanStateMsg_);
@@ -852,6 +905,8 @@ class Nodelet : public nodelet::Nodelet {
     nh.getParam("tolerance_d", tolerance_d_);
     nh.getParam("debug", debug_);
     nh.getParam("fake", fake_);
+    nh.param("debug_replan", debug_replan_, false);
+    nh.param("debug_throttle", debug_throttle_, 0.5);
     nh.param("hover_finish_hold_time", hover_finish_hold_time_, 2.0);
     nh.param("hover_finish_enable", hover_finish_enable_, true);
     nh.param("optimized_traj_vis_dt", optimized_traj_vis_dt_, 0.05);

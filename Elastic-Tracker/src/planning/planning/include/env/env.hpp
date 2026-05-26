@@ -7,8 +7,10 @@
 #include <sensor_msgs/point_cloud_conversion.h>
 
 #include <Eigen/Core>
+#include <iostream>
 #include <memory>
 #include <queue>
+#include <string>
 #include <traj_opt/geoutils.hpp>
 #include <unordered_map>
 
@@ -59,10 +61,18 @@ class Env {
   std::shared_ptr<mapping::OccGridMap> mapPtr_;
   NodePtr data_[MAX_MEMORY];
   double desired_dist_, theta_clearance_, tolerance_d_;
+  bool debug_search_ = false;
+  bool search_memory_exhausted_ = false;
+  double debug_throttle_ = 0.5;
+  ros::Time last_debug_log_;
 
   inline NodePtr visit(const Eigen::Vector3i& idx) {
     auto iter = visited_nodes_.find(idx);
     if (iter == visited_nodes_.end()) {
+      if (visited_nodes_.size() >= MAX_MEMORY) {
+        search_memory_exhausted_ = true;
+        return nullptr;
+      }
       auto ptr = data_[visited_nodes_.size()];
       ptr->idx = idx;
       ptr->valid = !mapPtr_->isOccupied(idx);
@@ -74,6 +84,58 @@ class Env {
     }
   }
 
+  inline bool debugDue() {
+    if (!debug_search_) {
+      return false;
+    }
+    const ros::Time now = ros::Time::now();
+    if (!last_debug_log_.isZero() && (now - last_debug_log_).toSec() < debug_throttle_) {
+      return false;
+    }
+    last_debug_log_ = now;
+    return true;
+  }
+
+  inline void logSearchFailure(const std::string& tag,
+                               const std::string& reason,
+                               const Eigen::Vector3i& start_idx,
+                               const Eigen::Vector3i& end_idx,
+                               const NodePtr& curPtr,
+                               const size_t open_set_size,
+                               const double elapsed_s) {
+    if (!debugDue()) {
+      return;
+    }
+    const Eigen::Vector3d start_pos = mapPtr_->idx2pos(start_idx);
+    const Eigen::Vector3d end_pos = mapPtr_->idx2pos(end_idx);
+    std::cout << "[env][" << tag << "][" << reason << "]"
+              << " start_idx=[" << start_idx.transpose() << "]"
+              << " end_idx=[" << end_idx.transpose() << "]"
+              << " start_pos=[" << start_pos.transpose() << "]"
+              << " end_pos=[" << end_pos.transpose() << "]"
+              << " start_occupied=" << mapPtr_->isOccupied(start_idx)
+              << " end_occupied=" << mapPtr_->isOccupied(end_idx)
+              << " ray_valid=" << checkRayValid(start_pos, end_pos)
+              << " visited=" << visited_nodes_.size()
+              << " max_memory=" << MAX_MEMORY
+              << " open_set=" << open_set_size
+              << " elapsed_ms=" << elapsed_s * 1000.0
+              << " max_duration_ms=" << MAX_DURATION * 1000.0
+              << " resolution=" << mapPtr_->resolution
+              << " desired_dist=" << desired_dist_
+              << " tolerance_d=" << tolerance_d_;
+    if (curPtr != nullptr) {
+      const Eigen::Vector3d cur_pos = mapPtr_->idx2pos(curPtr->idx);
+      std::cout << " current_idx=[" << curPtr->idx.transpose() << "]"
+                << " current_pos=[" << cur_pos.transpose() << "]"
+                << " current_occupied=" << mapPtr_->isOccupied(curPtr->idx)
+                << " current_g=" << curPtr->g
+                << " current_h=" << curPtr->h
+                << " idx_dist_to_end=" << (end_idx - curPtr->idx).norm();
+    }
+    std::cout << std::endl;
+  }
+
  public:
   Env(ros::NodeHandle& nh,
       std::shared_ptr<mapping::OccGridMap>& mapPtr) : mapPtr_(mapPtr) {
@@ -81,6 +143,8 @@ class Env {
     nh.getParam("tracking_dist", desired_dist_);
     nh.getParam("tolerance_d", tolerance_d_);
     nh.getParam("theta_clearance", theta_clearance_);
+    nh.param("debug_search", debug_search_, false);
+    nh.param("debug_throttle", debug_throttle_, 0.5);
     for (int i = 0; i < MAX_MEMORY; ++i) {
       data_[i] = new Node;
     }
@@ -439,9 +503,12 @@ class Env {
       neighbors.emplace_back(neighbor, 1);
     }
     bool ret = false;
+    search_memory_exhausted_ = false;
     NodePtr curPtr = visit(start_idx);
     // NOTE we should permit the start pos invalid! (for corridor generation)
-    if (!curPtr->valid) {
+    if (curPtr == nullptr || !curPtr->valid) {
+      logSearchFailure("findVisiblePath", curPtr == nullptr ? "start_memory_exhausted" : "start_invalid",
+                       start_idx, end_idx, curPtr, open_set.size(), 0.0);
       visited_nodes_.clear();
       std::cout << "start postition invalid!" << std::endl;
       return false;
@@ -460,6 +527,10 @@ class Env {
         auto neighbor_idx = curPtr->idx + neighbor.first;
         auto neighbor_dist = neighbor.second;
         NodePtr neighborPtr = visit(neighbor_idx);
+        if (neighborPtr == nullptr) {
+          search_memory_exhausted_ = true;
+          break;
+        }
         if (neighborPtr->state == CLOSE) {
           continue;
         }
@@ -482,9 +553,17 @@ class Env {
           }
         }
       }  // for each neighbor
+      if (search_memory_exhausted_) {
+        std::cout << "[env] out of memory!" << std::endl;
+        logSearchFailure("findVisiblePath", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - t_start_).toSec());
+        break;
+      }
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
         std::cout << "[env] no way!" << std::endl;
+        logSearchFailure("findVisiblePath", "no_way", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - t_start_).toSec());
         break;
       }
       curPtr = open_set.top();
@@ -496,7 +575,13 @@ class Env {
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
         std::cout << "[env] out of memory!" << std::endl;
+        logSearchFailure("findVisiblePath", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - t_start_).toSec());
       }
+    }
+    if (!ret && !search_memory_exhausted_ && (ros::Time::now() - t_start_).toSec() > MAX_DURATION) {
+      logSearchFailure("findVisiblePath", "timeout", start_idx, end_idx, curPtr,
+                       open_set.size(), (ros::Time::now() - t_start_).toSec());
     }
     if (ret) {
       for (NodePtr ptr = curPtr; ptr != nullptr; ptr = ptr->parent) {
@@ -562,9 +647,13 @@ class Env {
       neighbors.emplace_back(neighbor, 1);
     }
     bool ret = false;
+    search_memory_exhausted_ = false;
+    const ros::Time search_start = ros::Time::now();
     NodePtr curPtr = visit(start_idx);
     // NOTE we should permit the start pos invalid! (for corridor generation)
-    if (!curPtr->valid) {
+    if (curPtr == nullptr || !curPtr->valid) {
+      logSearchFailure("astar", curPtr == nullptr ? "start_memory_exhausted" : "start_invalid",
+                       start_idx, end_idx, curPtr, open_set.size(), 0.0);
       visited_nodes_.clear();
       std::cout << "start postition invalid!" << std::endl;
       return false;
@@ -579,6 +668,10 @@ class Env {
         auto neighbor_idx = curPtr->idx + neighbor.first;
         auto neighbor_dist = neighbor.second;
         NodePtr neighborPtr = visit(neighbor_idx);
+        if (neighborPtr == nullptr) {
+          search_memory_exhausted_ = true;
+          break;
+        }
         if (neighborPtr->state == CLOSE) {
           continue;
         }
@@ -601,9 +694,17 @@ class Env {
           }
         }
       }  // for each neighbor
+      if (search_memory_exhausted_) {
+        std::cout << "[astar search] out of memory!" << std::endl;
+        logSearchFailure("astar", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
+        break;
+      }
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
         std::cout << "[astar search] no way!" << std::endl;
+        logSearchFailure("astar", "no_way", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
         break;
       }
       curPtr = open_set.top();
@@ -615,6 +716,8 @@ class Env {
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
         std::cout << "[astar search] out of memory!" << std::endl;
+        logSearchFailure("astar", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
       }
     }
     if (ret) {
@@ -749,9 +852,13 @@ class Env {
       neighbors.emplace_back(neighbor, 1);
     }
     bool ret = false;
+    search_memory_exhausted_ = false;
+    const ros::Time search_start = ros::Time::now();
     NodePtr curPtr = visit(start_idx);
     // NOTE we should permit the start pos invalid! (for corridor generation)
-    if (!curPtr->valid) {
+    if (curPtr == nullptr || !curPtr->valid) {
+      logSearchFailure("short_astar", curPtr == nullptr ? "start_memory_exhausted" : "start_invalid",
+                       start_idx, end_idx, curPtr, open_set.size(), 0.0);
       visited_nodes_.clear();
       std::cout << "[short astar]start postition invalid!" << std::endl;
       return false;
@@ -766,6 +873,10 @@ class Env {
         auto neighbor_idx = curPtr->idx + neighbor.first;
         auto neighbor_dist = neighbor.second;
         NodePtr neighborPtr = visit(neighbor_idx);
+        if (neighborPtr == nullptr) {
+          search_memory_exhausted_ = true;
+          break;
+        }
         if (neighborPtr->state == CLOSE) {
           continue;
         }
@@ -788,9 +899,17 @@ class Env {
           }
         }
       }  // for each neighbor
+      if (search_memory_exhausted_) {
+        std::cout << "[short astar] out of memory!" << std::endl;
+        logSearchFailure("short_astar", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
+        break;
+      }
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
         std::cout << "[short astar] no way!" << std::endl;
+        logSearchFailure("short_astar", "no_way", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
         break;
       }
       curPtr = open_set.top();
@@ -802,6 +921,8 @@ class Env {
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
         std::cout << "[short astar] out of memory!" << std::endl;
+        logSearchFailure("short_astar", "out_of_memory", start_idx, end_idx, curPtr,
+                         open_set.size(), (ros::Time::now() - search_start).toSec());
       }
     }
     if (ret) {

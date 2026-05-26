@@ -21,6 +21,9 @@
   <arg name="rho_tracking" default="1000.0"/>
   <arg name="plan_hz" default="20"/>
   <arg name="hover_finish_hold_time" default="5.0"/>
+  <arg name="elastic_debug_search" default="true"/>
+  <arg name="elastic_debug_replan" default="true"/>
+  <arg name="elastic_debug_throttle" default="0.5"/>
 
   <group ns="$(arg drone_ns)">
     <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
@@ -111,9 +114,14 @@
       <param name="clearance_d" value="0.2"/>
       <param name="tracrance_d" value="0.3"/>
       <param name="toleking_dist" value="1.5"/>
+      <param name="tolerance_d" value="0.3"/>
+      <param name="tracking_dist" value="2.5"/>
       <param name="tracking_dur" value="1.5"/>
       <param name="tracking_dt" value="0.2"/>
       <param name="debug" value="false"/>
+      <param name="debug_search" value="$(arg elastic_debug_search)"/>
+      <param name="debug_replan" value="$(arg elastic_debug_replan)"/>
+      <param name="debug_throttle" value="$(arg elastic_debug_throttle)"/>
 
       <param name="prediction/rho_a" value="1.0"/>
       <param name="prediction/vmax" value="4.0"/>
