@@ -68,6 +68,11 @@ class FrontierManager{
   
   // utils
   void forceDeleteFrontier(Frontier ftr);
+  void setExplorationRegion(const std::vector<Eigen::Vector3d>& polygon, bool enabled);
+  bool hasExplorationRegion() const;
+  bool isPointInExplorationRegion(const Eigen::Vector3d& point) const;
+  bool frontierAllowedByRegion(const Frontier& frontier) const;
+  void filterFrontiersByExplorationRegion(std::vector<Frontier>& frontiers) const;
   void updateTopoBlacklist(Eigen::Vector3d goal, Eigen::Vector3d cur, double range,
                            std::unordered_map<int, int> &blacklist);
   Eigen::Vector3d getBlacklistTopoPos(int idx);
@@ -122,6 +127,8 @@ class FrontierManager{
   MapInterface::Ptr                 map_;
   PlanningVisualization::Ptr        visualization_;
   ros::Timer                        frontier_timer, goal_timer;
+  bool                              has_exploration_region_{false};
+  std::vector<Eigen::Vector3d>      exploration_region_polygon_;
   // ros::Publisher plan_goal_pub_;
   // ros::Subscriber odom_sub_, goal_sub_;
 

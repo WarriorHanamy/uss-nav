@@ -8,6 +8,8 @@ uint8 instruction_type
 
 uint16 target_obj_id
 string command
+bool has_exploration_region
+geometry_msgs/Point[] exploration_region
 
 # vla部分参数
 geometry_msgs/Point[] goal

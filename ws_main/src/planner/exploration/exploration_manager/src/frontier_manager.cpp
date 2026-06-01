@@ -1,4 +1,5 @@
 #include <exploration_manager/frontier_manager.h>
+#include <algorithm>
 #include <fstream>
 #include <memory>
 #include <lkh_tsp_solver/lkh_interface.h>
@@ -144,6 +145,73 @@ int FrontierManager::planExploreRapid(const Vector3d& pos, const Vector3d& vel,
   return FAIL;
 }
 
+void FrontierManager::setExplorationRegion(const std::vector<Eigen::Vector3d>& polygon, bool enabled)
+{
+  // 区域约束只约束 XY 平面；少于 3 个点时直接关闭，避免退化多边形影响全局探索。
+  has_exploration_region_ = enabled && polygon.size() >= 3;
+  exploration_region_polygon_.clear();
+  if (!has_exploration_region_) {
+    return;
+  }
+  exploration_region_polygon_ = polygon;
+  ROS_INFO_STREAM("[Ftr_manager] Exploration region enabled with "
+                  << exploration_region_polygon_.size() << " points.");
+}
+
+bool FrontierManager::hasExplorationRegion() const
+{
+  return has_exploration_region_ && exploration_region_polygon_.size() >= 3;
+}
+
+bool FrontierManager::isPointInExplorationRegion(const Eigen::Vector3d& point) const
+{
+  if (!hasExplorationRegion()) return true;
+
+  // 射线法判断点是否在多边形内，仅使用 XY 坐标。
+  bool inside = false;
+  const size_t n = exploration_region_polygon_.size();
+  for (size_t i = 0, j = n - 1; i < n; j = i++) {
+    const Eigen::Vector3d& pi = exploration_region_polygon_[i];
+    const Eigen::Vector3d& pj = exploration_region_polygon_[j];
+    const bool crosses = ((pi.y() > point.y()) != (pj.y() > point.y())) &&
+                         (point.x() < (pj.x() - pi.x()) * (point.y() - pi.y()) /
+                                        (pj.y() - pi.y() + 1e-9) + pi.x());
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+bool FrontierManager::frontierAllowedByRegion(const Frontier& frontier) const
+{
+  if (!hasExplorationRegion()) return true;
+  for (const auto& vp : frontier.viewpoints_) {
+    if (isPointInExplorationRegion(vp.pos_)) return true;
+  }
+  return isPointInExplorationRegion(frontier.average_);
+}
+
+void FrontierManager::filterFrontiersByExplorationRegion(std::vector<Frontier>& frontiers) const
+{
+  if (!hasExplorationRegion()) return;
+
+  std::vector<Frontier> filtered;
+  filtered.reserve(frontiers.size());
+  for (auto frontier : frontiers) {
+    if (!frontierAllowedByRegion(frontier)) continue;
+
+    // 如果存在区域内候选视点，则只保留这些视点，保证后续 TSP/front().pos_ 不跳出区域。
+    std::vector<Viewpoint> viewpoints_in_region;
+    for (const auto& vp : frontier.viewpoints_) {
+      if (isPointInExplorationRegion(vp.pos_)) viewpoints_in_region.push_back(vp);
+    }
+    if (!viewpoints_in_region.empty()) frontier.viewpoints_ = viewpoints_in_region;
+    filtered.push_back(frontier);
+  }
+  frontiers.swap(filtered);
+  ROS_INFO_STREAM("[Ftr_manager] Exploration region filtered frontiers, remain "
+                  << frontiers.size() << ".");
+}
+
 
 int FrontierManager::planExploreTSP(const Vector3d& pos, const Vector3d& vel, const double& yaw,
                                     Vector3d& aim_pos, Vector3d& aim_vel, double& aim_yaw, vector<Eigen::Vector3d>& path_res)
@@ -160,6 +228,7 @@ int FrontierManager::planExploreTSP(const Vector3d& pos, const Vector3d& vel, co
 
   //! Choose Ftr
   frontier_finder_->getFrontiersWithInfo(ed_->frontiers_with_info_);
+  filterFrontiersByExplorationRegion(ed_->frontiers_with_info_);
 
   if (ed_->frontiers_with_info_.empty())
   {
@@ -497,6 +566,7 @@ int FrontierManager::planLLMExploration(const int &area_id, const Eigen::Vector3
         ftrs_in_area.push_back(ftr);
     }
   }
+  filterFrontiersByExplorationRegion(ftrs_in_area);
   INFO_MSG_YELLOW("[LLM-Plan] : find " << ftrs_in_area.size() << " frontiers in area " << area_id);
   for (const auto& ftr : ftrs_in_area)
     INFO_MSG_YELLOW("Candidate frontier : " << ftr.id_ << ", pos " << ftr.average_.transpose());
@@ -579,7 +649,7 @@ int FrontierManager::planLLMExploration(const int &area_id, const Eigen::Vector3
     }
   }else {
     INFO_MSG_RED("Target Area [" << area_id << "] has no frontier!");
-    return FAIL;
+    return NO_FRONTIER;
   }
 
   INFO_MSG_GREEN("[LLM-PLan] : spend time ->" << (ros::Time::now() - t1).toSec() *1e3 <<"ms");

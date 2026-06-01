@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <sstream>
 #include <exploration_manager/mission_data.h>
 #include <map_interface/map_interface.hpp>
 #include <ostream>
@@ -40,6 +41,16 @@ double normalizeAngle(double angle) {
   while (angle > M_PI) angle -= 2.0 * M_PI;
   while (angle < -M_PI) angle += 2.0 * M_PI;
   return angle;
+}
+
+std::string jsonEscape(const std::string& value) {
+  std::string out;
+  out.reserve(value.size());
+  for (char c : value) {
+    if (c == '\\' || c == '"') out.push_back('\\');
+    out.push_back(c);
+  }
+  return out;
 }
 }  // namespace
 
@@ -169,8 +180,42 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   planner_cmd_mux_mode_pub_ = nh.advertise<std_msgs::String>(fp_->planner_cmd_mux_mode_topic_, 10, true);
   elastic_tracker_trigger_pub_ = nh.advertise<geometry_msgs::PoseStamped>(fp_->elastic_tracker_trigger_topic_, 10);
   elastic_tracker_stop_pub_ = nh.advertise<std_msgs::Empty>(fp_->elastic_tracker_stop_topic_, 10);
+  exploration_result_pub_ = nh.advertise<std_msgs::String>("/planning/exploration_result", 10);
 
   switchPlannerCmdMuxToEgo("fsm_init");
+}
+
+void FastExplorationFSM::applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg)
+{
+  std::vector<Eigen::Vector3d> polygon;
+  if (msg->has_exploration_region && msg->exploration_region.size() >= 3) {
+    polygon.reserve(msg->exploration_region.size());
+    for (const auto& point : msg->exploration_region) {
+      polygon.emplace_back(point.x, point.y, point.z);
+    }
+    expl_manager_->setExplorationRegion(polygon, true);
+    return;
+  }
+  expl_manager_->setExplorationRegion(polygon, false);
+}
+
+void FastExplorationFSM::publishExplorationResult(bool success, const std::string& reason,
+                                                  const std::string& message)
+{
+  std_msgs::String msg;
+  std::ostringstream ss;
+  ss << "{"
+     << "\"finished\":true,"
+     << "\"success\":" << (success ? "true" : "false") << ","
+     << "\"reason\":\"" << jsonEscape(reason) << "\","
+     << "\"message\":\"" << jsonEscape(message) << "\","
+     << "\"instruction_type\":" << static_cast<int>(md_->instruction_) << ","
+     << "\"command\":\"" << jsonEscape(fd_->target_cmd_) << "\","
+     << "\"has_region\":" << (expl_manager_->hasExplorationRegion() ? "true" : "false") << ","
+     << "\"state\":\"" << md_->state_str_[md_->mission_state_] << "\""
+     << "}";
+  msg.data = ss.str();
+  exploration_result_pub_.publish(msg);
 }
 
 void FastExplorationFSM::triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
@@ -437,6 +482,7 @@ void FastExplorationFSM::handelThingkingProcess() {
         transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "Recv Terminate Object ID !");
         return ;
       }else {
+        publishExplorationResult(false, "target_not_found", "terminate object id result is invalid");
         transitState(MISSION_FSM_STATE::FINISH, "Recv Terminate Object ID Failed !");
         return ;
       }
@@ -550,7 +596,13 @@ void FastExplorationFSM::planLLMExplore() {
     fd_->llm_plan_explore_counter_ = 0;
   }
 
-  if (res == FAIL) {
+  if (res == NO_FRONTIER) {
+    has_made_area_decision_ = false;
+    publishExplorationResult(false, "target_not_found", "target area has no frontier");
+    transitState(FINISH, "LLM Plan No Frontier");
+    return;
+
+  } else if (res == FAIL) {
     has_made_area_decision_ = false;
     planRegularExplore();
     INFO_MSG_RED(" !!!!!!!!!!!!!!!!!!!! LLM Plan Explore Failed !!!!!!!!!!!!!!!!!!!!!!");
@@ -621,7 +673,9 @@ void FastExplorationFSM::planRegularExplore() {
   }
   else if (res == NO_FRONTIER)
   {
-    transitState(STOP, "FSM");
+    const std::string reason = expl_manager_->hasExplorationRegion() ? "region_explored" : "global_explored";
+    publishExplorationResult(true, reason, "no frontier remains");
+    transitState(FINISH, "FSM");
     // clearVisMarker();
   }
   else if (res == FAIL)
@@ -1231,7 +1285,10 @@ void FastExplorationFSM::goTargetObject() {
       fd_->go_object_process_phase ++;
     }else {
       fd_->go_object_process_phase = 0;
-      if(fd_->find_terminate_target_mode_) transitState(FINISH, "** FIND TERMINATE TARGET PATH FAILED **");
+      if(fd_->find_terminate_target_mode_) {
+        publishExplorationResult(false, "target_path_failed", "failed to plan path to target object");
+        transitState(FINISH, "** FIND TERMINATE TARGET PATH FAILED **");
+      }
       else transitState(WAIT_TRIGGER, "** FIND OBJECT PATH FAILED **");
     }
   }
@@ -1256,7 +1313,10 @@ void FastExplorationFSM::goTargetObject() {
       ROS_WARN("-------------> Finish: [Reach Both Pos&Yaw Aim] <-------------");
       ROS_INFO_STREAM("t_cur: " << t_cur);
       fd_->go_object_process_phase = 0;
-      if (fd_->find_terminate_target_mode_) transitState(FINISH, "Find Terminate Target Finish");
+      if (fd_->find_terminate_target_mode_) {
+        publishExplorationResult(true, "target_found", "reached target object");
+        transitState(FINISH, "Find Terminate Target Finish");
+      }
       else transitState(WAIT_TRIGGER, "Go Target Object Finish");
       return;
     }
@@ -1856,6 +1916,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
   switch (msg->instruction_type) 
   {
     case quadrotor_msgs::Instruction::TURN_OBJECT_ID_NAV:
+      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       fd_->object_target_id_ = msg->target_obj_id;
       fd_->go_object_process_phase = 0;
       fd_->find_terminate_target_mode_ = false;
@@ -1863,6 +1924,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
 
     case quadrotor_msgs::Instruction::TURN_WAYPOINT_NAV: {
+      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       if (msg->nav_waypoint.empty()) {
         INFO_MSG_RED("[InstructionCallback]: TURN_WAYPOINT_NAV has empty nav_waypoint, switch to WAIT_TRIGGER");
         transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback:empty_waypoint");
@@ -1881,6 +1943,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     }
 
     case quadrotor_msgs::Instruction::TURN_OBJECT_NAV: 
+      applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = false;
       fd_->find_terminate_target_mode_ = false;
       fd_->new_topo_need_predict_immediately_ = true;
@@ -1891,6 +1954,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
 
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
+      applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = true;
       fd_->df_demo_mode_    = false;
       fd_->find_terminate_target_mode_ = false;
@@ -1898,6 +1962,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
     
     case quadrotor_msgs::Instruction::TURN_DF_DEMO:
+      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       fd_->df_demo_mode_ = true;
       fd_->df_demo_phase_ = 0;
       fd_->explore_count_ = 0;

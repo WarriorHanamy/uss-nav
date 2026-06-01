@@ -85,6 +85,7 @@ private:
   ros::Publisher planner_cmd_mux_mode_pub_;
   ros::Publisher elastic_tracker_trigger_pub_;
   ros::Publisher elastic_tracker_stop_pub_;
+  ros::Publisher exploration_result_pub_;
 
   // LLM related
   MISSION_FSM_STATE stash_state_{MISSION_FSM_STATE::UNKONWN};
@@ -115,6 +116,9 @@ private:
   void publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
                                  const ros::Time& stamp = ros::Time(),
                                  const std::string& frame_id = "world");
+  void applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg);
+  void publishExplorationResult(bool success, const std::string& reason,
+                                const std::string& message = "");
   
   void transitState(MISSION_FSM_STATE new_state, string pos_call);
   void stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called);
