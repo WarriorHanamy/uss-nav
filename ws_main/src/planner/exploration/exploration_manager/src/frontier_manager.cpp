@@ -249,8 +249,19 @@ int FrontierManager::planExploreTSP(const Vector3d& pos, const Vector3d& vel, co
     // Create TSP and solve by LKH
     // Optimal tour is returned as indices of frontier
     vector<int> indices;
-    Eigen::MatrixXd cost_mat;
-    findGlobalTour(pos, vel, yaw, indices, cost_mat); 
+    // 区域约束启用后，ed_->frontiers_with_info_ 可能已经是过滤后的子集。
+    // 这里必须直接基于过滤后的列表计算 TSP，否则会得到原始 frontier 列表的下标，
+    // 后续再访问过滤后的列表时会发生越界。
+    PolyHedronPtr cur_poly = scene_graph_->skeleton_gen_->mountCurTopoPoint(pos, false);
+    findGlobalTour_SomeFtrs(ed_->frontiers_with_info_, pos, vel, yaw, cur_poly, indices);
+    if (indices.empty() || indices.front() < 0 ||
+        indices.front() >= static_cast<int>(ed_->frontiers_with_info_.size())) {
+      ROS_ERROR_STREAM("[Ftr_manager] Invalid TSP frontier index after region filtering. "
+                       << "index="
+                       << (indices.empty() ? -1 : indices.front())
+                       << ", frontier_size=" << ed_->frontiers_with_info_.size());
+      return FAIL;
+    }
 
     // ed_->refined_ids_.clear();
     // int knum = min(int(indices.size()), ep_->refined_num_);
@@ -724,7 +735,7 @@ void FrontierManager::findGlobalTour_SomeFtrs(std::vector<Frontier>& ftr_select,
     double dis = -1.0f;
     std::vector<Eigen::Vector3d> path;
     auto vp = f.viewpoints_.front();
-    if (f.topo_father_ == nullptr) return 9999.0f;
+    if (f.topo_father_ == nullptr || cur_poly == nullptr) return 9999.0f;
     if (f.topo_father_ == cur_poly || map_->isVisible(vp.pos_, cur_pos, 0.0)) {
       if (!ViewNode::searchPath(cur_pos, vp.pos_, path, dis)) {
         path.clear();
@@ -788,6 +799,18 @@ void FrontierManager::findGlobalTour_SomeFtrs(std::vector<Frontier>& ftr_select,
     // Solve TSP
     INFO_MSG("   * [Solve TSP] start...");
     solveTSP(mat, indices);
+    if (indices.empty()) {
+      ROS_ERROR_STREAM("[Ftr_manager] TSP returned empty frontier tour.");
+      return;
+    }
+    for (int idx : indices) {
+      if (idx < 0 || idx >= static_cast<int>(ftr_select.size())) {
+        ROS_ERROR_STREAM("[Ftr_manager] TSP returned invalid frontier index. "
+                         << "index=" << idx << ", frontier_size=" << ftr_select.size());
+        indices.clear();
+        return;
+      }
+    }
     std::vector<Eigen::Vector3d> global_tour;
     if (ftr_select.size() >= 1) {
       global_tour.push_back(cur_pos);

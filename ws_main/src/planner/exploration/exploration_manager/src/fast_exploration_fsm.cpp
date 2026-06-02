@@ -1850,14 +1850,18 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
   const bool bypass_freq_limit =
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_GOAL ||
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_WAYPOINT_NAV ||
-      msg->instruction_type == quadrotor_msgs::Instruction::TURN_TRACKING;
+      msg->instruction_type == quadrotor_msgs::Instruction::TURN_TRACKING ||
+      msg->instruction_type == quadrotor_msgs::Instruction::TURN_OBJECT_NAV ||
+      msg->instruction_type == quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION;
   if (ic_first_recv_flag){
     ic_first_recv_flag = false;
     ic_last_recv_time = ros::Time::now();
   }else if (!bypass_freq_limit && !ic_first_recv_flag &&
             (ros::Time::now() - ic_last_recv_time).toSec() < 0.8){
     ic_last_recv_time = ros::Time::now();
-    std::cout << "[InstructionCallback] : recv too frequent, skip once!" << std::endl;
+    std::cout << "[InstructionCallback] : recv too frequent, skip once! instruction_type="
+              << static_cast<int>(msg->instruction_type)
+              << ", command=" << msg->command << std::endl;
     return;
   }else
     ic_last_recv_time = ros::Time::now();

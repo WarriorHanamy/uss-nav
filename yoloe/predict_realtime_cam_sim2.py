@@ -182,9 +182,9 @@ class YoloeDetectorNode:
         self.clip_model_path     = rospy.get_param('~clip_model_path', './mobileclip_blt.pt')
 
         # 三个输入话题参数
-        self.rgb_in_topic        = rospy.get_param('~rgb_topic',   '/camera1/color/image/compressed')
-        self.depth_in_topic      = rospy.get_param('~depth_topic', '/camera1/depth/image/compressed')
-        self.odom_in_topic       = rospy.get_param('~odom_topic',  '/unity_odom')
+        self.rgb_in_topic        = rospy.get_param('~rgb_topic',   '/camera1/color_sync/image/compressed')
+        self.depth_in_topic      = rospy.get_param('~depth_topic', '/camera1/depth_sync/image/compressed')
+        self.odom_in_topic       = rospy.get_param('~odom_topic',  '/unity_odom_sync')
 
         self.rgb_predict_out_topic = rospy.get_param('~output_topic', '/yoloe/plot')
         self.encodemask_out_topic  = rospy.get_param('~result_output_topic', '/yoloe/encodemask')
@@ -196,12 +196,12 @@ class YoloeDetectorNode:
         self.visualize           = rospy.get_param('~visualize', True)
         self.visualize_scale     = rospy.get_param('~visualize_scale', 0.5)
         self.debug               = rospy.get_param('~debug', False)
-        self.time_slop           = rospy.get_param('~time_slop', 0.005) # RGB-D 同步容差
+        self.time_slop           = rospy.get_param('~time_slop', 0.01) # RGB-D 同步容差
 
         self.export_mode         = rospy.get_param('~export_mode', False)
 
         # [修改] 新增参数：Odom同步的最大时间差容限
-        self.odom_sync_slop      = rospy.get_param('~odom_sync_slop', 0.005)
+        self.odom_sync_slop      = rospy.get_param('~odom_sync_slop', 0.01)
 
         self.is_rgb_compressed   = 'compressed' in self.rgb_in_topic
         self.is_depth_compressed = 'compressed' in self.depth_in_topic or 'compressedDepth' in self.depth_in_topic
