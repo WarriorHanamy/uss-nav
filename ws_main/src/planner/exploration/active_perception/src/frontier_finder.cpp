@@ -788,15 +788,33 @@ bool FrontierFinder::isHalfInLocalMap(const Frontier& ft)
     }
 }
 
-bool FrontierFinder::isWellObserved(const Frontier& ft, const Vector3d& pos) 
+bool FrontierFinder::isWellObserved(const Frontier& ft, const Vector3d& pos)
 {
+  // 预计算每个cell是否在至少一个viewpoint的相机FOV内
+  // 防止LiDAR宽FOV清除的cell被误认为相机已观测
+  vector<bool> in_camera_fov(ft.cells_.size(), false);
+  if (!ft.viewpoints_.empty())
+  {
+    for (const auto& vp : ft.viewpoints_)
+    {
+      percep_utils_->setPose(vp.pos_, vp.yaw_);
+      for (size_t i = 0; i < ft.cells_.size(); i++)
+      {
+        if (!in_camera_fov[i] && percep_utils_->insideFOV(ft.cells_[i]))
+          in_camera_fov[i] = true;
+      }
+    }
+  }
+
   int well_observed_count = 0;
-  for (auto cell : ft.cells_) 
+  for (size_t i = 0; i < ft.cells_.size(); i++)
   {
     Eigen::Vector3i idx;
-    // edt_env_->sdf_map_->posToIndex(cell, idx);
-    idx = edt_env_->pos2GlobalIdx(cell);
-    if (edt_env_->getOccupancy(idx) != MapInterface::UNKNOWN && edt_env_->isInLocalMap(idx))
+    idx = edt_env_->pos2GlobalIdx(ft.cells_[i]);
+    // occupancy已变化 + 在localmap内 + (无viewpoint时回退原逻辑 / 必须在相机FOV内)
+    if (edt_env_->getOccupancy(idx) != MapInterface::UNKNOWN &&
+        edt_env_->isInLocalMap(idx) &&
+        (ft.viewpoints_.empty() || in_camera_fov[i]))
     {
       well_observed_count++;
     }
@@ -811,7 +829,7 @@ bool FrontierFinder::isWellObserved(const Frontier& ft, const Vector3d& pos)
       if ((vp.pos_ - pos).norm() < 0.5) return true; // 观测点距离当前位置小于0.5m，认为是well observed
     }
   }
-  
+
   return false;
 }
 
