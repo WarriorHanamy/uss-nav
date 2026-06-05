@@ -59,6 +59,7 @@ class MapInterface{
   double getResolution() const;
   void   getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax) const;
   void   getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx) const;
+  void   resetOccupancyInRegion(const Eigen::Vector3d& region_min, const Eigen::Vector3d& region_max);
   bool searchPath(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
                   std::vector<Eigen::Vector3d>& path, double step_size);
   bool   searchPathConsiderUKRegion(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
@@ -167,6 +168,11 @@ inline void MapInterface::getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& 
 inline void MapInterface::getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx) const
 {
   map_->sml_->getUpdatedBoxIdx(bmin_inx, bmax_inx);
+}
+
+inline void MapInterface::resetOccupancyInRegion(const Eigen::Vector3d& region_min, const Eigen::Vector3d& region_max)
+{
+  map_->sml_->resetOccupancyInRegion(region_min, region_max);
 }
 
 inline Eigen::Vector3i MapInterface::pos2GlobalIdx(const Eigen::Vector3d &pos) const

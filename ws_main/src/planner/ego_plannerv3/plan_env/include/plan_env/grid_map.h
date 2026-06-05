@@ -231,6 +231,7 @@ public:
   inline int getVoxelNum() const { return md_.map_voxel_num_; };
   void getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax);
   void getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx);
+  void resetOccupancyInRegion(const Eigen::Vector3d& region_min, const Eigen::Vector3d& region_max);
   inline bool isInited() const {return (md_.has_odom_ && (md_.flag_have_ever_received_depth_ || md_.flag_have_ever_received_pc_)); }
 
   inline bool isInBuf(const Eigen::Vector3d &pos) const;

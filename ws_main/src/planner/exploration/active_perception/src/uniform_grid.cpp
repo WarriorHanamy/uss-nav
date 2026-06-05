@@ -196,6 +196,71 @@ void UniformGrid::getOverlappedGrids(vector<int> & grid_adrs, const Eigen::Vecto
 //    std::cout << adr << " ";
 //  std::cout << std::endl;
 }
+// 射线法判断点是否在多边形内（2D，仅使用 xy 平面）
+static bool pointInPolygon2D(const Eigen::Vector3d& p,
+                             const std::vector<Eigen::Vector3d>& polygon) {
+  int n = static_cast<int>(polygon.size());
+  if (n < 3) return false;
+  bool inside = false;
+  for (int i = 0, j = n - 1; i < n; j = i++) {
+    double xi = polygon[i].x(), yi = polygon[i].y();
+    double xj = polygon[j].x(), yj = polygon[j].y();
+    if (((yi > p.y()) != (yj > p.y())) &&
+        (p.x() < (xj - xi) * (p.y() - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+void UniformGrid::resetCoveredInRegion(const std::vector<Eigen::Vector3d>& polygon) {
+  for (auto& grid : grid_data_) {
+    if (!grid.is_covered_) continue;
+    bool in_region = false;
+    for (const auto& v : grid.vertices_) {
+      if (pointInPolygon2D(v, polygon)) { in_region = true; break; }
+    }
+    // 也检查中心点
+    if (!in_region && pointInPolygon2D(grid.center_, polygon)) {
+      in_region = true;
+    }
+    if (!in_region) continue;
+    grid.is_covered_ = false;
+    grid.is_cur_relevant_ = true;
+    grid.is_prev_relevant_ = true;
+  }
+  // 重建 relevant_id_ 列表
+  relevant_id_.clear();
+  relevant_map_.clear();
+  for (int i = 0; i < static_cast<int>(grid_data_.size()); ++i) {
+    if (isRelevant(grid_data_[i])) {
+      relevant_id_.push_back(i);
+      relevant_map_[i] = 1;
+    }
+  }
+  std::cout << "[UniformGrid] resetCoveredInRegion done: polygon vertices="
+            << polygon.size() << ", relevant grids=" << relevant_id_.size() << std::endl;
+}
+
+void UniformGrid::resetAllCovered() {
+  for (auto& grid : grid_data_) {
+    grid.is_covered_ = false;
+    grid.is_cur_relevant_ = true;
+    grid.is_prev_relevant_ = true;
+  }
+  // 重建 relevant_id_ 和 relevant_map_，与 resetCoveredInRegion 行为一致
+  relevant_id_.clear();
+  relevant_map_.clear();
+  for (int i = 0; i < static_cast<int>(grid_data_.size()); ++i) {
+    if (isRelevant(grid_data_[i])) {
+      relevant_id_.push_back(i);
+      relevant_map_[i] = 1;
+    }
+  }
+  std::cout << "[UniformGrid] resetAllCovered done: total grids="
+            << grid_data_.size() << ", relevant grids=" << relevant_id_.size() << std::endl;
+}
+
 void UniformGrid::updateGridData(const int& drone_id, vector<int>& grid_ids) {
 
   // parti_ids are ids of grids that are assigned to THIS drone and should be divided

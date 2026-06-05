@@ -74,6 +74,15 @@ void HGrid::inputFrontiers(const vector<vector<Eigen::Vector3d>>& avgs) {
   grid1_->inputFrontiers(avgs);
   //  grid2_->inputFrontiers(avgs);
 }
+
+void HGrid::resetCoveredInRegion(const std::vector<Eigen::Vector3d>& polygon) {
+  grid1_->resetCoveredInRegion(polygon);
+}
+
+void HGrid::resetAllCovered() {
+  grid1_->resetAllCovered();
+}
+
 /**
  * @note  update Hgrid data structure (P.S. update frontier before use this function)
  * @param drone_id id of drone (always 1 in FY-Project)

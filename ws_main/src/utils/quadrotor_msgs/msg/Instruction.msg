@@ -10,6 +10,7 @@ uint16 target_obj_id
 string command
 bool has_exploration_region
 geometry_msgs/Point[] exploration_region
+bool clear_local_map
 
 # vla部分参数
 geometry_msgs/Point[] goal
