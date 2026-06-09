@@ -1360,36 +1360,6 @@ void GridMap::clearAndInflateLocalMap()
   }
 }
 
-void GridMap::resetOccupancyInRegion(const Eigen::Vector3d& region_min,
-                                     const Eigen::Vector3d& region_max)
-{
-  Eigen::Vector3i id_min = pos2GlobalIdx(region_min);
-  Eigen::Vector3i id_max = pos2GlobalIdx(region_max);
-  // 限制到 local map buffer 范围内
-  id_min = id_min.cwiseMax(md_.rb_lb3i_);
-  id_max = id_max.cwiseMin(md_.rb_ub3i_);
-
-  int count = 0;
-  for (int x = id_min[0]; x <= id_max[0]; ++x) {
-    for (int y = id_min[1]; y <= id_max[1]; ++y) {
-      for (int z = id_min[2]; z <= id_max[2]; ++z) {
-        Eigen::Vector3i idx(x, y, z);
-        if (!isInBuf(idx)) continue;
-        size_t buf_idx = globalIdx2BufIdx(idx);
-        md_.occ_buf_[buf_idx] = mp_.clamp_min_log_ - 1.0f;
-        // 必须将 occ_buf_inf_ 重置为 0：getInflateOccupancy 对
-        // GRID_MAP_UNKNOWN_FLAG（-15000）返回 OCCUPIED，导致 A* 将所有
-        // 未初始化 cell 视作障碍物，规划必然失败。设为 0 表示无障碍物。
-        size_t inf_buf_idx = globalIdx2InfBufIdx(idx);
-        md_.occ_buf_inf_[inf_buf_idx] = 0;
-        ++count;
-      }
-    }
-  }
-  ROS_WARN("[GridMap] resetOccupancyInRegion: region=(%.1f,%.1f)-(%.1f,%.1f), reset %d voxels",
-           region_min.x(), region_min.y(), region_max.x(), region_max.y(), count);
-}
-
 void GridMap::CopyToOutputMap()
 {
   if (mtx_memcpy_.try_lock())

@@ -64,8 +64,6 @@ public:
   void getActiveGrids(vector<int>& grid_ids);
   bool isConsistent(const int& id1, const int& id2);
   bool isCovered(const Eigen::Vector3d& pos);
-  void resetCoveredInRegion(const std::vector<Eigen::Vector3d>& polygon);
-  void resetAllCovered();
   void setSwarmTf();
   void encodeHgridData(quadrotor_msgs::HgridMsg &msg);
   void decodeHgridData(const quadrotor_msgs::HgridMsg &msg, ros::NodeHandle& nh);

@@ -80,8 +80,6 @@ public:
   void getGridMarker(vector<Eigen::Vector3d>& pts1, vector<Eigen::Vector3d>& pts2);
   void getOverlappedGrids(vector<int> & grid_adrs, const Eigen::Vector3d &update_min,
                           const Eigen::Vector3d &update_max, bool show_info);
-  void resetCoveredInRegion(const std::vector<Eigen::Vector3d>& polygon);
-  void resetAllCovered();
   void updateGridInfo(const Eigen::Vector3i& id);
 
   int toAddress(const Eigen::Vector3i& id);

@@ -1946,42 +1946,8 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
     }
 
-    case quadrotor_msgs::Instruction::TURN_OBJECT_NAV:
+    case quadrotor_msgs::Instruction::TURN_OBJECT_NAV: 
       applyExplorationRegionFromInstruction(msg);
-      // 方案 B：清空局部地图重探
-      if (msg->clear_local_map) {
-        // 锁定数据互斥锁（与 raycast/fading 线程一致），防止并发修改 occ_buf_ / occ_buf_inf_
-        map_->mtxLock();
-        if (msg->has_exploration_region && msg->exploration_region.size() >= 3) {
-          std::vector<Eigen::Vector3d> polygon;
-          polygon.reserve(msg->exploration_region.size());
-          Eigen::Vector3d region_min(1e10, 1e10, 1e10);
-          Eigen::Vector3d region_max(-1e10, -1e10, -1e10);
-          for (const auto& pt : msg->exploration_region) {
-            polygon.emplace_back(pt.x, pt.y, pt.z);
-            region_min = region_min.cwiseMin(polygon.back());
-            region_max = region_max.cwiseMax(polygon.back());
-          }
-          expl_manager_->hgrid_->resetCoveredInRegion(polygon);
-          map_->resetOccupancyInRegion(region_min, region_max);
-          expl_manager_->frontier_finder_->frontierForceDeleteAll();
-          ROS_WARN("[FSM] Scheme B: region map clear done (OBJECT_NAV). polygon vertices=%zu",
-                   polygon.size());
-        } else {
-          expl_manager_->hgrid_->resetAllCovered();
-          Eigen::Vector3d global_box_min, global_box_max;
-          map_->getGlobalBox(global_box_min, global_box_max);
-          map_->resetOccupancyInRegion(global_box_min, global_box_max);
-          expl_manager_->frontier_finder_->frontierForceDeleteAll();
-          ROS_WARN("[FSM] Scheme B: full map clear done (OBJECT_NAV, scene-graph & topo-map preserved).");
-        }
-        map_->mtxUnlock();
-        // 立即触发 frontier 搜索，避免 FSM timer 先于 frontier timer 导致空列表
-        expl_manager_->frontier_finder_->searchFrontiers(fd_->odom_pos_);
-        expl_manager_->frontier_finder_->computeFrontiersToVisit(fd_->odom_pos_);
-        expl_manager_->frontier_finder_->updateFrontierCostMatrix();
-        expl_manager_->updateHgrid();
-      }
       fd_->regular_explore_ = false;
       fd_->find_terminate_target_mode_ = false;
       fd_->new_topo_need_predict_immediately_ = true;
@@ -1993,42 +1959,6 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
 
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
       applyExplorationRegionFromInstruction(msg);
-      // 方案 B：清空局部地图重探
-      if (msg->clear_local_map) {
-        // 锁定数据互斥锁（与 raycast/fading 线程一致），防止并发修改 occ_buf_ / occ_buf_inf_
-        map_->mtxLock();
-        if (msg->has_exploration_region && msg->exploration_region.size() >= 3) {
-          // 有界区域：仅清空探索区域覆盖的 HGrid、occupancy 和 frontier
-          std::vector<Eigen::Vector3d> polygon;
-          polygon.reserve(msg->exploration_region.size());
-          Eigen::Vector3d region_min(1e10, 1e10, 1e10);
-          Eigen::Vector3d region_max(-1e10, -1e10, -1e10);
-          for (const auto& pt : msg->exploration_region) {
-            polygon.emplace_back(pt.x, pt.y, pt.z);
-            region_min = region_min.cwiseMin(polygon.back());
-            region_max = region_max.cwiseMax(polygon.back());
-          }
-          expl_manager_->hgrid_->resetCoveredInRegion(polygon);
-          map_->resetOccupancyInRegion(region_min, region_max);
-          expl_manager_->frontier_finder_->frontierForceDeleteAll();
-          ROS_WARN("[FSM] Scheme B: region map clear done. polygon vertices=%zu",
-                   polygon.size());
-        } else {
-          // 无界区域：清空全部（保留 scene-graph 和 topo-map）
-          expl_manager_->hgrid_->resetAllCovered();
-          Eigen::Vector3d global_box_min, global_box_max;
-          map_->getGlobalBox(global_box_min, global_box_max);
-          map_->resetOccupancyInRegion(global_box_min, global_box_max);
-          expl_manager_->frontier_finder_->frontierForceDeleteAll();
-          ROS_WARN("[FSM] Scheme B: full map clear done (scene-graph & topo-map preserved).");
-        }
-        map_->mtxUnlock();
-        // 立即触发 frontier 搜索，避免 FSM timer 先于 frontier timer 导致空列表
-        expl_manager_->frontier_finder_->searchFrontiers(fd_->odom_pos_);
-        expl_manager_->frontier_finder_->computeFrontiersToVisit(fd_->odom_pos_);
-        expl_manager_->frontier_finder_->updateFrontierCostMatrix();
-        expl_manager_->updateHgrid();
-      }
       fd_->regular_explore_ = true;
       fd_->df_demo_mode_    = false;
       fd_->find_terminate_target_mode_ = false;
