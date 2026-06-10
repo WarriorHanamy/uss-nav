@@ -79,6 +79,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("fsm/auto_init_scene_graph",      fp_->auto_init_scene_graph_, true);
   nh.param("fsm/auto_init_delay_sec",        fp_->auto_init_delay_sec_, 2.0);
   nh.param("fsm/scene_graph_init_forward_dist", fp_->scene_graph_init_forward_dist_, 1.8);
+  nh.param("fsm/enable_yaw_scan", enable_yaw_scan_, false);
   double panorama_max_step_deg = 120.0;
   double panorama_extend_angle_deg = 40.0;
   nh.param("fsm/panorama_max_step", panorama_max_step_deg, 120.0);
@@ -517,6 +518,9 @@ void FastExplorationFSM::planLLMExplore() {
     return;
   }
 
+  if (need_rotate_yaw_ && !enable_yaw_scan_)
+    need_rotate_yaw_ = false;
+
   if (need_rotate_yaw_) {
     auto yawLimit = [] (double yaw) {
       while (yaw >= M_PI) yaw -= 2 * M_PI;
@@ -651,6 +655,9 @@ void FastExplorationFSM::planRegularExplore() {
     return;
   }
 
+  if (need_rotate_yaw_ && !enable_yaw_scan_)
+    need_rotate_yaw_ = false;
+
   if (need_rotate_yaw_ && fd_->df_demo_mode_) {
     auto yawLimit = [] (double yaw) {
       while (yaw >= M_PI) yaw -= 2 * M_PI;
@@ -672,7 +679,7 @@ void FastExplorationFSM::planRegularExplore() {
   int res = callExplorationPlanner(fd_->aim_pos_, fd_->aim_vel_, fd_->aim_yaw_, fd_->path_res_);
 
   if (fd_->df_demo_mode_) 
-    need_rotate_yaw_ = true;
+    need_rotate_yaw_ = enable_yaw_scan_;
 
   if (res == SUCCEED)
   {
@@ -688,7 +695,7 @@ void FastExplorationFSM::planRegularExplore() {
     fd_->last_pub_time_ = ros::Time::now();
 
     transitState(APPROACH_EXPLORE, "FSM");
-    need_rotate_yaw_ = true;
+    need_rotate_yaw_ = enable_yaw_scan_;
     // ROS_ERROR_STREAM("[Plan_Traj] start_pos: " << fd_->start_pt_.transpose());
     // ROS_ERROR_STREAM("[Plan_Traj] odom_pos: " << fd_->odom_pos_.transpose());
     // ROS_ERROR_STREAM("[Plan_Traj] start_vel: " << fd_->start_vel_.transpose());
@@ -1153,7 +1160,13 @@ void FastExplorationFSM::handlePanoramaYaw() {
 }
 
 void FastExplorationFSM::handleYawChange() {
-  // 左右各转向30°，最终回到原方向
+  // 依次转向原始朝向+45°、-45°，最终回到原始朝向。
+  if (!enable_yaw_scan_) {
+    need_rotate_yaw_ = false;
+    transitState(stash_state_, "Yaw Scan Disabled");
+    return;
+  }
+
   if (!fd_->ego_exec_finished_) {
     ROS_WARN_STREAM_THROTTLE(1.0, "[Handleyaw] : ego exec not finished, skip yaw handle ...");
     return ;
@@ -1872,7 +1885,7 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
     think_start_time_        = ros::Time::now().toSec();
     think_duration_limit_    = 10.0;
     has_made_area_decision_  = false;
-    need_rotate_yaw_         = true;
+    need_rotate_yaw_         = enable_yaw_scan_;
   }
 
   expl_manager_->setCurrentTopoNode(scene_graph_->skeleton_gen_->mountCurTopoPoint(fd_->odom_pos_, fd_->odom_yaw_));

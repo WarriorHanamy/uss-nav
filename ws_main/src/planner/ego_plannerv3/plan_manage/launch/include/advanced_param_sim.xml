@@ -53,6 +53,7 @@
         <param name="traj_server/panorama_yaw_acc" value="60.0" type="double"/> <!-- 全景旋转专用yaw加速度(deg/s²) -->
         <param name="fsm/panorama_max_step" value="120.0" type="double"/> <!-- 单次全景目标最大延长角(deg) -->
         <param name="fsm/panorama_extend_angle" value="40.0" type="double"/> <!-- 距当前目标小于该角度时提前续接(deg) -->
+        <param name="fsm/enable_yaw_scan" value="false" type="bool"/> <!-- 是否执行+45°/-45°/回正扫描 -->
 
         <!-- planning fsm -->
         <param name="fsm/flight_type" value="$(arg flight_type)" type="int"/>
