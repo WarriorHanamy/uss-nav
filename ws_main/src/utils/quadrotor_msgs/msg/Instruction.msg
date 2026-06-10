@@ -5,6 +5,8 @@ std_msgs/Header header
 
 # exploration部分参数
 uint8 instruction_type
+# 上层任务来源，用于区分相同instruction_type由哪个task_id发布
+uint8 source_task_id
 
 uint16 target_obj_id
 string command
@@ -49,3 +51,7 @@ uint8 TURN_LOAD_SCENE_GRAPH = 10
 
 # Scene Graph Skill IO
 uint8 REQUEST_ALL_AREA_AND_OBJS = 11
+
+# source_task_id definitions
+uint8 SOURCE_TASK_EXPLORATION = 2
+uint8 SOURCE_TASK_COUNTING = 8

@@ -35,7 +35,7 @@ public:
   // ！Frontier Operation
   void reCalculateAllFtrTopo(const Eigen::Vector3d &cur_pos);
   //! Frontier Generation
-  void searchFrontiers(const Vector3d& c_pos);
+  void searchFrontiers(const Vector3d& c_pos, const double yaw = 0.0);
   void computeFrontiersToVisit(const Vector3d& c_pos);
 
   //! Frontier Infomation get
@@ -94,6 +94,7 @@ public:
   // void mergeFrontiers(Frontier& ftr1, const Frontier& ftr2);
   bool isFrontierChanged(const Frontier& ft); 
   bool isWellObserved(const Frontier& ft, const Vector3d& pos);
+  bool isInCurrentFOV(const Frontier& ft, const Vector3d& pos, const double& yaw);  // 判断frontier是否在当前相机FOV内
   bool isHalfInLocalMap(const Frontier& ft);
   bool haveOverlap(const Vector3d& min1, const Vector3d& max1, const Vector3d& min2,
                    const Vector3d& max2);
@@ -163,7 +164,8 @@ public:
   double                            cluster_size_xy_, cluster_size_z_;
   int                               down_sample_;
   bool                              is_print_info_;
-  double                            ftr_blacklist_radius_;  
+  double                            ftr_blacklist_radius_;
+  double                            elimination_max_dist_;  // frontier消除距离门(m)，仅此距离内的frontier参与消除
 
   // viewpoint params
   double                            candidate_rmax_, candidate_rmin_, candidate_dphi_, min_candidate_dist_,

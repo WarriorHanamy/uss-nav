@@ -136,7 +136,9 @@ namespace ego_planner
     // handle yaw
     Eigen::Vector3d target_pos_;
     double target_yaw_;
-    bool   target_look_forward_, target_yaw_low_speed_;
+    bool target_look_forward_;
+    uint8_t target_yaw_mode_{quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL};
+    uint8_t target_yaw_path_mode_{quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST};
     void handleYaw();
     double aim_direction_; // rad
     bool yaw_init_finished_{false};
@@ -174,7 +176,10 @@ namespace ego_planner
     void aimCallbackYawPreset(const quadrotor_msgs::EgoGoalSetPtr &msg);
     void execAim();
     void readGivenWpsAndPlan();
-    bool planNextWaypoint(const Eigen::Vector3d next_wp, const double next_yaw = 0.0, const bool look_forward = true, bool yaw_low_speed = false);
+    bool planNextWaypoint(
+        const Eigen::Vector3d next_wp, const double next_yaw = 0.0, const bool look_forward = true,
+        uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
+        uint8_t yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
     bool mondifyInCollisionFinalGoal();
 
     /* input-output */

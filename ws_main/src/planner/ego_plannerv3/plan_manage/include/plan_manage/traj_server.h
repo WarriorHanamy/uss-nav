@@ -5,6 +5,7 @@
 #include <thread>
 #include <optimizer/poly_traj_utils.hpp>
 #include <quadrotor_msgs/PositionCommand.h>
+#include <quadrotor_msgs/EgoGoalSet.h>
 #include <ros/ros.h>
 #include <perception_utils/perception_utils.h>
 #include <string>
@@ -43,6 +44,8 @@ namespace ego_planner
         double time_forward_;
 
         double yaw_vel_limit_, yaw_acc_limit_, yaw_vel_low_limit_, yaw_acc_low_limit_;
+        double yaw_vel_panorama_, yaw_acc_panorama_;
+        bool panorama_yaw_active_{false};
 
         struct LAST_POS
         {
@@ -59,7 +62,8 @@ namespace ego_planner
             double yaw;
             bool reach_given_yaw_{true};
             bool look_forward{true};
-            bool low_speed{false};
+            uint8_t control_mode{quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL};
+            uint8_t path_mode{quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST};
             Eigen::Vector3d pos;
         };
         struct TIME_REC
@@ -74,7 +78,10 @@ namespace ego_planner
         
         void initTrajServer(ros::NodeHandle &node);
         void setTrajectory(poly_traj::Trajectory &traj, double start_time);
-        void setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward = true, bool low_speed = false);
+        void setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward = true,
+                    uint8_t control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
+                    uint8_t path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+        void setPanoramaYaw(double des_yaw, double cur_yaw, const Eigen::Vector3d& hold_pos);
         void resetYawLookforward(Eigen::Vector3d pos);
         void syncYawFromOdom(const double yaw, const std::string& source = "");
         void feedDog();

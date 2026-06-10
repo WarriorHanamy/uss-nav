@@ -25,6 +25,11 @@ namespace ego_planner
     yaw_vel_low_limit_ = abs(yaw_vel_low_limit_ * M_PI / 180.0);
     yaw_acc_low_limit_ = abs(yaw_acc_low_limit_ * M_PI / 180.0);
 
+    node_.param("traj_server/panorama_yaw_vel", yaw_vel_panorama_, 30.0);
+    node_.param("traj_server/panorama_yaw_acc", yaw_acc_panorama_, 15.0);
+    yaw_vel_panorama_ = abs(yaw_vel_panorama_ * M_PI / 180.0);
+    yaw_acc_panorama_ = abs(yaw_acc_panorama_ * M_PI / 180.0);
+
     last_yaw_     = 0.0;
     last_yawdot_  = 0.0;
     percep_utils_ = std::make_shared<PerceptionUtils>(node_);
@@ -41,23 +46,58 @@ namespace ego_planner
   void TrajServer::resetYawLookforward(Eigen::Vector3d pos)
   {
     std::cout << "[TrajServer] resetYawLookforward" << std::endl;
+    panorama_yaw_active_ = false;
     yaw_given_.pos = pos;
     yaw_given_.reach_given_yaw_ = true;
     yaw_given_.look_forward = true;
-    yaw_given_.low_speed = false;
+    yaw_given_.control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL;
+    yaw_given_.path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST;
   }
 
 
-  void TrajServer::setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward, bool low_speed)
+  void TrajServer::setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward,
+                          uint8_t control_mode, uint8_t path_mode)
   {
-    (void)cur_yaw;
-    // std::cout << "[TrajServer] setYaw : " << des_yaw << ", cur_yaw: " << cur_yaw << ", pos: " << pos.transpose() << ", look_forward: " << look_forward << ", low_speed: " << low_speed << std::endl;
+    panorama_yaw_active_ = false;
+    // 保持方向模式下，将新odometry yaw展开到最接近当前内部连续角的等价角度。
+    // 这样分段发布全景目标时不会因odometry跨越[-pi, pi]而丢失累计圈数。
+    if (path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION)
+    {
+      double unwrapped_cur_yaw = cur_yaw;
+      while (unwrapped_cur_yaw - last_yaw_ > M_PI) unwrapped_cur_yaw -= 2 * M_PI;
+      while (unwrapped_cur_yaw - last_yaw_ < -M_PI) unwrapped_cur_yaw += 2 * M_PI;
+      last_yaw_ = unwrapped_cur_yaw;
+    }
+
     yaw_given_.yaw = des_yaw;
     yaw_given_.pos = pos;
     yaw_given_.reach_given_yaw_ = false;
     yaw_given_.look_forward = look_forward;
-    yaw_given_.low_speed = low_speed;
-    // 当前真实 yaw 由 EGOReplanFSM 在新目标边界调用 syncYawFromOdom() 同步，避免高频 setYaw 破坏 yaw 限速递推。
+    yaw_given_.control_mode = control_mode;
+    yaw_given_.path_mode = path_mode;
+  }
+
+  void TrajServer::setPanoramaYaw(double des_yaw, double cur_yaw, const Eigen::Vector3d& hold_pos)
+  {
+    if (!panorama_yaw_active_)
+    {
+      // 全景会话只在首条命令根据odometry初始化，后续目标续接不得清零角速度。
+      double unwrapped_cur_yaw = cur_yaw;
+      while (unwrapped_cur_yaw - last_yaw_ > M_PI) unwrapped_cur_yaw -= 2 * M_PI;
+      while (unwrapped_cur_yaw - last_yaw_ < -M_PI) unwrapped_cur_yaw += 2 * M_PI;
+      last_yaw_ = unwrapped_cur_yaw;
+      last_yawdot_ = 0.0;
+      time_rec_.has_init = false;
+      receive_traj_ = false;
+      panorama_yaw_active_ = true;
+    }
+
+    yaw_given_.yaw = des_yaw;
+    yaw_given_.pos = hold_pos;
+    yaw_given_.reach_given_yaw_ = false;
+    yaw_given_.look_forward = false;
+    yaw_given_.control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA;
+    yaw_given_.path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION;
   }
 
   void TrajServer::syncYawFromOdom(const double yaw, const std::string& source)
@@ -79,6 +119,7 @@ namespace ego_planner
 
   void TrajServer::setTrajectory(poly_traj::Trajectory &traj, double start_time)
   {
+    panorama_yaw_active_ = false;
     traj_ = traj;
     start_time_ = start_time;
     traj_duration_ = traj_.getTotalDuration();
@@ -111,7 +152,16 @@ namespace ego_planner
     else
     {
       yaw_temp = yaw_given_.yaw;
-      if (abs(last_yaw_ - yaw_given_.yaw) < 0.01)
+      double yaw_error = yaw_temp - last_yaw_;
+      if (yaw_given_.path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
+      {
+        while (yaw_error >= M_PI) yaw_error -= 2 * M_PI;
+        while (yaw_error <= -M_PI) yaw_error += 2 * M_PI;
+      }
+      const bool panorama_stopped =
+          yaw_given_.control_mode != quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA ||
+          abs(last_yawdot_) < 0.5 * M_PI / 180.0;
+      if (abs(yaw_error) < 0.01 && panorama_stopped)
       {
         yaw_given_.reach_given_yaw_ = true;
       }
@@ -121,58 +171,82 @@ namespace ego_planner
 
     double yawdot = 0;
     double d_yaw = yaw_temp - last_yaw_;
-    if (d_yaw >= M_PI)
+    if (yaw_given_.path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
     {
-      d_yaw -= 2 * M_PI;
-    }
-    if (d_yaw <= -M_PI)
-    {
-      d_yaw += 2 * M_PI;
+      if (d_yaw >= M_PI) d_yaw -= 2 * M_PI;
+      if (d_yaw <= -M_PI) d_yaw += 2 * M_PI;
     }
 
     double YDM, YDDM;
-    if (yaw_given_.low_speed) {
-      YDM = d_yaw >= 0 ?  yaw_vel_low_limit_ : -yaw_vel_low_limit_;
+    if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+    {
+      YDM = d_yaw >= 0 ? yaw_vel_panorama_ : -yaw_vel_panorama_;
+      YDDM = d_yaw >= 0 ? yaw_acc_panorama_ : -yaw_acc_panorama_;
+    }
+    else if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED)
+    {
+      YDM = d_yaw >= 0 ? yaw_vel_low_limit_ : -yaw_vel_low_limit_;
       YDDM = d_yaw >= 0 ? yaw_acc_low_limit_ : -yaw_acc_low_limit_;
-    }else {
+    }
+    else
+    {
       YDM = d_yaw >= 0 ? yaw_vel_limit_ : -yaw_vel_limit_;
       YDDM = d_yaw >= 0 ? yaw_acc_limit_ : -yaw_acc_limit_;
     }
 
-    double d_yaw_max;
-    if (fabs(last_yawdot_ + dt * YDDM) <= fabs(YDM))
+    if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
     {
-      // yawdot = last_yawdot_ + dt * YDDM;
-      d_yaw_max = last_yawdot_ * dt + 0.5 * YDDM * dt * dt;
-      // ROS_INFO_STREAM("A last_yawdot_: " << last_yawdot_ << ", yd: " << last_yawdot_ + YDDM * dt);
-      // printf("A d_yaw_max=%f, last_yawdot_=%f, dt=%f, YDDM=%f\n", d_yaw_max, last_yawdot_, dt, YDDM);
+      // 根据剩余角度生成可制动的目标角速度，再按角加速度限制逐周期逼近。
+      // 中间目标会在进入制动区前被上层续接，因此巡航阶段能够保持稳定角速度。
+      const double remaining_abs = fabs(d_yaw);
+      const double target_speed_abs = std::min(fabs(YDM), sqrt(2.0 * fabs(YDDM) * remaining_abs));
+      const double target_yawdot = d_yaw >= 0.0 ? target_speed_abs : -target_speed_abs;
+      const double max_yawdot_change = fabs(YDDM) * dt;
+      double yawdot_change = target_yawdot - last_yawdot_;
+      yawdot_change = std::max(-max_yawdot_change, std::min(max_yawdot_change, yawdot_change));
+      yawdot = last_yawdot_ + yawdot_change;
+
+      double yaw_step = yawdot * dt;
+      if (fabs(yaw_step) > remaining_abs)
+      {
+        yaw_step = d_yaw;
+        yawdot = dt > 1e-6 ? yaw_step / dt : 0.0;
+      }
+      d_yaw = yaw_step;
     }
     else
     {
-      // yawdot = YDM;
-      double t1 = (YDM - last_yawdot_) / YDDM;
-      d_yaw_max = (last_yawdot_ * t1 + 0.5 * YDDM * t1 * t1) + YDM * (dt - t1);
-      // ROS_INFO_STREAM("B last_yawdot_: " << last_yawdot_ << ", yd: " << last_yawdot_ + YDDM * t1);
-      // printf("B d_yaw_max=%f, last_yawdot_=%f, dt=%f, t1=%f, YDM=%f, YDDM=%f\n", d_yaw_max, last_yawdot_, dt, t1, YDM, YDDM);
-    }
+      double d_yaw_max;
+      if (fabs(last_yawdot_ + dt * YDDM) <= fabs(YDM))
+      {
+        // yawdot = last_yawdot_ + dt * YDDM;
+        d_yaw_max = last_yawdot_ * dt + 0.5 * YDDM * dt * dt;
+        // ROS_INFO_STREAM("A last_yawdot_: " << last_yawdot_ << ", yd: " << last_yawdot_ + YDDM * dt);
+        // printf("A d_yaw_max=%f, last_yawdot_=%f, dt=%f, YDDM=%f\n", d_yaw_max, last_yawdot_, dt, YDDM);
+      }
+      else
+      {
+        // yawdot = YDM;
+        double t1 = (YDM - last_yawdot_) / YDDM;
+        d_yaw_max = (last_yawdot_ * t1 + 0.5 * YDDM * t1 * t1) + YDM * (dt - t1);
+        // ROS_INFO_STREAM("B last_yawdot_: " << last_yawdot_ << ", yd: " << last_yawdot_ + YDDM * t1);
+        // printf("B d_yaw_max=%f, last_yawdot_=%f, dt=%f, t1=%f, YDM=%f, YDDM=%f\n", d_yaw_max, last_yawdot_, dt, t1, YDM, YDDM);
+      }
 
-    if (fabs(d_yaw) > fabs(d_yaw_max))
-    {
-      d_yaw = d_yaw_max;
+      if (fabs(d_yaw) > fabs(d_yaw_max))
+      {
+        d_yaw = d_yaw_max;
+      }
+      yawdot = d_yaw / dt;
     }
-    yawdot = d_yaw / dt;
     // printf("yawdot=%f\n", yawdot);
     // ROS_INFO_STREAM("yawdot: " << yawdot);
 
-    double yaw = last_yaw_ + d_yaw;
+    const double yaw = last_yaw_ + d_yaw;
 
     // ROS_INFO_STREAM("[traj_server] last_yaw_: " << last_yaw_ << ", dyaw: " << d_yaw);
     // ROS_INFO("------------------------------------");
 
-    if (yaw > M_PI)
-      yaw -= 2 * M_PI;
-    if (yaw < -M_PI)
-      yaw += 2 * M_PI;
     yaw_yawdot.first = yaw;
     yaw_yawdot.second = yawdot;
 
@@ -205,6 +279,9 @@ namespace ego_planner
     cmd.jerk.x = j(0);
     cmd.jerk.y = j(1);
     cmd.jerk.z = j(2);
+    // PositionCommand继续使用[-pi, pi]表示，内部last_yaw_保留连续角用于方向保持。
+    while (y > M_PI) y -= 2 * M_PI;
+    while (y < -M_PI) y += 2 * M_PI;
     cmd.yaw = y;
     cmd.yaw_dot = yd;
     pos_cmd_pub_.publish(cmd);
@@ -243,7 +320,6 @@ namespace ego_planner
 
     if (!receive_traj_ && yaw_given_.reach_given_yaw_) {
       time_rec_.has_init   = false;
-      yaw_given_.low_speed = false;
       // ROS_WARN_THROTTLE(5.0, "[traj_server] Waiting for trajectory to be received...");
     }
     if ((time_now - heartbeat_time_).toSec() > 0.5){
@@ -287,7 +363,6 @@ namespace ego_planner
           drawFOV(l1, l2, cmd_vis_pub_);
         }
       }
-      if (yaw_given_.low_speed) yaw_given_.low_speed = false;
     }
     else
     {

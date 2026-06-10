@@ -883,7 +883,9 @@ namespace ego_planner
     return true;
   }
 
-  bool EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp, const double next_yaw, const bool look_forward, const bool yaw_low_speed)
+  bool EGOReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp, const double next_yaw,
+                                      const bool look_forward, const uint8_t yaw_mode,
+                                      const uint8_t yaw_path_mode)
   {
     final_goal_ = next_wp;
     glb_start_pt_ = odom_pos_;
@@ -891,8 +893,9 @@ namespace ego_planner
     pending_goal_finish_trigger_ = false;
     goal_finish_stable_start_time_ = ros::Time(0);
     cur_traj_to_cur_target_ = false;
-    // 新目标/新局部目标开始时，用真实 odom yaw 对齐 TrajServer 内部 yaw 状态。
-    traj_server_.syncYawFromOdom(odom_yaw_, "planNextWaypoint");
+    // 最短路径命令在目标边界同步真实yaw；保持方向命令保留TrajServer内部连续角。
+    if (yaw_path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
+      traj_server_.syncYawFromOdom(odom_yaw_, "planNextWaypoint");
 
     if (exec_state_ == WAIT_TARGET)
     {
@@ -904,7 +907,8 @@ namespace ego_planner
         yaw_cmd_.yaw_reach = false; // this will work only if the drone state is WAIT_TARGET
         yaw_cmd_.cmd_time = ros::Time::now();
         yaw_cmd_.des_yaw = des_yaw;
-        traj_server_.setYaw(des_yaw, odom_yaw_, odom_pos_, true, yaw_low_speed);
+        traj_server_.setYaw(des_yaw, odom_yaw_, odom_pos_, true, yaw_mode,
+                            quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
       }
 
       if (!look_forward)
@@ -912,7 +916,7 @@ namespace ego_planner
         yaw_cmd_.yaw_reach = false; // this will work only if the drone state is WAIT_TARGET
         yaw_cmd_.cmd_time = ros::Time::now();
         yaw_cmd_.des_yaw = next_yaw;
-        traj_server_.setYaw(next_yaw, odom_yaw_, odom_pos_, false, yaw_low_speed);
+        traj_server_.setYaw(next_yaw, odom_yaw_, odom_pos_, false, yaw_mode, yaw_path_mode);
       }
     }
 
@@ -921,7 +925,7 @@ namespace ego_planner
       yaw_cmd_.yaw_reach = false; // this will work only if the drone state is WAIT_TARGET
       yaw_cmd_.cmd_time = ros::Time::now();
       yaw_cmd_.des_yaw = next_yaw;
-      traj_server_.setYaw(next_yaw, odom_yaw_, odom_pos_, false, yaw_low_speed);
+      traj_server_.setYaw(next_yaw, odom_yaw_, odom_pos_, false, yaw_mode, yaw_path_mode);
     }
     else
     {
@@ -1122,7 +1126,29 @@ namespace ego_planner
     initEgoPlanResult();
     Eigen::Vector3d end_wp(msg->goal[0], msg->goal[1], msg->goal[2]);
 
-    if (planNextWaypoint(end_wp, msg->yaw, msg->look_forward))
+    uint8_t yaw_mode = msg->yaw_mode;
+    if (yaw_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL && msg->yaw_low_speed)
+      yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED;
+    uint8_t yaw_path_mode = msg->yaw_path_mode;
+    const bool panorama_source_allowed =
+        msg->source_task_id == quadrotor_msgs::EgoGoalSet::SOURCE_TASK_EXPLORATION ||
+        msg->source_task_id == quadrotor_msgs::EgoGoalSet::SOURCE_TASK_COUNTING;
+    if (yaw_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA &&
+        yaw_path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION &&
+        panorama_source_allowed)
+    {
+      traj_server_.setPanoramaYaw(msg->yaw, odom_yaw_, end_wp);
+      changeFSMExecState(WAIT_YAW, "Panorama Yaw Preset");
+      return;
+    }
+    if (yaw_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+    {
+      ROS_WARN("[Ego] Reject preset panorama mode from source_task_id=%u.",
+               static_cast<unsigned int>(msg->source_task_id));
+      yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL;
+      yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST;
+    }
+    if (planNextWaypoint(end_wp, msg->yaw, msg->look_forward, yaw_mode, yaw_path_mode))
       // if (planNextWaypoint(end_wp))
     {
       have_trigger_ = true;
@@ -1134,11 +1160,13 @@ namespace ego_planner
 
       ROS_WARN_THROTTLE(0.5, "[Ego-FSM] | Turning Yaw ... (cur yaw : %.2f deg, des_yaw : %.2f deg, err : %.2f deg)",
                     odom_yaw_ / M_PI * 180.0, aim_direction_ / M_PI * 180.0 , abs(odom_yaw_ - aim_direction_) / M_PI * 180.0);
-      traj_server_.setYaw(aim_direction_, odom_yaw_, odom_pos_, false, false);
+      traj_server_.setYaw(aim_direction_, odom_yaw_, odom_pos_, false, target_yaw_mode_,
+                          quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
 
     }else {
       ROS_INFO("[Ego-FSM] | Yaw Turned, Executing Plan ... " );
-      if (planNextWaypoint(target_pos_, target_yaw_, target_look_forward_, target_yaw_low_speed_))
+      if (planNextWaypoint(target_pos_, target_yaw_, target_look_forward_,
+                           target_yaw_mode_, target_yaw_path_mode_))
       {
         have_trigger_ = true;
       }
@@ -1147,8 +1175,10 @@ namespace ego_planner
 
   void EGOReplanFSM::aimCallback(const quadrotor_msgs::EgoGoalSetPtr &msg)
   {
-    ROS_INFO("[Ego]: Received goalID: %d, pos: %.1f, %.1f, %.1f, lookforward: %d, yaw: %.2f, yaw_low_speed: %d",
-             msg->drone_id, msg->goal[0], msg->goal[1], msg->goal[2], (int)msg->look_forward, msg->yaw, msg->yaw_low_speed);
+    ROS_INFO("[Ego]: Received goalID: %d, pos: %.1f, %.1f, %.1f, lookforward: %d, yaw: %.2f, yaw_mode: %u, yaw_path_mode: %u",
+             msg->drone_id, msg->goal[0], msg->goal[1], msg->goal[2], (int)msg->look_forward,
+             msg->yaw, static_cast<unsigned int>(msg->yaw_mode),
+             static_cast<unsigned int>(msg->yaw_path_mode));
     if (msg->drone_id != planner_manager_->pp_.drone_id)
       return;
 
@@ -1156,13 +1186,40 @@ namespace ego_planner
     initEgoPlanResult();
     target_pos_ = Eigen::Vector3d(msg->goal[0], msg->goal[1], msg->goal[2]);
     double yaw = msg->yaw;
-    if ( yaw > M_PI )
-      yaw -= 2 * M_PI;
-    if ( yaw < -M_PI )
-      yaw += 2 * M_PI;
+    if (msg->yaw_path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
+    {
+      while (yaw > M_PI) yaw -= 2 * M_PI;
+      while (yaw < -M_PI) yaw += 2 * M_PI;
+    }
     target_yaw_ = yaw;
-    target_yaw_low_speed_ = msg->yaw_low_speed;
+    target_yaw_mode_ = msg->yaw_mode;
+    if (target_yaw_mode_ == quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL && msg->yaw_low_speed)
+      target_yaw_mode_ = quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED;
+    target_yaw_path_mode_ = msg->yaw_path_mode;
     target_look_forward_  = msg->look_forward;
+
+    const bool panorama_source_allowed =
+        msg->source_task_id == quadrotor_msgs::EgoGoalSet::SOURCE_TASK_EXPLORATION ||
+        msg->source_task_id == quadrotor_msgs::EgoGoalSet::SOURCE_TASK_COUNTING;
+    if (target_yaw_mode_ == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA &&
+        !panorama_source_allowed)
+    {
+      ROS_WARN("[Ego] Reject panorama mode from source_task_id=%u, fallback to NORMAL + SHORTEST.",
+               static_cast<unsigned int>(msg->source_task_id));
+      target_yaw_mode_ = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL;
+      target_yaw_path_mode_ = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST;
+      while (target_yaw_ > M_PI) target_yaw_ -= 2 * M_PI;
+      while (target_yaw_ < -M_PI) target_yaw_ += 2 * M_PI;
+    }
+
+    if (target_yaw_mode_ == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA &&
+        target_yaw_path_mode_ == quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION)
+    {
+      // 全景旋转是纯yaw会话，不生成近零位移轨迹，也不进入GEN_NEW_TRAJ。
+      traj_server_.setPanoramaYaw(target_yaw_, odom_yaw_, target_pos_);
+      changeFSMExecState(WAIT_YAW, "Panorama Yaw");
+      return;
+    }
 
     // 计算当前点到目标点的方向的yaw
     Eigen::Vector3d dxy = target_pos_ - odom_pos_;
@@ -1176,7 +1233,8 @@ namespace ego_planner
     {
       changeFSMExecState(HANDLE_YAW, "Recv Aim Callback");
     }
-    else if (planNextWaypoint(target_pos_, target_yaw_, target_look_forward_, target_yaw_low_speed_))
+    else if (planNextWaypoint(target_pos_, target_yaw_, target_look_forward_,
+                              target_yaw_mode_, target_yaw_path_mode_))
     {
       have_trigger_ = true;
     }
@@ -1273,10 +1331,8 @@ namespace ego_planner
     Eigen::Matrix3d M = odom_q_.matrix();
     double yaw = atan2(M(1, 0), M(0, 0));
     double yaw_err = yaw - yaw_cmd_.des_yaw;
-    if ( yaw_err > M_PI )
-      yaw_err -= 2 * M_PI;
-    if ( yaw_err < -M_PI )
-      yaw_err += 2 * M_PI;
+    while (yaw_err > M_PI) yaw_err -= 2 * M_PI;
+    while (yaw_err < -M_PI) yaw_err += 2 * M_PI;
 
     odom_yaw_ = yaw;
     if (!traj_server_yaw_synced_)

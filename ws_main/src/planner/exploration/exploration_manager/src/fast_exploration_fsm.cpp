@@ -79,6 +79,17 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("fsm/auto_init_scene_graph",      fp_->auto_init_scene_graph_, true);
   nh.param("fsm/auto_init_delay_sec",        fp_->auto_init_delay_sec_, 2.0);
   nh.param("fsm/scene_graph_init_forward_dist", fp_->scene_graph_init_forward_dist_, 1.8);
+  double panorama_max_step_deg = 120.0;
+  double panorama_extend_angle_deg = 40.0;
+  nh.param("fsm/panorama_max_step", panorama_max_step_deg, 120.0);
+  nh.param("fsm/panorama_extend_angle", panorama_extend_angle_deg, 40.0);
+  panorama_max_step_ = std::max(1.0, panorama_max_step_deg) * M_PI / 180.0;
+  panorama_extend_angle_ = std::max(0.0, panorama_extend_angle_deg) * M_PI / 180.0;
+  if (panorama_extend_angle_ >= panorama_max_step_)
+  {
+    ROS_WARN("[Panorama] fsm/panorama_extend_angle must be smaller than panorama_max_step, clamp it.");
+    panorama_extend_angle_ = 0.5 * panorama_max_step_;
+  }
   nh.param("tracking/finish_hold_time",       fp_->track_finish_hold_time_, 3.0);
   nh.param("tracking/finish_move_thresh",     fp_->track_finish_move_thresh_, 0.2);
   nh.param("tracking/finish_yaw_thresh",      fp_->track_finish_yaw_thresh_, 0.2);
@@ -258,7 +269,7 @@ void FastExplorationFSM::handleGoalInstruction(const std::vector<geometry_msgs::
       Eigen::Vector3d(first_goal.x, first_goal.y, goal_z),
       yaw,
       look_forward,
-      false);
+      quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
 }
 
 void FastExplorationFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,
@@ -500,6 +511,12 @@ void FastExplorationFSM::handelThingkingProcess() {
 void FastExplorationFSM::planLLMExplore() {
   ROS_INFO("\033[1;31m\n\n ============== [Plan LLM Explore] ==============\033[0m");
 
+  // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
+  if (need_panorama_) {
+    handlePanoramaYaw();
+    return;
+  }
+
   if (need_rotate_yaw_) {
     auto yawLimit = [] (double yaw) {
       while (yaw >= M_PI) yaw -= 2 * M_PI;
@@ -627,6 +644,12 @@ void FastExplorationFSM::planLLMExplore() {
 
 void FastExplorationFSM::planRegularExplore() {
   ROS_INFO("\033[1;31mPlan Regular Explore!\033[0m");  //红
+
+  // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
+  if (need_panorama_) {
+    handlePanoramaYaw();
+    return;
+  }
 
   if (need_rotate_yaw_ && fd_->df_demo_mode_) {
     auto yawLimit = [] (double yaw) {
@@ -763,7 +786,8 @@ void FastExplorationFSM::approachRegularExplore() {
   if ((fd_->path_inx_ == fd_->path_res_.size() - 1 || fd_->path_res_.size() == 2) &&
       dis_2_aim_2d < expl_manager_->ep_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_){
     INFO_MSG_CYAN("\n[Approach EXPLORE] Close to Aim Position, Rotate Yaw to Aim Yaw!\n");
-    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false, true);
+    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
+                 quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
     fd_->has_rotated_ = true;
     INFO_MSG_GREEN("[EXP-FSM] [Rotate Yaw] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     return;
@@ -981,7 +1005,9 @@ void FastExplorationFSM::planTrack() {
   const bool look_forward = !(near_yaw_lock || far_yaw_align);
   const bool yaw_low_speed = far_yaw_align;
 
-  pubLocalGoal(fd_->path_res_.back(), fd_->aim_yaw_, look_forward, yaw_low_speed);
+  pubLocalGoal(fd_->path_res_.back(), fd_->aim_yaw_, look_forward,
+               yaw_low_speed ? quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED
+                             : quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
   resetTrackingFinishCandidate();
   INFO_MSG_GREEN("[TRACK] [look_forward = " << look_forward
                  << ", yaw_low_speed = " << yaw_low_speed
@@ -1052,7 +1078,8 @@ void FastExplorationFSM::approachTrack() {
     fd_->has_rotated_ = true;
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
-    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false, false);
+    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
+                 quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
     INFO_MSG_GREEN("[TRACK] Switch to yaw-lock, aim: " << fd_->aim_pos_.transpose()
                    << ", yaw: " << fd_->aim_yaw_);
     return;
@@ -1062,10 +1089,67 @@ void FastExplorationFSM::approachTrack() {
       std::fabs(normalizeAngle(current_dir - fd_->aim_yaw_)) > expl_manager_->ep_->track_yaw_thr_) {
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
-    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false, false);
+    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
+                 quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
     INFO_MSG_GREEN("[TRACK] Update yaw-lock, aim: " << fd_->aim_pos_.transpose()
                    << ", yaw: " << fd_->aim_yaw_);
   }
+}
+
+void FastExplorationFSM::startPanoramaRotation() {
+  // 全景旋转固定沿yaw正方向执行，odometry增量负责记录真实累计转角。
+  panorama_last_odom_yaw_ = fd_->odom_yaw_;
+  panorama_start_yaw_ = fd_->odom_yaw_;
+  panorama_unwrapped_yaw_ = fd_->odom_yaw_;
+  panorama_accumulated_yaw_ = 0.0;
+  panorama_command_target_yaw_ = panorama_unwrapped_yaw_;
+  panorama_hold_pos_ = fd_->odom_pos_;
+  panorama_command_active_ = false;
+  need_panorama_ = true;
+  need_rotate_yaw_ = false;
+  ROS_WARN("[FSM] Start panorama 360° rotation, start_yaw=%.2f°",
+           panorama_unwrapped_yaw_ * 180.0 / M_PI);
+}
+
+void FastExplorationFSM::handlePanoramaYaw() {
+  constexpr double TOTAL_ANGLE = 2.0 * M_PI;
+  constexpr double FINISH_TOLERANCE = 2.0 * M_PI / 180.0;
+  constexpr double TARGET_SETTLE_TOLERANCE = 1.0 * M_PI / 180.0;
+
+  const double remaining = std::max(0.0, TOTAL_ANGLE - panorama_accumulated_yaw_);
+  const double final_target_error =
+      fabs((panorama_start_yaw_ + TOTAL_ANGLE) - panorama_unwrapped_yaw_);
+  if (remaining <= FINISH_TOLERANCE && final_target_error <= TARGET_SETTLE_TOLERANCE) {
+    ROS_WARN("[FSM] Panorama 360° done, accumulated=%.2f°",
+             panorama_accumulated_yaw_ * 180.0 / M_PI);
+    panorama_command_active_ = false;
+    need_panorama_ = false;
+    return;
+  }
+
+  if (panorama_command_active_)
+  {
+    const double angle_to_command = panorama_command_target_yaw_ - panorama_unwrapped_yaw_;
+    const double commanded_angle = panorama_command_target_yaw_ - panorama_start_yaw_;
+    const bool final_target_published = commanded_angle >= TOTAL_ANGLE - 1e-6;
+    if (final_target_published || angle_to_command > panorama_extend_angle_)
+      return;
+  }
+
+  // 每次最多向前延长配置角度，最终连续目标严格封顶为起始yaw+360°。
+  const double commanded_angle =
+      std::max(0.0, panorama_command_target_yaw_ - panorama_start_yaw_);
+  const double next_commanded_angle =
+      std::min(TOTAL_ANGLE, commanded_angle + panorama_max_step_);
+  panorama_command_target_yaw_ = panorama_start_yaw_ + next_commanded_angle;
+  ROS_INFO("[Panorama] publish target=%.1f°, accumulated=%.1f°, remaining=%.1f°",
+           panorama_command_target_yaw_ * 180.0 / M_PI,
+           panorama_accumulated_yaw_ * 180.0 / M_PI,
+           remaining * 180.0 / M_PI);
+  pubLocalGoal(panorama_hold_pos_, panorama_command_target_yaw_, false,
+               quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA,
+               quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION);
+  panorama_command_active_ = true;
 }
 
 void FastExplorationFSM::handleYawChange() {
@@ -1080,7 +1164,8 @@ void FastExplorationFSM::handleYawChange() {
     if (!yawhandle_left_published) {
       INFO_MSG("[HandleYaw] | Turn Left ...");
       yawhandle_left_published = true;
-      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_left, false, true);
+      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_left, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -1091,7 +1176,8 @@ void FastExplorationFSM::handleYawChange() {
       ros::Duration(0.5).sleep();
       INFO_MSG("[HandleYaw] | Turn Right ...");
       yawhandle_right_published = true;
-      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_right, false, true);
+      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_right, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -1102,7 +1188,8 @@ void FastExplorationFSM::handleYawChange() {
       ros::Duration(0.5).sleep();
       INFO_MSG("[HandleYaw] | Back to raw ...");
       yawhandle_back_published = true;
-      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_raw, false, true);
+      pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_raw, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -1228,7 +1315,7 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e)
     }
 
     case LLM_PLAN_EXPLORE: {
-      if (fd_->ego_exec_finished_)
+      if (need_panorama_ || fd_->ego_exec_finished_)
         planLLMExplore();
       break;
     }
@@ -1327,7 +1414,8 @@ void FastExplorationFSM::goTargetObject() {
          && fd_->path_inx_ == fd_->path_res_.size() - 1){
       fd_->last_pub_time_ = ros::Time::now();
       ROS_WARN("-------------> RePublish LocalGoal: crash recovery, forcely rotate yaw<----------------");
-      pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false, false);
+      pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
       // INFO_MSG_GREEN("[Targ Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     }
 
@@ -1349,7 +1437,8 @@ void FastExplorationFSM::goTargetObject() {
       auto cur_obj = scene_graph_->object_factory_->object_map_[fd_->object_target_id_];
       Eigen::Vector3d target_pos = fd_->path_res_.back();
       target_pos[2] =  adjustTerminateHeightFindingObject(cur_obj, fd_->aim_pos_, true);
-      pubLocalGoal(target_pos, fd_->aim_yaw_, false, true);
+      pubLocalGoal(target_pos, fd_->aim_yaw_, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
       fd_->has_rotated_ = true;
       return;
     }
@@ -1444,7 +1533,8 @@ void FastExplorationFSM::goTargetWithWaypoint() {
          && fd_->path_inx_ == fd_->path_res_.size() - 1) {
       fd_->last_pub_time_ = ros::Time::now();
       ROS_WARN("-------------> RePublish LocalGoal: crash recovery, forcely rotate yaw<----------------");
-      pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false, false);
+      pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
     }
 
     if (t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
@@ -1460,7 +1550,8 @@ void FastExplorationFSM::goTargetWithWaypoint() {
       INFO_MSG_GREEN("[TARG Wpt] [Rotate Yaw] yaw: " << fd_->odom_yaw_ << ", target yaw: " << fd_->aim_yaw_
           << ", err : " << (fd_->odom_yaw_ - fd_->aim_yaw_) / 3.14 * 180.0f << "deg");
 
-      pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false, true);
+      pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
       fd_->has_rotated_ = true;
       return;
     }
@@ -1681,19 +1772,25 @@ bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
   }
 }
 
-void FastExplorationFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw, const bool look_forward, const bool yaw_low_speed)
+void FastExplorationFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw,
+                                      const bool look_forward, const uint8_t yaw_mode,
+                                      const uint8_t yaw_path_mode)
 {
-  fd_->ego_exec_finished_ = false;
+  // yaw-only全景命令不占用EGO位置轨迹完成标志，目标续接由odometry角度驱动。
+  if (yaw_mode != quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+    fd_->ego_exec_finished_ = false;
 
   quadrotor_msgs::EgoGoalSet msg;
   msg.drone_id = md_->drone_id_;
+  msg.source_task_id = active_instruction_task_id_;
   msg.goal[0] = static_cast<float>(local_goal.x());
   msg.goal[1] = static_cast<float>(local_goal.y());
   msg.goal[2] = static_cast<float>(local_goal.z());
   msg.look_forward = look_forward;
-  // ROS_ERROR_STREAM("pub look_forward: " << look_forward);
   msg.yaw = yaw;
-  msg.yaw_low_speed = yaw_low_speed;
+  msg.yaw_low_speed = yaw_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED;
+  msg.yaw_mode = yaw_mode;
+  msg.yaw_path_mode = yaw_path_mode;
   ego_goal_pub_.publish(msg);
 }
 
@@ -1763,7 +1860,8 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
         aim_direction += 2 * M_PI;
 
       Eigen::Vector3d aim_pos = scene_graph_->skeleton_gen_->cur_iter_first_poly_->center_;
-      pubLocalGoal(aim_pos, aim_direction, false, true);
+      pubLocalGoal(aim_pos, aim_direction, false,
+                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
       // pubLocalGoal(fd_->odom_pos_, fd_->odom_yaw_, false, false);
       INFO_MSG_GREEN("Get New skeleton info, stop motion & predict new area");
     }
@@ -1782,7 +1880,7 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
   if (new_topo) {
     ft->reCalculateAllFtrTopo(fd_->odom_pos_);
   }
-  ft->searchFrontiers(fd_->odom_pos_);
+  ft->searchFrontiers(fd_->odom_pos_, fd_->odom_yaw_);
   ft->computeFrontiersToVisit(fd_->odom_pos_);
   ft->updateFrontierCostMatrix();
   ft->updateSceneGraphWithFtr();
@@ -1829,6 +1927,18 @@ void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   Eigen::Vector3d rot_x = fd_->odom_orient_.toRotationMatrix().block<3, 1>(0, 0);
   fd_->odom_yaw_ = atan2(rot_x(1), rot_x(0));
 
+  if (need_panorama_)
+  {
+    double yaw_delta = fd_->odom_yaw_ - panorama_last_odom_yaw_;
+    while (yaw_delta > M_PI) yaw_delta -= 2 * M_PI;
+    while (yaw_delta < -M_PI) yaw_delta += 2 * M_PI;
+
+    panorama_unwrapped_yaw_ += yaw_delta;
+    // 累计量表示相对起始朝向沿正方向的净变化，反向扰动会增加后续剩余角。
+    panorama_accumulated_yaw_ = std::max(0.0, panorama_accumulated_yaw_ + yaw_delta);
+    panorama_last_odom_yaw_ = fd_->odom_yaw_;
+  }
+
   fd_->have_odom_ = true;
 }
 
@@ -1867,6 +1977,13 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     ic_last_recv_time = ros::Time::now();
 
   md_->instruction_ = msg->instruction_type;
+  active_instruction_task_id_ = msg->source_task_id;
+  const bool source_requires_panorama =
+      msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_EXPLORATION ||
+      msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING;
+  // 每条新Instruction先终止旧调度状态，只有下方匹配的task来源和探索指令可重新开启。
+  need_panorama_ = false;
+  panorama_command_active_ = false;
   fd_->instruct_directly_to_goal = false; // [gwq] 防止从turn_ego_plan状态切出的时候其他状态依旧使用强制ego规划
   if (msg->instruction_type != quadrotor_msgs::Instruction::TURN_TRACKING) {
     switchPlannerCmdMuxToEgo("instructionCallback:non_tracking");
@@ -1946,9 +2063,11 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
     }
 
-    case quadrotor_msgs::Instruction::TURN_OBJECT_NAV: 
+    case quadrotor_msgs::Instruction::TURN_OBJECT_NAV:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = false;
+      if (source_requires_panorama)
+        startPanoramaRotation();
       fd_->find_terminate_target_mode_ = false;
       fd_->new_topo_need_predict_immediately_ = true;
       fd_->df_demo_mode_ = false;
@@ -1960,6 +2079,8 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = true;
+      if (source_requires_panorama)
+        startPanoramaRotation();
       fd_->df_demo_mode_    = false;
       fd_->find_terminate_target_mode_ = false;
       transitState(MISSION_FSM_STATE::PLAN_EXPLORE, "instructionCallback");

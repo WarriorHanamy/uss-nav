@@ -91,6 +91,18 @@ private:
   MISSION_FSM_STATE stash_state_{MISSION_FSM_STATE::UNKONWN};
   unsigned int cur_prompt_id_{0};
   bool has_made_area_decision_{false}, need_rotate_yaw_{false};    // only used for llm plan
+  // 仅由source_task_id=EXPLORATION/COUNTING开启的360度全景旋转状态
+  bool need_panorama_{false};
+  bool panorama_command_active_{false};
+  uint8_t active_instruction_task_id_{0};
+  double panorama_last_odom_yaw_{0.0};
+  double panorama_start_yaw_{0.0};
+  double panorama_unwrapped_yaw_{0.0};
+  double panorama_accumulated_yaw_{0.0};
+  double panorama_command_target_yaw_{0.0};
+  Eigen::Vector3d panorama_hold_pos_{Eigen::Vector3d::Zero()};
+  double panorama_max_step_{2.0943951023931953};
+  double panorama_extend_angle_{0.6981317007977318};
   int expl_area_id_{-1};
   double think_duration_limit_;
   double think_start_time_;
@@ -146,7 +158,10 @@ private:
   void egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstPtr& msg);
   bool getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                               const bool look_forward = true, const double aim_yaw = 0.0);
-  void pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw = 0.0, const bool look_forward = true, bool yaw_low_speed = false);
+  void pubLocalGoal(
+      const Eigen::Vector3d local_goal, const double yaw = 0.0, const bool look_forward = true,
+      uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
+      uint8_t yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
   void stopMotion();
 
   void handelThingkingProcess();
@@ -156,6 +171,8 @@ private:
   void planTrack();
   void approachTrack();
   void handleYawChange();                  // scan the area (Fov expand) and update the map
+  void startPanoramaRotation();            // EXPLORATION/COUNTING启动阶段360°全景旋转
+  void handlePanoramaYaw();                // 全景旋转状态处理
   void goTargetObject();
   void goTargetWithWaypoint();
   void findTerminateTarget();
@@ -190,7 +207,6 @@ public:
   }
 
   void init(ros::NodeHandle& nh, const MapInterface::Ptr& map);
-
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 

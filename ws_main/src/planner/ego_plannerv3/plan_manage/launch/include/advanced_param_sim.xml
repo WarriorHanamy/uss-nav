@@ -47,8 +47,12 @@
         <param name="traj_server/time_forward" value="1.0" type="double"/>
         <param name="traj_server/max_yaw_vel" value="100.0" type="double"/>
         <param name="traj_server/max_yaw_acc" value="120.0" type="double"/>
-        <param name="traj_server/max_yaw_vel_low" value="20.0" type="double"/>
-        <param name="traj_server/max_yaw_acc_low" value="10.0" type="double"/>
+        <param name="traj_server/max_yaw_vel_low" value="30.0" type="double"/>
+        <param name="traj_server/max_yaw_acc_low" value="60.0" type="double"/>
+        <param name="traj_server/panorama_yaw_vel" value="30.0" type="double"/> <!-- 全景旋转专用yaw速度(deg/s) -->
+        <param name="traj_server/panorama_yaw_acc" value="60.0" type="double"/> <!-- 全景旋转专用yaw加速度(deg/s²) -->
+        <param name="fsm/panorama_max_step" value="120.0" type="double"/> <!-- 单次全景目标最大延长角(deg) -->
+        <param name="fsm/panorama_extend_angle" value="40.0" type="double"/> <!-- 距当前目标小于该角度时提前续接(deg) -->
 
         <!-- planning fsm -->
         <param name="fsm/flight_type" value="$(arg flight_type)" type="int"/>
@@ -159,6 +163,7 @@
         <param name="frontier/min_view_finish_fraction" value="0.5" type="double"/>;
         <param name="frontier/ftr_blacklist_radius" value="1.0" type="double"/>;
         <param name="frontier/print_info" value="false" type="bool"/>;
+        <param name="frontier/elimination_max_dist" value="3.0" type="double"/>; <!-- 消除距离门(m)，仅此距离内的frontier参与消除 -->
         
         <!-- Hgrid -->
         <param name="global_map/box_min_x" value="-20" type="double"/>
