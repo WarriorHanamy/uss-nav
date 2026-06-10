@@ -77,6 +77,7 @@
         <param name="fsm/auto_init_scene_graph" value="true" type="bool"/>
         <param name="fsm/auto_init_delay_sec" value="2.0" type="double"/>
         <param name="fsm/scene_graph_init_forward_dist" value="1.8" type="double"/>
+        <param name="fsm/frontier_update_dt" value="0.5" type="double"/>
         <!-- ego state trigger -->
         <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>
         <param name="fsm/ego_state_trigger_vel_thresh" value="0.15" type="double"/>
@@ -190,6 +191,7 @@
         <!-- exploration -->
         <param name="exploration/radius_close_goal" value="1.5" type="double"/>
         <param name="exploration/radius_far_goal" value="7.5" type="double"/>
+        <param name="exploration/frontier_tsp_mode" value="0" type="int"/>
         <param name="exploration/refine_local" value="false" type="bool"/>
         <param name="exploration/refined_num" value="4" type="int"/>
         <param name="exploration/refined_radius" value="5.0" type="double"/>

@@ -16,6 +16,7 @@
 // #include <pcl/segmentation/region_growing.h>
 #include <pcl/filters/voxel_grid.h>
 
+#include <cmath>
 #include <Eigen/Eigenvalues>
 #include <memory>
 
@@ -112,7 +113,8 @@ void FrontierFinder::reCalculateAllFtrTopo(const Eigen::Vector3d &cur_pos) {
    * @param this->tmp_frontiers_     输出 (Output): 存储本次搜索发现的所有新前沿点的列表，这是函数最主要的产出。
    * @param this->edt_env_           输入 (Input): 环境地图接口，提供栅格状态、更新区域等核心数据。
    */
-void FrontierFinder::searchFrontiers(const Vector3d& c_pos, const double yaw)
+void FrontierFinder::searchFrontiers(const Vector3d& c_pos, const double yaw,
+                                     bool use_fuel_generation)
 {
   if (is_print_info_) ROS_WARN_STREAM("[FtrFinder] >>>>>>>>>>>>> SearchFrontiers <<<<<<<<<<<<<");
 
@@ -231,21 +233,40 @@ void FrontierFinder::searchFrontiers(const Vector3d& c_pos, const double yaw)
   // edt_env_->sdf_map_->posToIndex(search_max, max_id);
 
   Eigen::Vector3i min_id, max_id;
-  edt_env_->getUpdatedBoxIdx(min_id, max_id);
-  if (is_print_info_) ROS_WARN_STREAM("min_id: " << min_id.transpose() << ", max_id: " << max_id.transpose());
+  bool has_generation_box = true;
+  if (use_fuel_generation)
+  {
+    // FUEL式生成：消费自上次frontier搜索以来累计的雷达地图更新盒。
+    has_generation_box = edt_env_->getFrontierUpdatedBoxIdx(min_id, max_id, true);
+    if (has_generation_box)
+    {
+      const int inflate_xy = std::max(1, static_cast<int>(std::ceil(1.0 / resolution_)));
+      const int inflate_z = std::max(1, static_cast<int>(std::ceil(0.5 / resolution_)));
+      min_id -= Eigen::Vector3i(inflate_xy, inflate_xy, inflate_z);
+      max_id += Eigen::Vector3i(inflate_xy, inflate_xy, inflate_z);
+    }
+  }
+  else
+  {
+    edt_env_->getUpdatedBoxIdx(min_id, max_id);
+  }
+  if (is_print_info_ && has_generation_box)
+    ROS_WARN_STREAM("min_id: " << min_id.transpose() << ", max_id: " << max_id.transpose());
 
   vector<Eigen::Vector3d> free_cell;
   vector<Eigen::Vector3d> uk_cell;
   vector<Eigen::Vector3d> seed_cell;
   vector<Eigen::Vector3d> ftr_cell;
 
-  if (is_print_info_)
+  if (is_print_info_ && has_generation_box)
   {
     for (int x = min_id(0) - 1; x <= max_id(0) + 1; ++x)
       for (int y = min_id(1) - 1; y <= max_id(1) + 1; ++y)
         for (int z = min_id(2) - 1; z <= max_id(2) + 1; ++z)
         {
           Eigen::Vector3i cur(x, y, z);
+          if (!edt_env_->isInLocalMap(cur) || !edt_env_->isInGlobalMap(cur))
+            continue;
           Eigen::Vector3d p = edt_env_->globalIdx2Pos(cur);
           if (knownfree(cur)){
             free_cell.push_back(p);
@@ -258,24 +279,29 @@ void FrontierFinder::searchFrontiers(const Vector3d& c_pos, const double yaw)
   }
 
   //! frontier的更新部分必须update_range一致(或者比update_range大)，否则ftr生成的边界在update_range里，找不到unknown邻居
-  for (int x = min_id(0); x <= max_id(0); ++x)
-    for (int y = min_id(1); y <= max_id(1); ++y)
-      for (int z = min_id(2); z <= max_id(2); ++z)
-      {
-        // Scanning the updated region to find seeds of frontiers
-        Eigen::Vector3i cur(x, y, z);
-        Eigen::Vector3d p = edt_env_->globalIdx2Pos(cur);
+  if (has_generation_box)
+  {
+    for (int x = min_id(0); x <= max_id(0); ++x)
+      for (int y = min_id(1); y <= max_id(1); ++y)
+        for (int z = min_id(2); z <= max_id(2); ++z)
+        {
+          // Scanning the updated region to find seeds of frontiers
+          Eigen::Vector3i cur(x, y, z);
+          if (!edt_env_->isInLocalMap(cur) || !edt_env_->isInGlobalMap(cur))
+            continue;
+          Eigen::Vector3d p = edt_env_->globalIdx2Pos(cur);
 
-        if (is_print_info_ && frontier_flag_[toadr(cur)] == 1 && knownfree(cur) && isNeighborUnknown(cur)){
-          ftr_cell.push_back(p);
-        }
+          if (is_print_info_ && frontier_flag_[toadr(cur)] == 1 && knownfree(cur) && isNeighborUnknown(cur)){
+            ftr_cell.push_back(p);
+          }
 
-        if (frontier_flag_[toadr(cur)] == 0 && knownfree(cur) && isNeighborUnknown(cur)) {
-          // Expand from the seed cell to find a complete frontier cluster
-          // INFO_MSG_GREEN("   * Expand frontier from seed cell: " << cur.transpose());
-          expandFrontier(cur);
+          if (frontier_flag_[toadr(cur)] == 0 && knownfree(cur) && isNeighborUnknown(cur)) {
+            // Expand from the seed cell to find a complete frontier cluster
+            // INFO_MSG_GREEN("   * Expand frontier from seed cell: " << cur.transpose());
+            expandFrontier(cur);
+          }
         }
-      }
+  }
   if (is_print_info_) ROS_INFO_STREAM("   * New Ftr Search done. ");
   splitLargeFrontiers(tmp_frontiers_);
 
@@ -1162,7 +1188,10 @@ void FrontierFinder::frontierForceDeleteAll() {
   frontiers_.clear();
   dormant_frontiers_.clear();
   tmp_frontiers_.clear();
+  remove_frontiers_.clear();
   removed_ids_.clear();
+  std::fill(frontier_flag_.begin(), frontier_flag_.end(), 0);
+  first_new_ftr_ = frontiers_.end();
 }
 
 void FrontierFinder::getFrontiersWithInfo(vector<Frontier>& clusters) {

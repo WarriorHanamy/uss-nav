@@ -15,6 +15,11 @@ It takes in information from odometry, sensor streams (such as depth images and 
 It can support aggressive and fully autonomous flight even in unknown and cluttered environments.
 Demonstrations about the planner have been reported on the [IEEE Spectrum](https://spectrum.ieee.org/automaton/robotics/robotics-hardware/video-friday-nasa-lemur-robot).
 
+## VLA_Diff Exploration Parameters
+
+- `fsm/frontier_update_dt`: frontier后台刷新周期，单位秒；仿真配置默认使用`0.2`，实机配置默认使用`0.5`。
+- `exploration/frontier_tsp_mode`: frontier与TSP的耦合模式。`0`表示沿用本仓库当前帧更新盒、异步timer刷新frontier、TSP读取已有列表的方案；`1`表示累计自上次搜索以来的雷达地图更新盒，按FUEL方式膨胀新frontier搜索区域，并在TSP规划前同步消费最新更新。两种模式均保留HGrid过滤和现有frontier消除逻辑。
+
 
 
 

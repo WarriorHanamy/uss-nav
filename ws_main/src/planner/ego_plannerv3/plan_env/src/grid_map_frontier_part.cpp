@@ -20,6 +20,27 @@ void GridMap::getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_
                    pos2GlobalIdx(md_.camera_pos_) + Eigen::Vector3i::Ones()); 
 }
 
+bool GridMap::getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx,
+                                       Eigen::Vector3i& bmax_inx,
+                                       bool reset_after_read)
+{
+  if (!md_.frontier_update_range_valid_)
+    return false;
+
+  // 累计盒可能跨越多帧雷达数据，读取时裁剪到当前滚动地图范围。
+  bmin_inx = max3i(md_.frontier_update_range_lb3i_, md_.rb_lb3i_);
+  bmax_inx = min3i(md_.frontier_update_range_ub3i_, md_.rb_ub3i_);
+  const bool valid = (bmin_inx.array() <= bmax_inx.array()).all();
+
+  if (reset_after_read)
+  {
+    md_.frontier_update_range_valid_ = false;
+    md_.frontier_update_range_lb3i_ = md_.rb_ub3i_;
+    md_.frontier_update_range_ub3i_ = md_.rb_lb3i_;
+  }
+  return valid;
+}
+
 void GridMap::publishUpdateRange() 
 {
   Eigen::Vector3d grid_min_pos, grid_max_pos, cube_pos, cube_scale;

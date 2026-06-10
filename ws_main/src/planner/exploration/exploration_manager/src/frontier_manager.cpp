@@ -42,6 +42,11 @@ FrontierManager::FrontierManager(ros::NodeHandle& nh, const MapInterface::Ptr& m
   nh.param("exploration/max_decay", ep_->max_decay_, -1.0);
   nh.param("exploration/tsp_dir", ep_->tsp_dir_, string("null"));
   nh.param("exploration/relax_time", ep_->relax_time_, 1.0);
+  nh.param("exploration/frontier_tsp_mode", ep_->frontier_tsp_mode_, 0);
+  if (ep_->frontier_tsp_mode_ != 0 && ep_->frontier_tsp_mode_ != 1) {
+    ROS_WARN("[Ftr_manager] exploration/frontier_tsp_mode only supports 0 or 1, fallback to 0.");
+    ep_->frontier_tsp_mode_ = 0;
+  }
 
   nh.param("exploration/vm", ViewNode::vm_, -1.0);
   nh.param("exploration/am", ViewNode::am_, -1.0);
@@ -225,7 +230,6 @@ int FrontierManager::planExploreTSP(const Vector3d& pos, const Vector3d& vel, co
   //
   // //! Update HGrid
   // updateHgrid();
-
   //! Choose Ftr
   frontier_finder_->getFrontiersWithInfo(ed_->frontiers_with_info_);
   filterFrontiersByExplorationRegion(ed_->frontiers_with_info_);
@@ -335,6 +339,21 @@ int FrontierManager::planExploreTSP(const Vector3d& pos, const Vector3d& vel, co
   ed_->path_next_goal_ = path_2_ftr;
   return SUCCEED;
 
+}
+
+void FrontierManager::updateFrontiersForPlanning(const Vector3d& pos, const double& yaw)
+{
+  if (ep_->frontier_tsp_mode_ != 1)
+    return;
+
+  // 必须在规划器锁定地图输出缓冲前执行，避免与建图线程形成锁顺序反转。
+  setCurrentTopoNode(scene_graph_->skeleton_gen_->mountCurTopoPoint(pos, yaw));
+  scene_graph_->mountCurPoly(pos, yaw);
+  frontier_finder_->searchFrontiers(pos, yaw, true);
+  frontier_finder_->computeFrontiersToVisit(pos);
+  frontier_finder_->updateFrontierCostMatrix();
+  frontier_finder_->updateSceneGraphWithFtr();
+  updateHgrid();
 }
 
 int FrontierManager::planTrackGoal(const Vector3d& pos, const Vector3d& vel,

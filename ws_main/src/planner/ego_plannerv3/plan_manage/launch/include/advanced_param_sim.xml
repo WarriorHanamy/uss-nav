@@ -76,6 +76,7 @@
         <param name="fsm/auto_init_scene_graph" value="true" type="bool"/>
         <param name="fsm/auto_init_delay_sec" value="2.0" type="double"/>
         <param name="fsm/scene_graph_init_forward_dist" value="1.8" type="double"/>
+        <param name="fsm/frontier_update_dt" value="0.2" type="double"/>
 
         <!-- ego state trigger -->
         <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>
@@ -142,8 +143,8 @@
 
         <!-- frontier -->
         <param name="frontier/floor" value="0.6" type="double"/>
-        <param name="frontier/ceil" value="0.8" type="double"/>
-        <param name="frontier/cluster_min" value="100" type="int"/>
+        <param name="frontier/ceil" value="1.0" type="double"/>
+        <param name="frontier/cluster_min" value="80" type="int"/>
         <param name="frontier/cluster_size_xy" value="2.0" type="double"/>
         <param name="frontier/cluster_size_z" value="10.0" type="double"/>
         <param name="frontier/down_sample" value="3" type="int"/>;
@@ -164,7 +165,7 @@
         <param name="frontier/min_view_finish_fraction" value="0.5" type="double"/>;
         <param name="frontier/ftr_blacklist_radius" value="1.0" type="double"/>;
         <param name="frontier/print_info" value="false" type="bool"/>;
-        <param name="frontier/elimination_max_dist" value="3.0" type="double"/>; <!-- 消除距离门(m)，仅此距离内的frontier参与消除 -->
+        <param name="frontier/elimination_max_dist" value="4.0" type="double"/>; <!-- 消除距离门(m)，仅此距离内的frontier参与消除 -->
         
         <!-- Hgrid -->
         <param name="global_map/box_min_x" value="-20" type="double"/>
@@ -190,6 +191,7 @@
         <!-- exploration -->
         <param name="exploration/radius_close_goal" value="1.5" type="double"/>
         <param name="exploration/radius_far_goal" value="7.5" type="double"/>
+        <param name="exploration/frontier_tsp_mode" value="1" type="int"/><!-- 0: 使用异步frontier列表；1: 基于FUEL的TSP规划前同步刷新frontier -->
         <param name="exploration/refine_local" value="false" type="bool"/>
         <param name="exploration/refined_num" value="4" type="int"/>
         <param name="exploration/refined_radius" value="5.0" type="double"/>

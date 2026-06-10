@@ -1,6 +1,8 @@
 #ifndef _GRID_MAP_
 #define _GRID_MAP_
 
+#include <algorithm>
+#include <atomic>
 #include <thread>
 #include <mutex>
 #include <chrono>
@@ -118,6 +120,8 @@ struct MappingData
 {
   Eigen::Vector3i center_last3i_;
   Eigen::Vector3i update_range_lb3i_, update_range_ub3i_;
+  Eigen::Vector3i frontier_update_range_lb3i_, frontier_update_range_ub3i_;
+  bool frontier_update_range_valid_{false};
   // rb: ring buffer
   Eigen::Vector3i rb_orig3i_;
   Eigen::Vector3d rb_lb3d_;
@@ -226,11 +230,15 @@ public:
   inline Eigen::Vector3d getLocalMapRange() const { return mp_.local_update_range3d_; };
   void LockCopyToOutputInfMap(bool lock);
   void LockCopyToOutputAllMap(bool lock);
+  void resetOccupancyToUnknown();
+  inline uint64_t getOccupancyUpdateSeq() const { return occupancy_update_seq_.load(); }
 
   int getu(int cols);
   inline int getVoxelNum() const { return md_.map_voxel_num_; };
   void getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax);
   void getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx);
+  bool getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx,
+                                bool reset_after_read);
   inline bool isInited() const {return (md_.has_odom_ && (md_.flag_have_ever_received_depth_ || md_.flag_have_ever_received_pc_)); }
 
   inline bool isInBuf(const Eigen::Vector3d &pos) const;
@@ -253,6 +261,7 @@ private:
   MappingParameters mp_;
   MappingData md_;
   TimeStatistics ts_;
+  std::atomic<uint64_t> occupancy_update_seq_{0};
   std::mutex mtx_vis_, mtx_memcpy_inf_, mtx_memcpy_;
 
   enum
@@ -271,6 +280,7 @@ private:
   inline bool isInInfBuf(const Eigen::Vector3i &idx) const;
   inline Eigen::Vector3i min3i(Eigen::Vector3i in1, Eigen::Vector3i in2);
   inline Eigen::Vector3i max3i(Eigen::Vector3i in1, Eigen::Vector3i in2);
+  inline void recordFrontierUpdate(const Eigen::Vector3i& idx);
 
   void publishMap() const;
   void publishMapInflate() const;
@@ -837,6 +847,19 @@ inline Eigen::Vector3i GridMap::max3i(Eigen::Vector3i in1, Eigen::Vector3i in2)
   return Eigen::Vector3i(max(in1(0), in2(0)), max(in1(1), in2(1)), max(in1(2), in2(2)));
 }
 
+inline void GridMap::recordFrontierUpdate(const Eigen::Vector3i& idx)
+{
+  if (!md_.frontier_update_range_valid_)
+  {
+    md_.frontier_update_range_lb3i_ = idx;
+    md_.frontier_update_range_ub3i_ = idx;
+    md_.frontier_update_range_valid_ = true;
+    return;
+  }
+  md_.frontier_update_range_lb3i_ = min3i(md_.frontier_update_range_lb3i_, idx);
+  md_.frontier_update_range_ub3i_ = max3i(md_.frontier_update_range_ub3i_, idx);
+}
+
 class MapManager
 {
 public:
@@ -854,6 +877,7 @@ public:
 
   void initMapManager(ros::NodeHandle &nh);
   void setMapUse(MAP_USE use);
+  void resetAllMapsToUnknown();
   MAP_USE getMapUse() const { return map_use_; }
   inline int getOcc(const Eigen::Vector3d &pos) const;
   inline double getReso() const { return cur_->getResolution(); }

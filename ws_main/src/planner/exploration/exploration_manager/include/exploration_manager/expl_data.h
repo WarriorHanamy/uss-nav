@@ -115,6 +115,7 @@ struct FSMParam
   bool                    auto_init_scene_graph_{true};
   double                  auto_init_delay_sec_{2.0};
   double                  scene_graph_init_forward_dist_{1.8};
+  double                  frontier_update_dt_{0.5};  // frontier后台刷新周期，单位秒
   double                  track_finish_hold_time_{3.0};
   double                  track_finish_move_thresh_{0.2};
   double                  track_finish_yaw_thresh_{0.2};
@@ -181,6 +182,7 @@ struct ExplorationParam
   double       relax_time_;
   double       radius_close_;
   double       radius_far_;
+  int          frontier_tsp_mode_{0};  // 0: 当前帧更新盒；1: FUEL式累计更新盒并在TSP前同步刷新
   double       track_dist_;
   double       track_dist_thr_;
   double       track_replan_dist_;

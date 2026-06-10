@@ -104,6 +104,8 @@ private:
   Eigen::Vector3d panorama_hold_pos_{Eigen::Vector3d::Zero()};
   double panorama_max_step_{2.0943951023931953};
   double panorama_extend_angle_{0.6981317007977318};
+  bool wait_fresh_map_after_reset_{false};
+  uint64_t map_reset_update_seq_{0};
   int expl_area_id_{-1};
   double think_duration_limit_;
   double think_start_time_;
@@ -174,6 +176,7 @@ private:
   void handleYawChange();                  // scan the area (Fov expand) and update the map
   void startPanoramaRotation();            // EXPLORATION/COUNTING启动阶段360°全景旋转
   void handlePanoramaYaw();                // 全景旋转状态处理
+  bool waitForFreshMapAfterReset();         // 清图后等待第一帧新地图，再开始全景旋转
   void goTargetObject();
   void goTargetWithWaypoint();
   void findTerminateTarget();
@@ -188,7 +191,7 @@ private:
   bool   yawhandle_left_published, yawhandle_right_published, yawhandle_back_published;
   bool   yawhandle_left_ok, yawhandle_right_ok, yawhandle_back_ok;
 
-  void hardResetExploreArea(bool clear_posegraph);
+  void hardResetExploreArea(bool clear_occupancy, bool clear_posegraph);
 
   void displayMissionState();
   void displayPath();

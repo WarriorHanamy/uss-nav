@@ -35,7 +35,8 @@ public:
   // ！Frontier Operation
   void reCalculateAllFtrTopo(const Eigen::Vector3d &cur_pos);
   //! Frontier Generation
-  void searchFrontiers(const Vector3d& c_pos, const double yaw = 0.0);
+  void searchFrontiers(const Vector3d& c_pos, const double yaw = 0.0,
+                       bool use_fuel_generation = false);
   void computeFrontiersToVisit(const Vector3d& c_pos);
 
   //! Frontier Infomation get

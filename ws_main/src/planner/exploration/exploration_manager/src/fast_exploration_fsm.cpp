@@ -79,6 +79,11 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("fsm/auto_init_scene_graph",      fp_->auto_init_scene_graph_, true);
   nh.param("fsm/auto_init_delay_sec",        fp_->auto_init_delay_sec_, 2.0);
   nh.param("fsm/scene_graph_init_forward_dist", fp_->scene_graph_init_forward_dist_, 1.8);
+  nh.param("fsm/frontier_update_dt",          fp_->frontier_update_dt_, 0.5);
+  if (fp_->frontier_update_dt_ < 0.05) {
+    ROS_WARN("[ExploreFSM] fsm/frontier_update_dt is too small, clamp to 0.05s.");
+    fp_->frontier_update_dt_ = 0.05;
+  }
   nh.param("fsm/enable_yaw_scan", enable_yaw_scan_, false);
   double panorama_max_step_deg = 120.0;
   double panorama_extend_angle_deg = 40.0;
@@ -160,7 +165,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
 
   /* Ros sub, pub and timer */
   exec_timer_      = nh.createTimer(ros::Duration(0.1), &FastExplorationFSM::FSMCallback, this);
-  frontier_timer_  = nh.createTimer(ros::Duration(0.5), &FastExplorationFSM::frontierCallback, this);
+  frontier_timer_  = nh.createTimer(ros::Duration(fp_->frontier_update_dt_), &FastExplorationFSM::frontierCallback, this);
 
   // vis_timer_       = nh.createTimer(ros::Duration(0.2), &FastExplorationFSM::visualize, this); // [gwq] has thread problem! Don't turn on!
 
@@ -512,6 +517,9 @@ void FastExplorationFSM::handelThingkingProcess() {
 void FastExplorationFSM::planLLMExplore() {
   ROS_INFO("\033[1;31m\n\n ============== [Plan LLM Explore] ==============\033[0m");
 
+  if (waitForFreshMapAfterReset())
+    return;
+
   // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
   if (need_panorama_) {
     handlePanoramaYaw();
@@ -648,6 +656,9 @@ void FastExplorationFSM::planLLMExplore() {
 
 void FastExplorationFSM::planRegularExplore() {
   ROS_INFO("\033[1;31mPlan Regular Explore!\033[0m");  //红
+
+  if (waitForFreshMapAfterReset())
+    return;
 
   // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
   if (need_panorama_) {
@@ -1116,6 +1127,22 @@ void FastExplorationFSM::startPanoramaRotation() {
   need_rotate_yaw_ = false;
   ROS_WARN("[FSM] Start panorama 360° rotation, start_yaw=%.2f°",
            panorama_unwrapped_yaw_ * 180.0 / M_PI);
+}
+
+bool FastExplorationFSM::waitForFreshMapAfterReset() {
+  if (!wait_fresh_map_after_reset_)
+    return false;
+
+  const uint64_t current_update_seq = map_->getOccupancyUpdateSeq();
+  if (current_update_seq <= map_reset_update_seq_) {
+    ROS_WARN_THROTTLE(1.0, "[FSM] Waiting for the first occupancy update after map reset.");
+    return true;
+  }
+
+  wait_fresh_map_after_reset_ = false;
+  ROS_WARN("[FSM] Fresh occupancy received after map reset, start panorama rotation.");
+  startPanoramaRotation();
+  return false;
 }
 
 void FastExplorationFSM::handlePanoramaYaw() {
@@ -1810,6 +1837,9 @@ void FastExplorationFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const do
 // return aim_pose aim_vel, aim_yaw and path_res
 int FastExplorationFSM::callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw, vector<Eigen::Vector3d>& path_res)
 {
+  // mode 1在TSP前同步消费累计雷达更新盒，完成新frontier生成。
+  expl_manager_->updateFrontiersForPlanning(fd_->odom_pos_, fd_->odom_yaw_);
+
   map_->Lock();
   ros::Time time_r = ros::Time::now() + ros::Duration(fp_->replan_time_);
 
@@ -1846,6 +1876,7 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
 
   if (++delay < 5) return;
   if (md_->mission_state_ == INIT) return;
+  if (waitForFreshMapAfterReset()) return;
 
   ros::Time t1 = ros::Time::now();
   auto ft = expl_manager_->frontier_finder_;
@@ -1893,7 +1924,8 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
   if (new_topo) {
     ft->reCalculateAllFtrTopo(fd_->odom_pos_);
   }
-  ft->searchFrontiers(fd_->odom_pos_, fd_->odom_yaw_);
+  ft->searchFrontiers(fd_->odom_pos_, fd_->odom_yaw_,
+                      expl_manager_->ep_->frontier_tsp_mode_ == 1);
   ft->computeFrontiersToVisit(fd_->odom_pos_);
   ft->updateFrontierCostMatrix();
   ft->updateSceneGraphWithFtr();
@@ -1997,6 +2029,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
   // 每条新Instruction先终止旧调度状态，只有下方匹配的task来源和探索指令可重新开启。
   need_panorama_ = false;
   panorama_command_active_ = false;
+  wait_fresh_map_after_reset_ = false;
   fd_->instruct_directly_to_goal = false; // [gwq] 防止从turn_ego_plan状态切出的时候其他状态依旧使用强制ego规划
   if (msg->instruction_type != quadrotor_msgs::Instruction::TURN_TRACKING) {
     switchPlannerCmdMuxToEgo("instructionCallback:non_tracking");
@@ -2027,7 +2060,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       has_made_area_decision_ = false;
       need_rotate_yaw_ = false;
       expl_area_id_ = -1;
-      hardResetExploreArea(false);
+      hardResetExploreArea(false, false);
       scene_graph_->object_factory_->runThisModule();
       scene_graph_->refreshLoadedMapVisualization();
       transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback(load scene graph)");
@@ -2079,8 +2112,14 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     case quadrotor_msgs::Instruction::TURN_OBJECT_NAV:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = false;
-      if (source_requires_panorama)
+      if (source_requires_panorama && msg->clear_local_map) {
+        stopMotion();
+        hardResetExploreArea(true, false);
+        map_reset_update_seq_ = map_->getOccupancyUpdateSeq();
+        wait_fresh_map_after_reset_ = true;
+      } else if (source_requires_panorama) {
         startPanoramaRotation();
+      }
       fd_->find_terminate_target_mode_ = false;
       fd_->new_topo_need_predict_immediately_ = true;
       fd_->df_demo_mode_ = false;
@@ -2092,8 +2131,14 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = true;
-      if (source_requires_panorama)
+      if (source_requires_panorama && msg->clear_local_map) {
+        stopMotion();
+        hardResetExploreArea(true, false);
+        map_reset_update_seq_ = map_->getOccupancyUpdateSeq();
+        wait_fresh_map_after_reset_ = true;
+      } else if (source_requires_panorama) {
         startPanoramaRotation();
+      }
       fd_->df_demo_mode_    = false;
       fd_->find_terminate_target_mode_ = false;
       transitState(MISSION_FSM_STATE::PLAN_EXPLORE, "instructionCallback");
@@ -2309,15 +2354,42 @@ void FastExplorationFSM::stopMotion()
   pubLocalGoal(fd_->odom_pos_, fd_->odom_yaw_, true);
 }
 
-void FastExplorationFSM::hardResetExploreArea(bool clear_posegraph) {
-  // get param
+void FastExplorationFSM::hardResetExploreArea(bool clear_occupancy, bool clear_posegraph) {
+  (void)clear_posegraph;
+  if (clear_occupancy)
+    map_->resetOccupancyToUnknown();
+
+  // 重置探索边界及所有由地图派生的探索状态，保留scene graph和topo map。
   map_->resetGlobalBox();
   Eigen::Vector3d global_box_min, global_box_max;
   map_->getGlobalBox(global_box_min, global_box_max);
-  // reset frontier
   expl_manager_->frontier_finder_->frontierForceDeleteAll();
-  // reset Hgrid
   expl_manager_->hgrid_->init(global_box_min, global_box_max);
+  expl_manager_->ed_->frontiers_.clear();
+  expl_manager_->ed_->frontiers_with_info_.clear();
+  expl_manager_->ed_->dead_frontiers_.clear();
+  expl_manager_->ed_->frontier_boxes_.clear();
+  expl_manager_->ed_->global_tour_.clear();
+  expl_manager_->ed_->global_tour_map_.clear();
+  expl_manager_->ed_->path_next_goal_.clear();
+  expl_manager_->ed_->last_grid_ids_.clear();
+  expl_manager_->ed_->last_frontiers_with_info_.clear();
+  expl_manager_->ed_->last_indices_.clear();
+  expl_manager_->ed_->refined_ids_.clear();
+  expl_manager_->ed_->n_points_.clear();
+  expl_manager_->ed_->unrefined_points_.clear();
+  expl_manager_->ed_->refined_points_.clear();
+  expl_manager_->ed_->refined_views_.clear();
+  expl_manager_->ed_->refined_views1_.clear();
+  expl_manager_->ed_->refined_views2_.clear();
+  expl_manager_->ed_->refined_tour_.clear();
+
+  fd_->path_res_.clear();
+  fd_->path_inx_ = 0;
+  fd_->llm_plan_explore_counter_ = 0;
+  fd_->explore_count_ = 0;
+  has_made_area_decision_ = false;
+  expl_area_id_ = -1;
   INFO_MSG_GREEN("=================================");
   INFO_MSG_GREEN("[FSM] : Explore Area Reset Done .");
   INFO_MSG_GREEN("=================================");

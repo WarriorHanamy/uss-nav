@@ -120,6 +120,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
   md_.raycast_num_ = 0;
   md_.proj_points_cnt_ = 0;
   md_.cache_voxel_cnt_ = 0;
+  md_.frontier_update_range_valid_ = false;
 
   md_.finish_occupancy_ = true;
   md_.has_first_depth_ = false;
@@ -256,6 +257,7 @@ void GridMap::paramAdjust(double reso, double rangex, double rangey, double rang
   md_.last_occ_update_time_.fromSec(0);
   md_.flag_have_ever_received_depth_ = false;
   md_.flag_have_ever_received_pc_    = false;
+  md_.frontier_update_range_valid_ = false;
 
   mtx_.unlock();
   mtx_vis_.unlock();
@@ -1293,7 +1295,6 @@ void GridMap::raycastProcess()
       md_.update_range_lb3i_ = min3i(md_.update_range_lb3i_, idx);
       md_.update_range_ub3i_ = max3i(md_.update_range_ub3i_, idx);
     }
-
     int idx_ctns = globalIdx2BufIdx(idx);
 
     if (md_.count_hit_[idx_ctns] > 0)
@@ -1362,9 +1363,12 @@ void GridMap::clearAndInflateLocalMap()
 
 void GridMap::CopyToOutputMap()
 {
+  bool occupancy_copied = false;
+  bool inflate_copied = false;
   if (mtx_memcpy_.try_lock())
   {
     std::memcpy(md_.occ_buf_output_.data(), md_.occ_buf_.data(), sizeof(float) * md_.occ_buf_.size());
+    occupancy_copied = true;
     mtx_memcpy_.unlock();
   }
   else
@@ -1374,12 +1378,65 @@ void GridMap::CopyToOutputMap()
   if (mtx_memcpy_inf_.try_lock())
   {
     std::memcpy(md_.occ_buf_inf_output_.data(), md_.occ_buf_inf_.data(), sizeof(int16_t) * md_.occ_buf_inf_.size());
+    inflate_copied = true;
     mtx_memcpy_inf_.unlock();
   }
   else
   {
     ROS_ERROR("[%s]The planner occupies use occ_inf_map too much time!", mp_.name_.c_str());
   }
+  // 规划和frontier读取的是两个输出缓冲区，只有二者同步完成才算一帧有效新地图。
+  if (occupancy_copied && inflate_copied)
+  {
+    if ((md_.update_range_lb3i_.array() <= md_.update_range_ub3i_.array()).all())
+    {
+      recordFrontierUpdate(md_.update_range_lb3i_);
+      recordFrontierUpdate(md_.update_range_ub3i_);
+    }
+    occupancy_update_seq_.fetch_add(1);
+  }
+}
+
+void GridMap::resetOccupancyToUnknown()
+{
+  // 与正常建图线程使用相同互斥锁，保证清图过程中不会写入半帧观测。
+  std::lock_guard<std::mutex> map_lock(mtx_);
+  std::lock_guard<std::mutex> output_lock(mtx_memcpy_);
+  std::lock_guard<std::mutex> output_inf_lock(mtx_memcpy_inf_);
+
+  const float unknown_occ = mp_.clamp_min_log_ - mp_.unknown_flag_;
+  std::fill(md_.occ_buf_.begin(), md_.occ_buf_.end(), unknown_occ);
+  std::fill(md_.occ_buf_output_.begin(), md_.occ_buf_output_.end(), unknown_occ);
+  std::fill(md_.occ_buf_inf_.begin(), md_.occ_buf_inf_.end(), GRID_MAP_UNKNOWN_FLAG);
+  std::fill(md_.occ_buf_inf_output_.begin(), md_.occ_buf_inf_output_.end(), GRID_MAP_UNKNOWN_FLAG);
+  std::fill(md_.dist_buf_.begin(), md_.dist_buf_.end(), GRID_MAP_UNKNOWN_ESDF_FLAG);
+  std::fill(md_.tmp_buf0_.begin(), md_.tmp_buf0_.end(), 0.0);
+  std::fill(md_.tmp_buf1_.begin(), md_.tmp_buf1_.end(), 0.0);
+  std::fill(md_.tmp_buf2_.begin(), md_.tmp_buf2_.end(), 0.0);
+  std::fill(md_.tmp_buf3_.begin(), md_.tmp_buf3_.end(), 0.0);
+#if COMPUTE_NEGTIVE_EDT
+  std::fill(md_.dist_buf_neg_.begin(), md_.dist_buf_neg_.end(), GRID_MAP_UNKNOWN_ESDF_FLAG);
+  std::fill(md_.dist_buf_all_.begin(), md_.dist_buf_all_.end(), GRID_MAP_UNKNOWN_ESDF_FLAG);
+  std::fill(md_.occ_buf_neg_.begin(), md_.occ_buf_neg_.end(), 0);
+#endif
+
+  std::fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
+  std::fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
+  std::fill(md_.hit_accum_.begin(), md_.hit_accum_.end(), 0);
+  std::fill(md_.flag_traverse_.begin(), md_.flag_traverse_.end(), -1);
+  std::fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
+  std::fill(md_.cache_voxel_.begin(), md_.cache_voxel_.end(), Eigen::Vector3i::Zero());
+  md_.cache_voxel_cnt_ = 0;
+  md_.proj_points_cnt_ = 0;
+  md_.raycast_num_ = 0;
+  md_.update_range_lb3i_ = md_.rb_ub3i_;
+  md_.update_range_ub3i_ = md_.rb_lb3i_;
+  md_.frontier_update_range_lb3i_ = md_.rb_ub3i_;
+  md_.frontier_update_range_ub3i_ = md_.rb_lb3i_;
+  md_.frontier_update_range_valid_ = false;
+  md_.finish_occupancy_ = true;
+
+  ROS_WARN("[%s] Occupancy map reset to UNKNOWN.", mp_.name_.c_str());
 }
 
 void GridMap::LockCopyToOutputInfMap(bool lock)
@@ -1890,4 +1947,13 @@ void MapManager::setMapUse(MAP_USE use)
     ROS_ERROR("Un-supported map use: %d", use);
     break;
   }
+}
+
+void MapManager::resetAllMapsToUnknown()
+{
+  // small/big map 都参与规划，必须同步清理，避免地图模式切换后重新读到旧障碍物。
+  if (sml_)
+    sml_->resetOccupancyToUnknown();
+  if (big_)
+    big_->resetOccupancyToUnknown();
 }

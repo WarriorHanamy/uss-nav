@@ -65,6 +65,7 @@
         <param name="fsm/fail_safe" value="true"/>
         <param name="fsm/battery_thr" value="14.0" type="double"/>
         <param name="fsm/enable_area_prediction" value="true" type="bool"/>
+        <param name="fsm/frontier_update_dt" value="0.2" type="double"/>
 
         <!-- <param name="grid_map/resolution" value="0.1" /> -->
         <!-- local_map的size必须比depth_filter_maxdist大两个resoluiton -->
@@ -172,6 +173,7 @@
         <!-- exploration -->
         <param name="exploration/radius_close_goal" value="1.5" type="double"/>
         <param name="exploration/radius_far_goal" value="7.5" type="double"/>
+        <param name="exploration/frontier_tsp_mode" value="1" type="int"/>
         <param name="exploration/refine_local" value="false" type="bool"/>
         <param name="exploration/refined_num" value="4" type="int"/>
         <param name="exploration/refined_radius" value="5.0" type="double"/>

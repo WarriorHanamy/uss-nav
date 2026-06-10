@@ -55,10 +55,14 @@ class MapInterface{
 
   void   resetGlobalBox();
   void   resetGlobalBox(const Eigen::Vector3d & box_min, const Eigen::Vector3d & box_max);
+  void   resetOccupancyToUnknown();
+  uint64_t getOccupancyUpdateSeq() const;
   void   getGlobalBox(Eigen::Vector3d & box_min, Eigen::Vector3d & box_max) const;
   double getResolution() const;
   void   getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax) const;
   void   getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx) const;
+  bool   getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx,
+                                  bool reset_after_read) const;
   bool searchPath(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
                   std::vector<Eigen::Vector3d>& path, double step_size);
   bool   searchPathConsiderUKRegion(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
@@ -100,6 +104,16 @@ class MapInterface{
 inline void MapInterface::resetGlobalBox(const Eigen::Vector3d &box_min, const Eigen::Vector3d &box_max) {
   map_min_ = box_min;
   map_max_ = box_max;
+}
+
+inline void MapInterface::resetOccupancyToUnknown()
+{
+  map_->resetAllMapsToUnknown();
+}
+
+inline uint64_t MapInterface::getOccupancyUpdateSeq() const
+{
+  return map_->sml_->getOccupancyUpdateSeq();
 }
 
 inline void MapInterface::resetGlobalBox() 
@@ -167,6 +181,13 @@ inline void MapInterface::getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& 
 inline void MapInterface::getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx) const
 {
   map_->sml_->getUpdatedBoxIdx(bmin_inx, bmax_inx);
+}
+
+inline bool MapInterface::getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx,
+                                                   Eigen::Vector3i& bmax_inx,
+                                                   bool reset_after_read) const
+{
+  return map_->sml_->getFrontierUpdatedBoxIdx(bmin_inx, bmax_inx, reset_after_read);
 }
 
 inline Eigen::Vector3i MapInterface::pos2GlobalIdx(const Eigen::Vector3d &pos) const
