@@ -76,10 +76,15 @@ public:
 
     ObjectFactory(ros::NodeHandle& nh);
     ObjectFactory(ros::NodeHandle& nh, SkeletonGeneratorPtr skel_gen_ptr);
+    ObjectFactory(ros::NodeHandle& nh, const std::string& param_prefix,
+                  const std::string& topic_prefix);
     ~ObjectFactory();
 
     void runThisModule();
     void stopThisModule();
+    void startFreshSession();
+    void cancelSession();
+    std::vector<ObjectNode::Ptr> stopAndSnapshot();
     void lock(){mutex_.lock();};
     void unlock(){mutex_.unlock();};
     bool ok();
@@ -120,6 +125,10 @@ private:
     bool   _use_realsense;
 
     bool skeleton_enabled_;
+    bool accepting_input_{false};
+    int active_processing_count_{0};
+    std::string param_prefix_;
+    std::string topic_prefix_;
 
     std::vector<Eigen::Vector3d> depth_directions_;
 
@@ -144,6 +153,7 @@ private:
 
     // Object Thread
     std::condition_variable condition_var_;
+    std::condition_variable drain_condition_var_;
     bool allow_thread_run_{false};
     double _filter_run_duration;
     int    _obj_main_thread_run_hz;
@@ -193,6 +203,8 @@ private:
     inline geometry_msgs::Point pclToGeoPt(const pcl::PointXYZ& pt);
     template<typename T>
     void readParam(ros::NodeHandle &node, std::string param_name, T &param_val, T default_val);
+    std::string prefixedParam(const std::string& name) const;
+    std::string prefixedTopic(const std::string& name) const;
     cv::Mat decodeRealsenseCompressedDepth(const sensor_msgs::CompressedImage& msg);
 };
 #endif //OBJECT_FACTORY_H

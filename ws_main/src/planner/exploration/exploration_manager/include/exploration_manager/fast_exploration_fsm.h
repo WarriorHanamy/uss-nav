@@ -32,6 +32,7 @@
 #include <exploration_manager/frontier_manager.h>
 #include <exploration_manager/mission_data.h>
 #include <scene_graph/object_factory.h>
+#include <scene_graph/counting_scene_graph.h>
 #include <scene_graph/scene_graph.h>
 #include <scene_graph/traj_visualizer.h>
 #include <std_msgs/Bool.h>
@@ -60,6 +61,7 @@ private:
   MapInterface::Ptr                                 map_;
   shared_ptr<FrontierManager>                       expl_manager_;
   shared_ptr<SceneGraph>                            scene_graph_;
+  CountingSceneGraph::Ptr                           counting_scene_graph_;
   shared_ptr<TrajectoryVisualizer>                  traj_visualizer_;
   shared_ptr<PlanningVisualization>                 visualization_;
   shared_ptr<FSMParam>                              fp_;
@@ -96,6 +98,7 @@ private:
   bool need_panorama_{false};
   bool panorama_command_active_{false};
   uint8_t active_instruction_task_id_{0};
+  uint32_t active_instruction_session_id_{0};
   double panorama_last_odom_yaw_{0.0};
   double panorama_start_yaw_{0.0};
   double panorama_unwrapped_yaw_{0.0};

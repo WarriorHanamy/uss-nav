@@ -2,7 +2,7 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-ObjectFactory::ObjectFactory(ros::NodeHandle& nh): nh_(nh){
+ObjectFactory::ObjectFactory(ros::NodeHandle& nh): nh_(nh), param_prefix_("obj"){
     skeleton_enabled_ = false;
     init();
 }
@@ -10,43 +10,62 @@ ObjectFactory::ObjectFactory(ros::NodeHandle& nh): nh_(nh){
 ObjectFactory::ObjectFactory(ros::NodeHandle &nh, SkeletonGeneratorPtr skel_gen_ptr): nh_(nh) {
     skeleton_enabled_ = true;
     skel_gen_ptr_     = skel_gen_ptr;
+    param_prefix_     = "obj";
     init();
+}
+
+ObjectFactory::ObjectFactory(
+    ros::NodeHandle& nh,
+    const std::string& param_prefix,
+    const std::string& topic_prefix
+): nh_(nh), skeleton_enabled_(false), param_prefix_(param_prefix), topic_prefix_(topic_prefix) {
+    init();
+}
+
+std::string ObjectFactory::prefixedParam(const std::string& name) const {
+    if (param_prefix_.empty()) return name;
+    return param_prefix_ + "/" + name;
+}
+
+std::string ObjectFactory::prefixedTopic(const std::string& name) const {
+    if (topic_prefix_.empty()) return name;
+    return topic_prefix_ + name;
 }
 
 void ObjectFactory::init() {
     std::string seg_result_topic;
-    readParam<double>(nh_, "obj/camera_fx", _camera_fx, 415.69219771027923);
-    readParam<double>(nh_, "obj/camera_fy", _camera_fy, 415.69219771027923);
-    readParam<double>(nh_, "obj/camera_cx", _camera_cx, 320.0);
-    readParam<double>(nh_, "obj/camera_cy", _camera_cy, 240.0);
-    readParam<double>(nh_, "obj/voxel_size", _voxel_size,0.01);
-    readParam<double>(nh_, "obj/std_dev_thresh", _std_dev_thresh, 1.0);
-    readParam<int>(nh_, "obj/mean_k", _mean_k, 50);
-    readParam<bool>(nh_, "obj/use_camera_intrinsics", _use_camera_intrinsics, false);
-    readParam<double>(nh_, "obj/max_depth", _max_depth, 5.0);
-    readParam<double>(nh_, "obj/min_depth", _min_depth, 0.2);
-    readParam<double>(nh_, "obj/fov_vertical", _fov_vertical, 57.0);
-    readParam<double>(nh_, "obj/fov_horizontal", _fov_horizontal, 71.0);
-    readParam<int>(nh_, "obj/cam_resolution_h", _cam_resolution_h, 480.0);
-    readParam<int>(nh_, "obj/cam_resolution_w", _cam_resolution_w, 640.0);
-    readParam<bool>(nh_, "obj/depth_cloud_disp_all", _depth_cloud_disp_all, false);
-    readParam<std::string>(nh_, "obj/seg_result_topic", seg_result_topic, "/yoloe/encodemask");
-    readParam<int>(nh_, "obj/max_threads", _max_threads, 8);                  // 添加最大线程数参数
-    readParam<int>(nh_, "obj/obj_cloud_num_thresh", _obj_cloud_num_thresh, 20);
-    readParam<int>(nh_, "obj/detection_counter_thresh", _detection_counter_thresh, 10);
-    readParam<double>(nh_, "obj/filter_run_duration", _filter_run_duration, 3.0);
-    readParam<int>(nh_, "obj/obj_main_thread_run_hz", _obj_main_thread_run_hz, 5);
-    readParam<int>(nh_, "obj/max_deque_size", _max_deque_size, 3);
-    readParam<double>(nh_, "obj/max_ray_length", _max_ray_length, 4.0);
-    readParam<bool>(nh_, "obj/use_realsense", _use_realsense, false);
+    readParam<double>(nh_, prefixedParam("camera_fx"), _camera_fx, 415.69219771027923);
+    readParam<double>(nh_, prefixedParam("camera_fy"), _camera_fy, 415.69219771027923);
+    readParam<double>(nh_, prefixedParam("camera_cx"), _camera_cx, 320.0);
+    readParam<double>(nh_, prefixedParam("camera_cy"), _camera_cy, 240.0);
+    readParam<double>(nh_, prefixedParam("voxel_size"), _voxel_size,0.01);
+    readParam<double>(nh_, prefixedParam("std_dev_thresh"), _std_dev_thresh, 1.0);
+    readParam<int>(nh_, prefixedParam("mean_k"), _mean_k, 50);
+    readParam<bool>(nh_, prefixedParam("use_camera_intrinsics"), _use_camera_intrinsics, false);
+    readParam<double>(nh_, prefixedParam("max_depth"), _max_depth, 5.0);
+    readParam<double>(nh_, prefixedParam("min_depth"), _min_depth, 0.2);
+    readParam<double>(nh_, prefixedParam("fov_vertical"), _fov_vertical, 57.0);
+    readParam<double>(nh_, prefixedParam("fov_horizontal"), _fov_horizontal, 71.0);
+    readParam<int>(nh_, prefixedParam("cam_resolution_h"), _cam_resolution_h, 480.0);
+    readParam<int>(nh_, prefixedParam("cam_resolution_w"), _cam_resolution_w, 640.0);
+    readParam<bool>(nh_, prefixedParam("depth_cloud_disp_all"), _depth_cloud_disp_all, false);
+    readParam<std::string>(nh_, prefixedParam("seg_result_topic"), seg_result_topic, "/yoloe/encodemask");
+    readParam<int>(nh_, prefixedParam("max_threads"), _max_threads, 8);
+    readParam<int>(nh_, prefixedParam("obj_cloud_num_thresh"), _obj_cloud_num_thresh, 20);
+    readParam<int>(nh_, prefixedParam("detection_counter_thresh"), _detection_counter_thresh, 10);
+    readParam<double>(nh_, prefixedParam("filter_run_duration"), _filter_run_duration, 3.0);
+    readParam<int>(nh_, prefixedParam("obj_main_thread_run_hz"), _obj_main_thread_run_hz, 5);
+    readParam<int>(nh_, prefixedParam("max_deque_size"), _max_deque_size, 3);
+    readParam<double>(nh_, prefixedParam("max_ray_length"), _max_ray_length, 4.0);
+    readParam<bool>(nh_, prefixedParam("use_realsense"), _use_realsense, false);
 
     // lidar-cam extrinsics
-    readParam<double>(nh_, "obj/lidar_cam_tx", _lidar_cam_tx, 0.0);
-    readParam<double>(nh_, "obj/lidar_cam_ty", _lidar_cam_ty, 0.0);
-    readParam<double>(nh_, "obj/lidar_cam_tz", _lidar_cam_tz, 0.0);
-    readParam<double>(nh_, "obj/lidar_cam_pitch", _lidar_cam_pitch, 0.0);
-    readParam<double>(nh_, "obj/lidar_cam_roll", _lidar_cam_roll, 0.0);
-    readParam<double>(nh_, "obj/lidar_cam_yaw", _lidar_cam_yaw, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_tx"), _lidar_cam_tx, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_ty"), _lidar_cam_ty, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_tz"), _lidar_cam_tz, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_pitch"), _lidar_cam_pitch, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_roll"), _lidar_cam_roll, 0.0);
+    readParam<double>(nh_, prefixedParam("lidar_cam_yaw"), _lidar_cam_yaw, 0.0);
     _lidar_cam_pitch = _lidar_cam_pitch * M_PI / 180.0;
     _lidar_cam_roll  = _lidar_cam_roll  * M_PI / 180.0;
     _lidar_cam_yaw   = _lidar_cam_yaw   * M_PI / 180.0;
@@ -56,12 +75,12 @@ void ObjectFactory::init() {
 
     segment_result_sub_      = nh_.subscribe<scene_graph::EncodeMask>(seg_result_topic, 5,
                                         &ObjectFactory::segmentationResultCallback, this, ros::TransportHints().tcpNoDelay());
-    odom_depth_pub_          = nh_.advertise<nav_msgs::Odometry>("/depth_odom", 2);
-    obj_detection_vis_pub_   = nh_.advertise<visualization_msgs::MarkerArray>("/object_detection_vis", 2);
-    obj_all_vis_pub_         = nh_.advertise<visualization_msgs::MarkerArray>("/object_all_vis", 2);
-    obj_update_vis_pub_      = nh_.advertise<visualization_msgs::MarkerArray>("/object_update_vis", 2);
-    obj_update_pt_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("/object_update_pointcloud", 2);
-    obj_pt_cloud_all_pub_    = nh_.advertise<sensor_msgs::PointCloud2>("/object_pointcloud", 2);
+    odom_depth_pub_          = nh_.advertise<nav_msgs::Odometry>(prefixedTopic("/depth_odom"), 2);
+    obj_detection_vis_pub_   = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_detection_vis"), 2);
+    obj_all_vis_pub_         = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_all_vis"), 2);
+    obj_update_vis_pub_      = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_update_vis"), 2);
+    obj_update_pt_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_update_pointcloud"), 2);
+    obj_pt_cloud_all_pub_    = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_pointcloud"), 2);
 
     obj_process_thread_running_ = true;
     object_process_thread_ = std::make_unique<std::thread>(&ObjectFactory::objectProcessThread, this);
@@ -83,6 +102,7 @@ ObjectFactory::~ObjectFactory() {
 void ObjectFactory::runThisModule() {
     std::unique_lock<std::mutex> lock(mutex_);
     INFO_MSG_GREEN("\n   ******** Object factory module started! ********\n");
+    accepting_input_ = true;
     allow_thread_run_ = true;
     lock.unlock();
     condition_var_.notify_all();
@@ -91,8 +111,47 @@ void ObjectFactory::runThisModule() {
 void ObjectFactory::stopThisModule() {
     INFO_MSG_RED("\n   ******** Object factory module stopped! ********\n");
     std::unique_lock<std::mutex> lock(mutex_);
+    accepting_input_ = false;
     allow_thread_run_ = false;
     lock.unlock();
+}
+
+void ObjectFactory::startFreshSession() {
+    cancelSession();
+    std::unique_lock<std::mutex> lock(mutex_);
+    resetForMapLoad();
+    accepting_input_ = true;
+    allow_thread_run_ = true;
+    lock.unlock();
+    condition_var_.notify_all();
+}
+
+std::vector<ObjectNode::Ptr> ObjectFactory::stopAndSnapshot() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    accepting_input_ = false;
+    drain_condition_var_.wait(lock, [&]() {
+        return semantic_msg_queue_.empty() && active_processing_count_ == 0;
+    });
+    allow_thread_run_ = false;
+
+    std::vector<ObjectNode::Ptr> objects;
+    objects.reserve(object_map_.size());
+    for (const auto& item : object_map_) {
+        if (item.second != nullptr && objInGoodDetection(item.second)) {
+            objects.push_back(item.second);
+        }
+    }
+    return objects;
+}
+
+void ObjectFactory::cancelSession() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    accepting_input_ = false;
+    semantic_msg_queue_.clear();
+    drain_condition_var_.wait(lock, [&]() {
+        return active_processing_count_ == 0;
+    });
+    allow_thread_run_ = false;
 }
 
 bool ObjectFactory::ok() {
@@ -279,6 +338,7 @@ void ObjectFactory::doSemanticProcessingOnce() {
     if (!semantic_msg_queue_.empty()) {
         cur_data_ = semantic_msg_queue_.front();
         semantic_msg_queue_.pop_front();
+        active_processing_count_++;
 
         cur_update_ids_.clear();
         cur_observe_results_.clear(); 
@@ -293,6 +353,7 @@ void ObjectFactory::doSemanticProcessingOnce() {
             cur_polyhedron_ = last_polyhedron_;
         }
     }else {
+        drain_condition_var_.notify_all();
         return ;
     }
     main_lock.unlock();
@@ -310,6 +371,10 @@ void ObjectFactory::doSemanticProcessingOnce() {
         pt_cloud_msg.header.frame_id = "world";
         pt_cloud_msg.header.stamp = cur_data_.cur_depth_odom_.header.stamp;
         obj_update_pt_cloud_pub_.publish(pt_cloud_msg);
+        std::unique_lock<std::mutex> finish_lock(mutex_);
+        active_processing_count_--;
+        finish_lock.unlock();
+        drain_condition_var_.notify_all();
         return;
     }
 
@@ -388,9 +453,18 @@ void ObjectFactory::doSemanticProcessingOnce() {
     visualizeResult();
     if ((t2 - t1).toSec() * 1e3 > 60.0f)
         INFO_MSG("[ObjFactory] All threads finished, Processing time: " << (t2 - t1).toSec() * 1e3<< "ms");
+
+    std::unique_lock<std::mutex> finish_lock(mutex_);
+    active_processing_count_--;
+    finish_lock.unlock();
+    drain_condition_var_.notify_all();
 }
 
 void ObjectFactory::segmentationResultCallback(const scene_graph::EncodeMask::ConstPtr &msg) {
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!accepting_input_) return;
+    }
     SemanticDataInput se_input;
     se_input.cur_semantic_recv_msg_ = msg;
     // INFO_MSG("\n\n =================== New Observation ===================");
@@ -455,10 +529,12 @@ void ObjectFactory::segmentationResultCallback(const scene_graph::EncodeMask::Co
 
 void ObjectFactory::pushDataInDeque(const SemanticDataInput &data) {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (!accepting_input_) return;
     if (semantic_msg_queue_.size() >= _max_deque_size)
         semantic_msg_queue_.pop_front();
     semantic_msg_queue_.emplace_back(data);
     lock.unlock();
+    condition_var_.notify_all();
 }
 
 void ObjectFactory::mergeObjAIntoB(ObjectNode::Ptr &obj_src, ObjectNode::Ptr &obj_target) {
@@ -1063,10 +1139,31 @@ cv::Mat ObjectFactory::decodeRealsenseCompressedDepth(const sensor_msgs::Compres
 
 template<typename T>
 void ObjectFactory::readParam(ros::NodeHandle &node, std::string param_name, T &param_val, T default_val) {
-    if (!node.param(param_name, param_val, default_val))
-        INFO_MSG_YELLOW("[ObjFactory]: param | " << param_name << " not found, using default value: " << default_val);
-    else
+    if (node.getParam(param_name, param_val)) {
         INFO_MSG_GREEN("[ObjFactory]: param | " << param_name << " found: " << param_val);
+        return;
+    }
+
+    // Counting 对象图只覆盖需要独立调节的参数，其余相机与融合参数继承原 obj 配置。
+    if (!param_prefix_.empty() && param_prefix_ != "obj") {
+        const std::size_t slash_pos = param_name.find('/');
+        const std::string leaf_name =
+            slash_pos == std::string::npos ? param_name : param_name.substr(slash_pos + 1);
+        const std::string fallback_name = "obj/" + leaf_name;
+        if (node.getParam(fallback_name, param_val)) {
+            INFO_MSG_GREEN(
+                "[ObjFactory]: param | " << param_name
+                << " inherits " << fallback_name << ": " << param_val
+            );
+            return;
+        }
+    }
+
+    param_val = default_val;
+    INFO_MSG_YELLOW(
+        "[ObjFactory]: param | " << param_name
+        << " not found, using default value: " << default_val
+    );
 }
 
 geometry_msgs::Point ObjectFactory::eigenToGeoPt(const Eigen::Vector3d &pt) {

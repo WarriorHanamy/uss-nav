@@ -64,6 +64,7 @@ set(skelton_cpps
         src/skeleton_generation.cpp
         src/skeleton_astar.cpp
         src/object_factory.cpp
+        src/counting_scene_graph.cpp
         src/skeleton_cluster.cpp
         src/ikd_Tree.cpp
         src/scene_graph.cpp
@@ -75,6 +76,7 @@ set(skeleton_hs
         include/scene_graph/skeleton_generation.h
         include/scene_graph/skeleton_astar.h
         include/scene_graph/object_factory.h
+        include/scene_graph/counting_scene_graph.h
         include/scene_graph/skeleton_cluster.h
         include/scene_graph/ikd_Tree.h
         include/scene_graph/data_structure.h

@@ -119,6 +119,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   map_ = map;
   visualization_      = std::make_shared<PlanningVisualization>(nh);
   scene_graph_        = std::make_shared<SceneGraph>(nh, map_);
+  counting_scene_graph_ = std::make_shared<CountingSceneGraph>(nh);
   expl_manager_       = std::make_shared<FrontierManager>(nh, map, scene_graph_);
   traj_visualizer_    = std::make_shared<TrajectoryVisualizer>(nh);
 
@@ -219,6 +220,12 @@ void FastExplorationFSM::applyExplorationRegionFromInstruction(const quadrotor_m
 void FastExplorationFSM::publishExplorationResult(bool success, const std::string& reason,
                                                   const std::string& message)
 {
+  // Counting 专用对象图必须先冻结并发布，确保上层收到 exploration finished 时
+  // 对应 session 的 JSON 已经进入 ROS 发布队列。
+  if (counting_scene_graph_ != nullptr && counting_scene_graph_->active()) {
+    counting_scene_graph_->finishSessionAndPublish();
+  }
+
   std_msgs::String msg;
   std::ostringstream ss;
   ss << "{"
@@ -227,6 +234,7 @@ void FastExplorationFSM::publishExplorationResult(bool success, const std::strin
      << "\"reason\":\"" << jsonEscape(reason) << "\","
      << "\"message\":\"" << jsonEscape(message) << "\","
      << "\"instruction_type\":" << static_cast<int>(md_->instruction_) << ","
+     << "\"task_session_id\":" << active_instruction_session_id_ << ","
      << "\"command\":\"" << jsonEscape(fd_->target_cmd_) << "\","
      << "\"has_region\":" << (expl_manager_->hasExplorationRegion() ? "true" : "false") << ","
      << "\"state\":\"" << md_->state_str_[md_->mission_state_] << "\""
@@ -2022,7 +2030,11 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     ic_last_recv_time = ros::Time::now();
 
   md_->instruction_ = msg->instruction_type;
+  if (counting_scene_graph_ != nullptr && counting_scene_graph_->active()) {
+    counting_scene_graph_->cancelSession();
+  }
   active_instruction_task_id_ = msg->source_task_id;
+  active_instruction_session_id_ = msg->task_session_id;
   const bool source_requires_panorama =
       msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_EXPLORATION ||
       msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING;
@@ -2112,6 +2124,10 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     case quadrotor_msgs::Instruction::TURN_OBJECT_NAV:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = false;
+      if (msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING &&
+          msg->task_session_id > 0) {
+        counting_scene_graph_->startSession(msg->task_session_id, fd_->odom_pos_);
+      }
       if (source_requires_panorama && msg->clear_local_map) {
         stopMotion();
         hardResetExploreArea(true, false);
@@ -2131,6 +2147,10 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
       applyExplorationRegionFromInstruction(msg);
       fd_->regular_explore_ = true;
+      if (msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING &&
+          msg->task_session_id > 0) {
+        counting_scene_graph_->startSession(msg->task_session_id, fd_->odom_pos_);
+      }
       if (source_requires_panorama && msg->clear_local_map) {
         stopMotion();
         hardResetExploreArea(true, false);

@@ -7,6 +7,8 @@ std_msgs/Header header
 uint8 instruction_type
 # 上层任务来源，用于区分相同instruction_type由哪个task_id发布
 uint8 source_task_id
+# 上层任务会话编号，用于隔离多次 counting 等异步任务的返回结果
+uint32 task_session_id
 
 uint16 target_obj_id
 string command
