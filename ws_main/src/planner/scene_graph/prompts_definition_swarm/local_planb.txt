@@ -1,0 +1,4 @@
+The format of your generated is:
+   {
+   "message": "", //In English(<10 words). 描述图片中所在房间的大致场景类型和主要物体分布
+   }

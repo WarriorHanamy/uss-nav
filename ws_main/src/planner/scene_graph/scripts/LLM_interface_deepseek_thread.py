@@ -13,6 +13,12 @@ import rospy
 from loguru import logger
 from rospkg import RosPack
 from scene_graph.msg import PromptMsg
+from vla_swarm_prompt_router import (
+    create_answer,
+    load_prompt_specs,
+    resolve_text_request,
+    structured_error,
+)
 
 # --- ROS 参数定义 ---
 RESULT_TOPIC = '/scene_graph/llm_ans'
@@ -20,27 +26,24 @@ PROMPT_TOPIC = '/scene_graph/prompt'
 NODE_NAME = 'LLM_DEEPSEEK_API_NODE'
 
 # --- DeepSeek Anthropic 兼容接口参数 ---
-# API_KEY 请在本机使用前手动填写；不要把真实密钥提交到仓库。
-MODEL_TYPE = "deepseek-v4-flash"
-BASE_URL = "https://api.deepseek.com/anthropic"
-API_KEY = "sk-2db36e3a9bc24c958f45699b9febd3a9"
+# API key 通过环境变量或私有 ROS 参数提供，不在仓库内保存。
+MODEL_TYPE = os.environ.get("SCENE_GRAPH_TEXT_MODEL", "deepseek-v4-flash")
+BASE_URL = os.environ.get("SCENE_GRAPH_DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic")
+API_KEY = os.environ.get("SCENE_GRAPH_DEEPSEEK_API_KEY", "")
 MAX_TOKENS = 4096
 REQUEST_TIMEOUT = 120
-
-SYSTEM_PROMPT_AREA_PREDICT = None
-SYSTEM_PROMPT_AREA_CHOOSE = None
-SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE = None
-SYSTEM_PROMPT_DF_DEMO = None
 
 # --- 全局变量定义 ---
 result_publisher = None
 prompt_queue = queue.Queue(maxsize=100)
+prompt_routes = {}
 
 
 def initialize_llm_client():
     """检查 DeepSeek Anthropic 接口参数是否已经配置。"""
     if not API_KEY:
-        logger.warning("DeepSeek API key is empty. Please fill API_KEY before running this node.")
+        logger.error("SCENE_GRAPH_DEEPSEEK_API_KEY is empty.")
+        return False
     logger.success("DeepSeek Anthropic API endpoint configured: {}", BASE_URL)
     return True
 
@@ -110,41 +113,19 @@ def call_llm_api(prompt_in: PromptMsg) -> PromptMsg:
     prompt_id = prompt_in.prompt_id
 
     try:
-        mode_str = ""
-        system_prompt = None
+        route, route_error = resolve_text_request(prompt_in, prompt_routes)
+        if route_error:
+            return create_answer(PromptMsg, prompt_in, route_error, rospy.Time.now())
 
-        if prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_ROOM_PREDICTION:
-            mode_str = "Room Prediction"
-            system_prompt = SYSTEM_PROMPT_AREA_PREDICT
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_EXPL_PREDICTION:
-            mode_str = "Area Choose"
-            system_prompt = SYSTEM_PROMPT_AREA_CHOOSE
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_TERMINATE_OBJ_ID:
-            mode_str = "Terminate Object ID Choose"
-            system_prompt = SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_DF_DEMO:
-            mode_str = "DF Demo"
-            system_prompt = SYSTEM_PROMPT_DF_DEMO
-        else:
-            raise ValueError("Invalid prompt_type: {}".format(prompt_in.prompt_type))
+        logger.info("   [ID: {}] Calling DeepSeek in [{}] mode...", prompt_id, route["mode"])
+        answer_text = _create_deepseek_message(route["system_prompt"], prompt_in.prompt)
 
-        logger.info("   [ID: {}] Calling DeepSeek in [{}] mode...", prompt_id, mode_str)
-        answer_text = _create_deepseek_message(system_prompt, prompt_in.prompt)
-
-        llm_ans = PromptMsg()
-        llm_ans.header.stamp = rospy.Time.now()
-        llm_ans.answer = answer_text
-        llm_ans.prompt_id = prompt_id
-        llm_ans.option = PromptMsg.SEND_ANSWER
-        return llm_ans
+        return create_answer(PromptMsg, prompt_in, answer_text, rospy.Time.now())
 
     except Exception as exc:
-        error_message = "[ID: {}] Error during DeepSeek API call: {}".format(prompt_id, exc)
-        logger.error(error_message)
-        err_ans = PromptMsg()
-        err_ans.answer = error_message
-        err_ans.prompt_id = prompt_id
-        return err_ans
+        logger.error("[ID: {}] Error during DeepSeek API call: {}", prompt_id, exc)
+        error_message = structured_error("llm_request_failed", str(exc))
+        return create_answer(PromptMsg, prompt_in, error_message, rospy.Time.now())
 
 
 def prompt_callback(message: PromptMsg):
@@ -158,6 +139,15 @@ def prompt_callback(message: PromptMsg):
         prompt_queue.put(message)
     else:
         logger.warning("[ID: {}] Queue is full. Discarding message.", message.prompt_id)
+        if result_publisher is not None:
+            result_publisher.publish(
+                create_answer(
+                    PromptMsg,
+                    message,
+                    structured_error("prompt_queue_full", "LLM request queue is full"),
+                    rospy.Time.now(),
+                )
+            )
 
 
 def llm_processing_worker():
@@ -224,43 +214,35 @@ def main():
     logger.info("Starting DeepSeek LLM API Node...")
     rospy.init_node(NODE_NAME, anonymous=True, log_level=rospy.INFO)
 
-    if not initialize_llm_client():
-        return
+    global MODEL_TYPE, BASE_URL, API_KEY, MAX_TOKENS, REQUEST_TIMEOUT
+    global PROMPT_TOPIC, RESULT_TOPIC, prompt_routes
+    MODEL_TYPE = rospy.get_param("~text_model", MODEL_TYPE)
+    BASE_URL = rospy.get_param("~base_url", BASE_URL)
+    API_KEY = rospy.get_param("~api_key", API_KEY)
+    MAX_TOKENS = int(rospy.get_param("~max_tokens", MAX_TOKENS))
+    REQUEST_TIMEOUT = float(rospy.get_param("~request_timeout", REQUEST_TIMEOUT))
+    PROMPT_TOPIC = rospy.get_param("~prompt_topic", PROMPT_TOPIC)
+    RESULT_TOPIC = rospy.get_param("~answer_topic", RESULT_TOPIC)
 
-    worker_thread = threading.Thread(target=llm_processing_worker, daemon=True)
-    worker_thread.start()
-
-    global SYSTEM_PROMPT_AREA_PREDICT, SYSTEM_PROMPT_AREA_CHOOSE, SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE, SYSTEM_PROMPT_DF_DEMO
     try:
         rospack = RosPack()
         pkg_path = rospack.get_path('scene_graph')
-        area_predict_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'room_prediction_syspt.txt')
-        area_choosen_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'area_choose_syspt.txt')
-        terminate_obj_id_choose_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'terminate_id_choose_syspt.txt')
-        df_demo_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'df_demo_syspt.txt')
-
-        with open(area_predict_prompt_def_path, 'r') as prompt_file:
-            SYSTEM_PROMPT_AREA_PREDICT = prompt_file.read()
-        logger.info("System Prompt for [Area Prediction] loaded.")
-
-        with open(area_choosen_prompt_def_path, 'r') as prompt_file:
-            SYSTEM_PROMPT_AREA_CHOOSE = prompt_file.read()
-        logger.info("System Prompt for [Area Choose] loaded.")
-
-        with open(terminate_obj_id_choose_prompt_def_path, 'r') as prompt_file:
-            SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE = prompt_file.read()
-        logger.info("System Prompt for [Terminate Object ID Choose] loaded.")
-
-        with open(df_demo_prompt_def_path, 'r') as prompt_file:
-            SYSTEM_PROMPT_DF_DEMO = prompt_file.read()
-        logger.info("System Prompt for [DF Demo] loaded.")
+        prompt_routes = load_prompt_specs(PromptMsg, pkg_path)
+        logger.info("Loaded {} SceneGraph prompt routes.", len(prompt_routes))
 
     except Exception as exc:
         logger.error("Failed to load system prompts: {}", exc)
+        return
+
+    if not initialize_llm_client():
+        return
 
     global result_publisher
     result_publisher = rospy.Publisher(RESULT_TOPIC, PromptMsg, queue_size=10)
     rospy.Subscriber(PROMPT_TOPIC, PromptMsg, prompt_callback)
+
+    worker_thread = threading.Thread(target=llm_processing_worker, daemon=True)
+    worker_thread.start()
 
     logger.success("Node is fully running. Waiting for prompts on topic: {}", PROMPT_TOPIC)
     rospy.spin()

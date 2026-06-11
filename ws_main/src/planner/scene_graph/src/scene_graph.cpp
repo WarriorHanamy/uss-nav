@@ -10,6 +10,7 @@
 #include <scene_graph/data_structure.h>
 #include <scene_graph/skeleton_cluster.h>
 #include <scene_graph/skeleton_generation.h>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -318,6 +319,117 @@ void SceneGraph::sendSceneGraphJson(std::string &scene_graph_json_str){
     INFO_MSG_CYAN("[SceneGraph] | Published scene graph json to CoPaw, json size: " << scene_graph_json_str.size() << " bytes\n");
 }
 
+bool SceneGraph::vlaSwarmPromptGen(unsigned char prompt_type, const std::string &command,
+                                  uint32_t task_session_id, uint32_t observation_batch_id,
+                                  std::string &prompt_str) const
+{
+    const bool supported =
+        prompt_type >= scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION &&
+        prompt_type <= scene_graph::PromptMsg::PROMPT_TYPE_TASK_OVER_PREDICTION;
+    if (!supported || command.empty() || task_session_id == 0) {
+        return false;
+    }
+
+    // 阶段四统一构造会话字段。地图、房间、门和 Observation 数据由后续阶段填充，
+    // 当前使用空数组明确表示数据尚未产生，避免处理端误用实时流或历史任务数据。
+    nlohmann::json data;
+    data["overall_task"] = command;
+    data["task_session_id"] = task_session_id;
+    data["observation_batch_id"] = observation_batch_id;
+    data["single_robot"] = true;
+
+    switch (prompt_type) {
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION:
+            data["candidate_ids"] = nlohmann::json::array();
+            data["room_descriptions"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_TASK_CHAT_PREDICTION:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_AA:
+            data["key_action_history"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_PLACE_PREDICTION:
+            data["explored_rooms"] = nlohmann::json::array();
+            data["detected_objects"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A1:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A2:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A3:
+            data["object_need"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B1:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B2:
+        case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B3:
+            data["memory_information"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_TASK_ASSIGN_PREDICTION:
+        case scene_graph::PromptMsg::PROMPT_TYPE_TASK_ASSIGN_FOLLOW_PREDICTION:
+            data["swarm_situations"] = nlohmann::json::array();
+            data["task_assign_chat"] = nlohmann::json::array();
+            break;
+        case scene_graph::PromptMsg::PROMPT_TYPE_TASK_OVER_PREDICTION:
+            data["key_action_history"] = nlohmann::json::array();
+            data["my_current_observation"] = nlohmann::json::array();
+            break;
+        default:
+            break;
+    }
+
+    prompt_str = data.dump();
+    return true;
+}
+
+VLASwarmPromptResult SceneGraph::parseVlaSwarmPromptResult(
+    unsigned int prompt_id, unsigned char expected_prompt_type)
+{
+    VLASwarmPromptResult result;
+    std::string answer;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto answer_it = llm_ans_str_poll_.find(prompt_id);
+        const auto prompt_it = llm_prompts_.find(prompt_id);
+        if (answer_it == llm_ans_str_poll_.end() || prompt_it == llm_prompts_.end()) {
+            result.error = "answer_not_ready";
+            result.detail = "Prompt answer is not available";
+            return result;
+        }
+        if (prompt_it->second.prompt_type != expected_prompt_type) {
+            result.error = "prompt_type_mismatch";
+            result.detail = "Prompt answer type does not match the active VLA_Swarm request";
+            return result;
+        }
+        answer = answer_it->second;
+    }
+
+    try {
+        result.payload = nlohmann::json::parse(answer);
+    } catch (const std::exception &e) {
+        result.error = "invalid_json";
+        result.detail = e.what();
+        return result;
+    }
+
+    if (!result.payload.is_object()) {
+        result.error = "invalid_json";
+        result.detail = "Prompt answer must be a JSON object";
+        return result;
+    }
+
+    result.valid = true;
+    if (result.payload.contains("success") && result.payload["success"].is_boolean() &&
+        !result.payload["success"].get<bool>()) {
+        result.success = false;
+        result.error = result.payload.value("error", std::string("prompt_error"));
+        result.detail = result.payload.value(
+            "detail", std::string("Prompt processor returned an error"));
+        return result;
+    }
+
+    result.success = true;
+    return result;
+}
+
 int SceneGraph::handelDFDemoResult(unsigned int prompt_id){
     if (llm_ans_str_poll_.find(prompt_id) == llm_ans_str_poll_.end()) {
         ROS_WARN("[SceneGraph] | No answer for prompt (id: %u) found. Ignoring result.", prompt_id);
@@ -510,7 +622,13 @@ std::future<std::string> SceneGraph::sendPrompt(unsigned int prompt_id, unsigned
     return final_future;
 }
 
-void SceneGraph::eraseLLMData(unsigned int prompt_id) {
+bool SceneGraph::hasPromptAnswer(unsigned int prompt_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return llm_ans_str_poll_.find(prompt_id) != llm_ans_str_poll_.end();
+}
+
+void SceneGraph::clearPromptData(unsigned int prompt_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
     llm_ans_promises_.erase(prompt_id);
     llm_ans_str_poll_.erase(prompt_id);
     llm_prompts_.erase(prompt_id);
@@ -518,10 +636,21 @@ void SceneGraph::eraseLLMData(unsigned int prompt_id) {
 
 void SceneGraph::llmAnsCallback(const scene_graph::PromptMsg::ConstPtr &msg) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (llm_ans_promises_.find(msg->prompt_id) != llm_ans_promises_.end() && msg->option == scene_graph::PromptMsg::SEND_ANSWER) {
-        INFO_MSG_GREEN("[SceneGraph] | *** Callback Recv llm answer (id: " << msg->prompt_id << ")");
-        llm_ans_promises_[msg->prompt_id].set_value(msg->answer);
+    const auto promise_it = llm_ans_promises_.find(msg->prompt_id);
+    const auto prompt_it = llm_prompts_.find(msg->prompt_id);
+    if (promise_it == llm_ans_promises_.end() ||
+        prompt_it == llm_prompts_.end() ||
+        msg->option != scene_graph::PromptMsg::SEND_ANSWER) {
+        return;
     }
+    if (msg->prompt_type != prompt_it->second.prompt_type) {
+        ROS_WARN("[SceneGraph] | Ignore answer with mismatched prompt_type for id: %u", msg->prompt_id);
+        return;
+    }
+    INFO_MSG_GREEN("[SceneGraph] | *** Callback Recv llm answer (id: " << msg->prompt_id << ")");
+    promise_it->second.set_value(msg->answer);
+    // promise 完成后立即移出活动表，重复或迟到答案将被忽略。
+    llm_ans_promises_.erase(promise_it);
 }
 
 void SceneGraph::mountCurPoly(const Eigen::Vector3d pos, const double yaw) {

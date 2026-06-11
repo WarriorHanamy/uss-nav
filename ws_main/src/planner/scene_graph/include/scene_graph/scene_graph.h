@@ -23,6 +23,14 @@ struct SceneGraph_Data {
 std::vector<AreaHandler::Ptr> area;
 };
 
+struct VLASwarmPromptResult {
+    bool valid{false};
+    bool success{false};
+    std::string error;
+    std::string detail;
+    nlohmann::json payload;
+};
+
 class SceneGraph {
 public:
     typedef std::shared_ptr<SceneGraph> Ptr;
@@ -64,6 +72,8 @@ public:
     std::future<std::string> sendPrompt(unsigned int prompt_id, unsigned char prompt_type, std::string prompt_str,
                                         const std::chrono::seconds &timeout, int max_retries);
     int wait_recv_id_;
+    bool hasPromptAnswer(unsigned int prompt_id);
+    void clearPromptData(unsigned int prompt_id);
 
     template<typename T>
     bool waitForFutureWithSpinOnce(std::future<T>& future, const ros::Duration& timeout);
@@ -76,12 +86,17 @@ public:
     bool chooseTerminateObjIdPromptGen(std::string &prompt_str);
     bool DFDemoPromptGen(std::string &prompt_str);
     void sendSceneGraphJson(std::string &scene_graph_json_str);
+    bool vlaSwarmPromptGen(unsigned char prompt_type, const std::string &command,
+                           uint32_t task_session_id, uint32_t observation_batch_id,
+                           std::string &prompt_str) const;
 
     // result handle //
     void handleRoomPredictionResult(unsigned int prompt_id);
     int handelExplorationResult(unsigned int prompt_id);
     int handelTerminateObjIdResult(unsigned int prompt_id);
     int handelDFDemoResult(unsigned int prompt_id);
+    VLASwarmPromptResult parseVlaSwarmPromptResult(unsigned int prompt_id,
+                                                   unsigned char expected_prompt_type);
 
     // data operations //
     unsigned int getCurPromptIdAndPlusOne(){std::lock_guard<std::mutex> lock(mutex_); return cur_prompt_id_++; }
@@ -110,7 +125,6 @@ private:
 
     std::map<unsigned int, std::promise<std::string>> llm_ans_promises_;
     void llmAnsCallback(const scene_graph::PromptMsg::ConstPtr& msg);
-    void eraseLLMData(unsigned int prompt_id);
 };
 
 /**

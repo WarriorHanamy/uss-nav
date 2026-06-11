@@ -1,0 +1,6 @@
+1. 根据“key_action_history”记录的，以及“my_current_observation”观察到的当前场景判断“overall_task”是否已经被完成。
+3. The format of your generated next action is:
+   {
+   "task_over": , // true/false. true表示“overall_task”完成了，false表示没有.
+   "task_over_reason": "", // In English(<10 words).  Explain the reason.
+   }

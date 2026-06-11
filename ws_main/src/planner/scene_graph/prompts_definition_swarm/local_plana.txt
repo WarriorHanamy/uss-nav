@@ -1,0 +1,14 @@
+Frame the object mentioned (in "object_need"), The format of your generated is:
+   {
+   "action_type": 0/1/2/3/4    //0 表示只需要知道物体位置
+                                 1 表示需要抓取得到物体
+                                 2 表示需要推动物体
+                                 3 表示需要拉动物体
+                                 4 表示需要拧动物体
+
+   "bounding_box": [x_min, y_min, x_max, y_max], // integer type.
+                                                 Draw a bounding box of object in RGB image using :
+                                                 • [x_min, y_min] = top-left corner point
+                                                 • [x_max, y_max] = bottom-right corner point
+   }
+   只输出json格式，其他的不要输出

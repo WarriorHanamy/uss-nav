@@ -78,7 +78,7 @@ private:
   ros::Timer exec_timer_, frontier_timer_;
   ros::Subscriber trigger_sub_, odom_sub_, goal_from_station_sub_, egoplanner_goal_sub_, ego_exec_finish_sub_;
   ros::Subscriber track_command_sub_, target_sub_, elastic_tracking_finish_sub_;
-  ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_;
+  ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
   ros::Publisher ego_goal_pub_, goal_from_station_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
   ros::Publisher fsm_state_pub_;
@@ -88,6 +88,7 @@ private:
   ros::Publisher elastic_tracker_trigger_pub_;
   ros::Publisher elastic_tracker_stop_pub_;
   ros::Publisher exploration_result_pub_;
+  ros::Publisher vla_swarm_result_pub_;
 
   // LLM related
   MISSION_FSM_STATE stash_state_{MISSION_FSM_STATE::UNKONWN};
@@ -113,6 +114,30 @@ private:
   double think_duration_limit_;
   double think_start_time_;
 
+  // VLA_Swarm 独立任务上下文。算法字段将在后续迁移阶段继续补充。
+  bool vla_swarm_enabled_{false};
+  bool vla_swarm_active_{false};
+  bool vla_swarm_result_published_{false};
+  bool vla_swarm_success_{false};
+  uint32_t vla_swarm_session_id_{0};
+  std::string vla_swarm_command_;
+  std::string vla_swarm_finish_reason_;
+  std::string vla_swarm_finish_detail_;
+  std::string vla_swarm_result_topic_{"/planning/vla_swarm_result"};
+  bool vla_swarm_prompt_pending_{false};
+  unsigned int vla_swarm_prompt_id_{0};
+  uint8_t vla_swarm_prompt_type_{0};
+  uint32_t vla_swarm_observation_batch_id_{0};
+  ros::Time vla_swarm_prompt_start_time_;
+  double vla_swarm_prompt_timeout_{20.0};
+  double vla_swarm_target_timeout_{10.0};
+  double vla_swarm_ego_plan_timeout_{5.0};
+  double vla_swarm_ego_exec_timeout_{30.0};
+  int vla_swarm_max_plan_retries_{2};
+  int vla_swarm_max_target_retries_{2};
+  double vla_swarm_waypoint_distance_{2.0};
+  double vla_swarm_goal_tolerance_{0.5};
+
  private:
   /* helper functions */
   int callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
@@ -137,6 +162,19 @@ private:
   void applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg);
   void publishExplorationResult(bool success, const std::string& reason,
                                 const std::string& message = "");
+  bool isVlaSwarmState(MISSION_FSM_STATE state) const;
+  void resetVlaSwarmContext();
+  void startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg);
+  void cancelVlaSwarmTask(const std::string& reason, const std::string& detail);
+  void publishVlaSwarmResult(bool success, const std::string& reason,
+                             const std::string& detail = "");
+  void handleVlaSwarmPlanLocal();
+  void handleVlaSwarmWaitLLM();
+  void handleVlaSwarmWaitTarget();
+  void handleVlaSwarmApproach();
+  void handleVlaSwarmYaw();
+  void handleVlaSwarmRecovery();
+  void handleVlaSwarmFinish();
   
   void transitState(MISSION_FSM_STATE new_state, string pos_call);
   void stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called);
@@ -159,6 +197,7 @@ private:
                             const std::string& frame_id = "world");
 
   void instructionCallback(const quadrotor_msgs::InstructionConstPtr& msg);
+  void emergencyStopCallback(const std_msgs::Empty::ConstPtr& msg);
   void batteryCallBack(const sensor_msgs::BatteryState msg);
   void odometryCallback(const nav_msgs::OdometryConstPtr& msg);
   void egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstPtr& msg);

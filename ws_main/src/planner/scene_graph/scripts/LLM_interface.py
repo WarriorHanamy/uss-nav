@@ -14,9 +14,9 @@ PROMPT_TOPIC = '/scene_graph/prompt'
 NODE_NAME    = 'LLM_API_NODE'
 
 # --- 大模型 API 参数 ---
-MODEL_TYPE = "qwen-flash"            
-BASE_URL      = "https://dashscope.aliyuncs.com/compatible-mode/v1" # API 的 Base URL
-API_KEY       = "sk-92320fd71e07458bb898abadca5c02eb"     # API_KEY
+MODEL_TYPE = "qwen-flash"
+BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+API_KEY = os.environ.get("SCENE_GRAPH_OPENAI_API_KEY", "")
 SYSTEM_PROMPT = "You are a great AI agent"
 
 SYSTEM_PROMPT_AREA_PREDICT = "You are a great AI agent. Please predict some areas'type."
@@ -33,6 +33,9 @@ def initialize_llm_client():
     初始化大模型 API 客户端。
     """
     global client
+    if not API_KEY:
+        rospy.logfatal("SCENE_GRAPH_OPENAI_API_KEY is empty.")
+        return False
     try:
         client = OpenAI(
             base_url=BASE_URL,

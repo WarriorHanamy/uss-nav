@@ -10,6 +10,12 @@ import queue
 import threading
 import sys
 import json
+from vla_swarm_prompt_router import (
+    create_answer,
+    load_prompt_specs,
+    resolve_text_request,
+    structured_error,
+)
 
 # 引入 Loguru 的 logger
 from loguru import logger
@@ -20,24 +26,26 @@ PROMPT_TOPIC = '/scene_graph/prompt'
 NODE_NAME    = 'LLM_API_NODE'
 
 # --- 大模型 API 参数 ---
-MODEL_TYPE    = "qwen3-max"
-BASE_URL      = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-API_KEY       = "sk-92320fd71e07458bb898abadca5c02eb"
-
-SYSTEM_PROMPT_AREA_PREDICT = None
-SYSTEM_PROMPT_AREA_CHOOSE = None
-SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE = None
-SYSTEM_PROMPT_DF_DEMO = None
+MODEL_TYPE = os.environ.get("SCENE_GRAPH_TEXT_MODEL", "qwen3-max")
+BASE_URL = os.environ.get(
+    "SCENE_GRAPH_OPENAI_BASE_URL",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+API_KEY = os.environ.get("SCENE_GRAPH_OPENAI_API_KEY", "")
 
 # --- 全局变量定义 ---
 client = None
 result_publisher = None
 prompt_queue = queue.Queue(maxsize=100)
+prompt_routes = {}
 
 def initialize_llm_client():
     """初始化大模型 API 客户端"""
     global client
     try:
+        if not API_KEY:
+            logger.error("SCENE_GRAPH_OPENAI_API_KEY is empty.")
+            return False
         client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
         logger.success("✅ LLM client initialized successfully.")
         return True
@@ -50,42 +58,22 @@ def call_llm_api(prompt_in: PromptMsg) -> PromptMsg:
     prompt_id = prompt_in.prompt_id
     
     if client is None:
-        error_msg = f"❌ [ID: {prompt_id}] Error: LLM client is not initialized."
-        logger.error(error_msg)
-        err_ans = PromptMsg()
-        err_ans.answer = error_msg
-        err_ans.prompt_id = prompt_id
-        return err_ans
+        error_msg = structured_error(
+            "llm_client_not_initialized",
+            "OpenAI-compatible client is not initialized",
+        )
+        return create_answer(PromptMsg, prompt_in, error_msg, rospy.Time.now())
     
     try:
-        mode_str = ""
-        messages = []
-        if prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_ROOM_PREDICTION:
-            mode_str = "Room Prediction"
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT_AREA_PREDICT},
-                {"role": "user", "content": prompt_in.prompt}
-            ]
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_EXPL_PREDICTION:
-            mode_str = "Area Choose"
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT_AREA_CHOOSE},
-                {"role": "user", "content": prompt_in.prompt}
-            ]
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_TERMINATE_OBJ_ID:
-            mode_str = "Terminate Object ID Choose"
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE},
-                {"role": "user", "content": prompt_in.prompt}
-            ]
-        elif prompt_in.prompt_type == PromptMsg.PROMPT_TYPE_DF_DEMO:
-            mode_str = "DF Demo"
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT_DF_DEMO},
-                {"role": "user", "content": prompt_in.prompt}
-            ]
-        else:
-            raise ValueError(f"Invalid prompt_type: {prompt_in.prompt_type}")
+        route, route_error = resolve_text_request(prompt_in, prompt_routes)
+        if route_error:
+            return create_answer(PromptMsg, prompt_in, route_error, rospy.Time.now())
+
+        mode_str = route["mode"]
+        messages = [
+            {"role": "system", "content": route["system_prompt"]},
+            {"role": "user", "content": prompt_in.prompt},
+        ]
 
         logger.info(f"   [ID: {prompt_id}] 🤖 Calling LLM in [{mode_str}] mode...")
         completion = client.chat.completions.create(
@@ -94,20 +82,17 @@ def call_llm_api(prompt_in: PromptMsg) -> PromptMsg:
             extra_body={"enable_thinking": False}
         )
         
-        llm_ans = PromptMsg()
-        llm_ans.header.stamp = rospy.Time.now()
-        llm_ans.answer = completion.choices[0].message.content
-        llm_ans.prompt_id = prompt_id
-        llm_ans.option = PromptMsg.SEND_ANSWER
-        return llm_ans
+        return create_answer(
+            PromptMsg,
+            prompt_in,
+            completion.choices[0].message.content,
+            rospy.Time.now(),
+        )
 
     except Exception as e:
-        error_message = f"❌ [ID: {prompt_id}] Error during LLM API call: {e}"
-        logger.error(error_message)
-        err_ans = PromptMsg()
-        err_ans.answer = error_message
-        err_ans.prompt_id = prompt_id
-        return err_ans
+        logger.error("[ID: {}] Error during LLM API call: {}", prompt_id, e)
+        error_message = structured_error("llm_request_failed", str(e))
+        return create_answer(PromptMsg, prompt_in, error_message, rospy.Time.now())
 
 
 def prompt_callback(message: PromptMsg):
@@ -117,6 +102,15 @@ def prompt_callback(message: PromptMsg):
         prompt_queue.put(message)
     else:
         logger.warning(f"⚠️ [ID: {message.prompt_id}] Queue is full! Discarding message.")
+        if result_publisher is not None:
+            result_publisher.publish(
+                create_answer(
+                    PromptMsg,
+                    message,
+                    structured_error("prompt_queue_full", "LLM request queue is full"),
+                    rospy.Time.now(),
+                )
+            )
 
 def llm_processing_worker():
     """消费者：从队列中处理任务，所有日志都带追踪ID"""
@@ -183,47 +177,32 @@ def main():
     logger.info("🚀 Starting LLM API Node...")
     rospy.init_node(NODE_NAME, anonymous=True, log_level=rospy.INFO)
 
-    if not initialize_llm_client():
-        return
+    global MODEL_TYPE, BASE_URL, API_KEY, PROMPT_TOPIC, RESULT_TOPIC, prompt_routes
+    MODEL_TYPE = rospy.get_param("~text_model", MODEL_TYPE)
+    BASE_URL = rospy.get_param("~base_url", BASE_URL)
+    API_KEY = rospy.get_param("~api_key", API_KEY)
+    PROMPT_TOPIC = rospy.get_param("~prompt_topic", PROMPT_TOPIC)
+    RESULT_TOPIC = rospy.get_param("~answer_topic", RESULT_TOPIC)
 
-    worker_thread = threading.Thread(target=llm_processing_worker, daemon=True)
-    worker_thread.start()
-    
-    # ... (加载 System Prompts 的代码保持不变) ...
-    global SYSTEM_PROMPT_AREA_PREDICT, SYSTEM_PROMPT_AREA_CHOOSE, SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE, SYSTEM_PROMPT_DF_DEMO
     try:
         rospack = RosPack()
         pkg_path = rospack.get_path('scene_graph')
-        area_predict_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'room_prediction_syspt.txt')
-        area_choosen_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'area_choose_syspt.txt')
-        # area_predict_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'room_prediction_realworld.txt')
-        # area_choosen_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'area_choose_realworld.txt')
-        
-        terminate_obj_id_choose_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'terminate_id_choose_syspt.txt')
-        df_demo_prompt_def_path = os.path.join(pkg_path, 'prompts_definition', 'df_demo_syspt.txt')
-
-        with open(area_predict_prompt_def_path, 'r') as f:
-            SYSTEM_PROMPT_AREA_PREDICT = f.read()
-        logger.info("📄 System Prompt for [Area Prediction] loaded.")
-
-        with open(area_choosen_prompt_def_path, 'r') as f:
-            SYSTEM_PROMPT_AREA_CHOOSE = f.read()
-        logger.info("📄 System Prompt for [Area Choose] loaded.")
-
-        with open(terminate_obj_id_choose_prompt_def_path, 'r') as f:
-            SYSTEM_PROMPT_TERMINATE_OBJ_CHOOSE = f.read()
-        logger.info("📄 System Prompt for [Terminate Object ID Choose] loaded.")
-
-        with open(df_demo_prompt_def_path, 'r') as f:
-            SYSTEM_PROMPT_DF_DEMO = f.read()
-        logger.info("📄 System Prompt for [DF Demo] loaded.")
+        prompt_routes = load_prompt_specs(PromptMsg, pkg_path)
+        logger.info("Loaded {} SceneGraph prompt routes.", len(prompt_routes))
 
     except Exception as e:
-        logger.error(f"❌ Failed to load system prompts: {e}")
+        logger.error("Failed to load system prompts: {}", e)
+        return
+
+    if not initialize_llm_client():
+        return
 
     global result_publisher
     result_publisher = rospy.Publisher(RESULT_TOPIC, PromptMsg, queue_size=10)
     rospy.Subscriber(PROMPT_TOPIC, PromptMsg, prompt_callback)
+
+    worker_thread = threading.Thread(target=llm_processing_worker, daemon=True)
+    worker_thread.start()
     
     logger.success("✅ Node is fully running. Waiting for prompts on topic: {}", PROMPT_TOPIC)
     rospy.spin()

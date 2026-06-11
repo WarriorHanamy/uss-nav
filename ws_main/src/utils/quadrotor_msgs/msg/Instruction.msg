@@ -58,7 +58,11 @@ uint8 TURN_LOAD_SCENE_GRAPH = 10
 ## Scene Graph Skill IO
 uint8 REQUEST_ALL_AREA_AND_OBJS = 11
 
+## VLA_Swarm
+uint8 TURN_VLA_SWARM = 12
+
 
 # source_task_id definitions
 uint8 SOURCE_TASK_EXPLORATION = 2
 uint8 SOURCE_TASK_COUNTING = 8
+uint8 SOURCE_TASK_VLA_SWARM = 9

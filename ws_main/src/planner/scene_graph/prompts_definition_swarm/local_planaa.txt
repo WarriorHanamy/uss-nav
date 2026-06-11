@@ -1,0 +1,6 @@
+The format of your generated is:
+   {
+   "found": true/false, //"key_action_history" records the objects that have already been found,It must be a task related object that has not been found before in order to be true.
+   "in_which_photo": [...], //integer type. On which pictures did you see task related objects.
+   "object": "", // In English(<2 words). Explain what nearst object that has been found and previously not been found.
+   }

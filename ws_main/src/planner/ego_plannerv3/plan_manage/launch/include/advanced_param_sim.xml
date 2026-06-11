@@ -78,6 +78,18 @@
         <param name="fsm/scene_graph_init_forward_dist" value="1.8" type="double"/>
         <param name="fsm/frontier_update_dt" value="0.2" type="double"/>
 
+        <!-- VLA_Swarm 独立任务状态机 -->
+        <param name="vla_swarm/enable" value="true" type="bool"/>
+        <param name="vla_swarm/result_topic" value="/planning/vla_swarm_result" type="string"/>
+        <param name="vla_swarm/prompt_timeout" value="20.0" type="double"/>
+        <param name="vla_swarm/target_timeout" value="10.0" type="double"/>
+        <param name="vla_swarm/ego_plan_timeout" value="5.0" type="double"/>
+        <param name="vla_swarm/ego_exec_timeout" value="30.0" type="double"/>
+        <param name="vla_swarm/max_plan_retries" value="2" type="int"/>
+        <param name="vla_swarm/max_target_retries" value="2" type="int"/>
+        <param name="vla_swarm/waypoint_distance" value="2.0" type="double"/>
+        <param name="vla_swarm/goal_tolerance" value="0.5" type="double"/>
+
         <!-- ego state trigger -->
         <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>
         <param name="fsm/ego_state_trigger_vel_thresh" value="0.15" type="double"/>

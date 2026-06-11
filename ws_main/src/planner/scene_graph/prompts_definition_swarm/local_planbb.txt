@@ -1,0 +1,11 @@
+The format of your generated is:
+   {
+   "need_operate": true/false   //判断是否具有可以通过操作（推拉动，按钮）等方式打开的通道或门（已经开着的不算），或者被遮盖区域
+   "bounding_box": [x_min, y_min, x_max, y_max], // integer type.
+                                                 画出 需要操作的区域（门，按钮，遮盖物体）:
+                                                 • [x_min, y_min] = top-left corner point
+                                                 • [x_max, y_max] = bottom-right corner point
+   "message": "", //In English(<15 words). 描述图片中所在房间的大致场景类型和主要物体分布。再简单描述一下需要操作的区域（假如有的话）
+   }
+
+
