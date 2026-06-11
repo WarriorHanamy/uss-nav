@@ -36,23 +36,28 @@ string image_camera
 int32[] classes
 geometry_msgs/Point[] global_poses
 
-#definations for instruction_type
+# definations for instruction_type
+## uss-nav exploration
 uint8 TURN_OBJECT_NAV = 1               # 全功能
 uint8 TURN_OBJECT_ID_NAV = 2            # 给定物体id导航
 uint8 TURN_REGULAR_EXPLORATION = 3      # 纯建图探索
 uint8 TURN_DF_DEMO = 4                  # demo演示，给prompt
-uint8 TURN_GOAL = 5                     # vla的点到点导航
-uint8 TURN_TRACKING = 6                 # Tracking
 uint8 TURN_WAYPOINT_NAV = 7             # 给定目标点导航
 
+## navigation
+uint8 TURN_GOAL = 5                     # vla的点到点导航
 
-# Map IO
+## tracking
+uint8 TURN_TRACKING = 6                 # Tracking
+
+## Map IO
 string map_folder
 uint8 TURN_SAVE_SCENE_GRAPH = 9
 uint8 TURN_LOAD_SCENE_GRAPH = 10
 
-# Scene Graph Skill IO
+## Scene Graph Skill IO
 uint8 REQUEST_ALL_AREA_AND_OBJS = 11
+
 
 # source_task_id definitions
 uint8 SOURCE_TASK_EXPLORATION = 2
