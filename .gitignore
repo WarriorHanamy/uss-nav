@@ -196,6 +196,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Generated HTML codebase docs
+/_site/
+
+# Node / Bun dependencies in tooling
+tools/md2html/node_modules/
+
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

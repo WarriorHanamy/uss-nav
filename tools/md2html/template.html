@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{TITLE}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<style>
+/* ── highlight.js Light (GitHub) ────────────────────────────────── */
+pre code.hljs{display:block;overflow-x:auto;padding:1em}
+code.hljs{padding:3px 5px}
+.hljs{color:#24292e;background:#ffffff}
+.hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#d73a49}
+.hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#6f42c1}
+.hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#005cc5}
+.hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#032f62}
+.hljs-built_in,.hljs-symbol{color:#e36209}
+.hljs-comment,.hljs-code,.hljs-formula{color:#6a737d}
+.hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#22863a}
+.hljs-subst{color:#24292e}
+.hljs-section{color:#005cc5;font-weight:bold}
+.hljs-bullet{color:#735c0f}
+.hljs-emphasis{color:#24292e;font-style:italic}
+.hljs-strong{color:#24292e;font-weight:bold}
+.hljs-addition{color:#22863a;background-color:#f0fff4}
+.hljs-deletion{color:#b31d28;background-color:#ffeef0}
+
+[data-theme="dark"] .hljs{color:#c9d1d9;background:#0d1117}
+[data-theme="dark"] .hljs-doctag,[data-theme="dark"] .hljs-keyword,[data-theme="dark"] .hljs-meta .hljs-keyword,[data-theme="dark"] .hljs-template-tag,[data-theme="dark"] .hljs-template-variable,[data-theme="dark"] .hljs-type,[data-theme="dark"] .hljs-variable.language_{color:#ff7b72}
+[data-theme="dark"] .hljs-title,[data-theme="dark"] .hljs-title.class_,[data-theme="dark"] .hljs-title.class_.inherited__,[data-theme="dark"] .hljs-title.function_{color:#d2a8ff}
+[data-theme="dark"] .hljs-attr,[data-theme="dark"] .hljs-attribute,[data-theme="dark"] .hljs-literal,[data-theme="dark"] .hljs-meta,[data-theme="dark"] .hljs-number,[data-theme="dark"] .hljs-operator,[data-theme="dark"] .hljs-variable,[data-theme="dark"] .hljs-selector-attr,[data-theme="dark"] .hljs-selector-class,[data-theme="dark"] .hljs-selector-id{color:#79c0ff}
+[data-theme="dark"] .hljs-regexp,[data-theme="dark"] .hljs-string,[data-theme="dark"] .hljs-meta .hljs-string{color:#a5d6ff}
+[data-theme="dark"] .hljs-built_in,[data-theme="dark"] .hljs-symbol{color:#ffa657}
+[data-theme="dark"] .hljs-comment,[data-theme="dark"] .hljs-code,[data-theme="dark"] .hljs-formula{color:#8b949e}
+[data-theme="dark"] .hljs-name,[data-theme="dark"] .hljs-quote,[data-theme="dark"] .hljs-selector-tag,[data-theme="dark"] .hljs-selector-pseudo{color:#7ee787}
+[data-theme="dark"] .hljs-subst{color:#c9d1d9}
+[data-theme="dark"] .hljs-bullet{color:#f2cc60}
+[data-theme="dark"] .hljs-emphasis{color:#c9d1d9;font-style:italic}
+[data-theme="dark"] .hljs-strong{color:#c9d1d9;font-weight:bold}
+[data-theme="dark"] .hljs-addition{color:#aff5b4;background-color:#033a16}
+[data-theme="dark"] .hljs-deletion{color:#ffdcd7;background-color:#67060c}
+
+/* ── CSS Variables ──────────────────────────────────────────────── */
+:root {
+  --bg: #fff;
+  --bg-alt: #f6f8fa;
+  --bg-sidebar: #fafbfc;
+  --text: #24292f;
+  --text-muted: #656d76;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --code-bg: #f6f8fa;
+  --code-text: #24292f;
+  --table-stripe: #f6f8fa;
+  --blockquote-bg: #f0f6fc;
+  --blockquote-border: #0969da;
+  --heading-border: #d0d7de;
+  --shadow: rgba(0,0,0,.08);
+  --scrollbar: #c0c0c0;
+}
+
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --bg-alt: #161b22;
+  --bg-sidebar: #0d1117;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --border: #30363d;
+  --accent: #58a6ff;
+  --accent-hover: #79c0ff;
+  --code-bg: #1c2128;
+  --code-text: #e6edf3;
+  --table-stripe: #161b22;
+  --blockquote-bg: #0d1117;
+  --blockquote-border: #58a6ff;
+  --heading-border: #21262d;
+  --shadow: rgba(0,0,0,.4);
+  --scrollbar: #484f58;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;
+  font-size:16px;line-height:1.6;color:var(--text);background:var(--bg);
+  display:flex;min-height:100vh;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;color:var(--accent-hover)}
+::selection{background:var(--accent);color:#fff}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:4px}
+
+/* ── Layout ─────────────────────────────────────────────────────── */
+.sidebar{
+  width:280px;flex-shrink:0;background:var(--bg-sidebar);
+  border-right:1px solid var(--border);height:100vh;position:sticky;top:0;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.main{flex:1;min-width:0;padding:40px 48px;max-width:960px}
+
+/* ── Sidebar header ─────────────────────────────────────────────── */
+.sidebar-header{
+  padding:16px 16px 12px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.sidebar-header h1{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme-toggle{
+  background:none;border:1px solid var(--border);border-radius:6px;
+  cursor:pointer;font-size:16px;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;color:var(--text);transition:background .15s;
+}
+.theme-toggle:hover{background:var(--bg-alt)}
+
+/* ── Search ──────────────────────────────────────────────────────── */
+.search-wrap{padding:12px 16px;border-bottom:1px solid var(--border)}
+.search-wrap input{
+  width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+  font-size:13px;background:var(--bg);color:var(--text);outline:none;
+  transition:border-color .15s;
+}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-wrap input::placeholder{color:var(--text-muted)}
+
+/* ── TOC ─────────────────────────────────────────────────────────── */
+.toc{flex:1;overflow-y:auto;padding:8px 0}
+.toc a{
+  display:flex;padding:3px 16px 3px 0;
+  font-size:13px;color:var(--text-muted);border-left:2px solid transparent;
+  transition:color .15s,border-color .15s,background .15s;
+  text-decoration:none;align-items:center;gap:4px;
+}
+.toc a:hover{color:var(--text);background:var(--bg-alt)}
+.toc a.active{
+  color:var(--accent);border-left-color:var(--accent);
+  background:var(--blockquote-bg);font-weight:500;
+}
+.toc .toc-h2{padding-left:16px}
+.toc .toc-h3{padding-left:32px;font-size:12.5px}
+.toc .toc-count{
+  margin-left:auto;font-size:11px;color:var(--text-muted);opacity:.6;
+}
+
+/* ── Main content ────────────────────────────────────────────────── */
+.main h2{
+  font-size:24px;font-weight:600;margin-top:32px;padding-bottom:8px;
+  border-bottom:1px solid var(--heading-border);cursor:pointer;
+  user-select:none;position:relative;
+}
+.main h2::after{
+  content:"▾";position:absolute;right:0;font-size:14px;
+  transition:transform .2s;color:var(--text-muted);
+}
+.main h2.collapsed::after{transform:rotate(-90deg)}
+.main h2:first-child{margin-top:0}
+.main h3{font-size:18px;font-weight:600;margin-top:24px;margin-bottom:8px}
+.main h4{font-size:15px;font-weight:600;margin-top:16px;margin-bottom:6px}
+.main p{margin-bottom:16px}
+.main a{word-break:break-word}
+.main img{max-width:100%;border-radius:6px}
+
+/* ── Blockquote ──────────────────────────────────────────────────── */
+.main blockquote{
+  margin:0 0 16px;padding:12px 16px;background:var(--blockquote-bg);
+  border-left:4px solid var(--blockquote-border);border-radius:4px;
+  color:var(--text-muted);font-size:15px;
+}
+.main blockquote p{margin-bottom:0}
+
+/* ── Code ────────────────────────────────────────────────────────── */
+.main code{
+  font-family:"SF Mono","Cascadia Code","JetBrains Mono","Fira Code",monospace;
+  font-size:13px;background:var(--code-bg);padding:2px 6px;border-radius:4px;
+}
+.main pre{
+  position:relative;margin:0 0 16px;border-radius:6px;
+  background:var(--code-bg);border:1px solid var(--border);
+  overflow-x:auto;
+}
+.main pre code{
+  display:block;padding:16px;background:none;overflow-x:auto;
+  font-size:13px;line-height:1.5;tab-size:2;color:var(--code-text);
+}
+.copy-btn{
+  position:absolute;top:8px;right:8px;background:var(--bg);
+  border:1px solid var(--border);border-radius:4px;cursor:pointer;
+  font-size:14px;padding:2px 6px;line-height:1;
+  opacity:0;transition:opacity .2s;z-index:2;
+}
+pre:hover .copy-btn{opacity:1}
+
+/* ── Lists ────────────────────────────────────────────────────────── */
+.main ul,.main ol{padding-left:24px;margin-bottom:16px}
+.main li{margin-bottom:4px}
+.main li > ul,.main li > ol{margin-bottom:0;margin-top:4px}
+
+/* ── Tables ───────────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto;margin-bottom:16px;border-radius:6px;border:1px solid var(--border)}
+.main table{width:100%;border-collapse:collapse;font-size:14px}
+.main thead{background:var(--bg-alt)}
+.main th{text-align:left;padding:8px 12px;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap}
+.main td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.main tbody tr:nth-child(even){background:var(--table-stripe)}
+.main tbody tr:hover{background:var(--blockquote-bg)}
+
+/* ── HR ───────────────────────────────────────────────────────────── */
+.main hr{margin:32px 0;border:none;border-top:1px solid var(--border)}
+
+/* ── Section collapse ─────────────────────────────────────────────── */
+.section-body{overflow:hidden;transition:max-height .3s ease,opacity .2s ease}
+.section-body.hidden{max-height:0!important;opacity:0;margin:0!important}
+
+/* ── Back to top ──────────────────────────────────────────────────── */
+#back-to-top{
+  position:fixed;bottom:24px;right:24px;width:40px;height:40px;
+  border-radius:50%;border:1px solid var(--border);background:var(--bg);
+  color:var(--text);font-size:18px;cursor:pointer;box-shadow:0 2px 8px var(--shadow);
+  display:none;align-items:center;justify-content:center;
+  transition:background .15s,transform .15s;z-index:100;
+}
+#back-to-top:hover{background:var(--bg-alt);transform:translateY(-2px)}
+
+/* ── Print ────────────────────────────────────────────────────────── */
+@media print{
+  .sidebar,#back-to-top{display:none!important}
+  .main{max-width:none;padding:0}
+  .main h2::after{content:""}
+  .section-body{max-height:none!important;opacity:1!important}
+  pre{break-inside:avoid;page-break-inside:avoid}
+}
+
+/* ── Mobile ───────────────────────────────────────────────────────── */
+@media(max-width:800px){
+  body{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:relative;border-right:none;border-bottom:1px solid var(--border);max-height:50vh}
+  .main{padding:24px 16px}
+}
+</style>
+</head>
+<body>
+
+<nav class="sidebar" role="navigation" aria-label="Table of Contents">
+  <div class="sidebar-header">
+    <h1>{{TITLE}}</h1>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" id="themeBtn">🌙</button>
+  </div>
+  <div class="search-wrap">
+    <input type="text" id="searchInput" placeholder="Search sections..." oninput="filterToc(this.value)" aria-label="Search">
+  </div>
+  <div class="toc" id="toc"></div>
+</nav>
+
+<main class="main" id="mainContent">
+  {{BODY}}
+</main>
+
+<button id="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
+
+<script>
+// ── data ──────────────────────────────────────────────────────────────
+const TOC = {{TOC}};
+const NESTED = buildNested(TOC);
+let tocActive = null;
+
+// ── build nested toc (h2→children) ───────────────────────────────────
+function buildNested(flat){
+  const out=[],map={};
+  for(const e of flat){
+    if(e.level===2){map[e.id]={...e,children:[]};out.push(map[e.id])}
+    else if(e.level===3){
+      const keys=Object.keys(map);
+      if(keys.length)map[keys[keys.length-1]].children.push(e);
+    }
+  }
+  return out;
+}
+
+// ── render TOC ────────────────────────────────────────────────────────
+function renderToc(){
+  const el=document.getElementById('toc');
+  const counts=countSections();
+  el.innerHTML=NESTED.map(g=>{
+    let html=`<a href="#${g.id}" class="toc-h2" data-id="${g.id}">${g.text}`;
+    if(counts[g.id])html+=`<span class="toc-count">${counts[g.id]}</span>`;
+    html+=`</a>`;
+    for(const c of g.children){
+      html+=`<a href="#${c.id}" class="toc-h3" data-id="${c.id}">${c.text}</a>`;
+    }
+    return html;
+  }).join('');
+}
+
+// ── count sections (h3 per h2 section, by looking at markdown structure) ─
+function countSections(){
+  const c={};
+  for(const g of NESTED){
+    let n=0;
+    const sec=document.getElementById(g.id);
+    if(sec){
+      let sib=sec.nextElementSibling;
+      while(sib&&sib.tagName!=='H2'){
+        if(sib.tagName==='H3')n++;
+        sib=sib.nextElementSibling;
+      }
+    }
+    c[g.id]=n;
+  }
+  return c;
+}
+
+// ── search filter ─────────────────────────────────────────────────────
+function filterToc(q){
+  q=q.toLowerCase().trim();
+  document.querySelectorAll('.toc a').forEach(a=>{
+    const ok=!q||a.textContent.toLowerCase().includes(q);
+    a.style.display=ok?'flex':'none';
+  });
+  if(q){
+    // highlight matching sections in content
+    document.querySelectorAll('.main h2,.main h3').forEach(h=>{
+      const ok=h.textContent.toLowerCase().includes(q);
+      h.style.opacity=ok?'1':'.3';
+    });
+  }else{
+    document.querySelectorAll('.main h2,.main h3').forEach(h=>h.style.opacity='1');
+  }
+}
+
+// ── IntersectionObserver for active toc ────────────────────────────────
+function setupObserver(){
+  const heads=document.querySelectorAll('.main h2,.main h3');
+  const observer=new IntersectionObserver(entries=>{
+    let best=null;
+    for(const e of entries){
+      if(e.isIntersecting){const id=e.target.id||e.target.textContent.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g,'-').replace(/^-+|-+$/g,'');best=id}
+    }
+    if(best)setActive(best);
+  },{rootMargin:'-64px 0px -60% 0px',threshold:0});
+  heads.forEach(h=>observer.observe(h));
+}
+
+function setActive(id){
+  if(tocActive===id)return;
+  tocActive=id;
+  document.querySelectorAll('.toc a').forEach(a=>{
+    a.classList.toggle('active',a.dataset.id===id);
+  });
+}
+
+// ── section collapse ───────────────────────────────────────────────────
+function setupCollapse(){
+  document.querySelectorAll('.main h2').forEach(h2=>{
+    let sib=h2.nextElementSibling;
+    const children=[];
+    while(sib&&sib.tagName!=='H2'){
+      children.push(sib);
+      sib=sib.nextElementSibling;
+    }
+    if(children.length){
+      const wrap=document.createElement('div');
+      wrap.className='section-body';
+      children.forEach(c=>wrap.appendChild(c.cloneNode(true)));
+      children.forEach(c=>c.remove());
+      h2.parentNode.insertBefore(wrap,h2.nextSibling);
+      const key='collapse_'+h2.id;
+      if(localStorage.getItem(key)==='1'){wrap.classList.add('hidden');h2.classList.add('collapsed')}
+      h2.addEventListener('click',e=>{
+        if(e.target.tagName!=='A'&&!e.target.closest('a')){
+          wrap.classList.toggle('hidden');h2.classList.toggle('collapsed');
+          localStorage.setItem(key,wrap.classList.contains('hidden')?'1':'0');
+        }
+      });
+    }
+  });
+}
+
+// ── code copy ──────────────────────────────────────────────────────────
+window.copyCode=function(btn){
+  const code=btn.parentElement.querySelector('code')||btn.nextElementSibling;
+  const text=code.textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    btn.textContent='✅';setTimeout(()=>btn.textContent='📋',1500);
+  }).catch(()=>{
+    const ta=document.createElement('textarea');
+    ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
+    btn.textContent='✅';setTimeout(()=>btn.textContent='📋',1500);
+  });
+};
+
+// ── theme toggle ───────────────────────────────────────────────────────
+function toggleTheme(){
+  const html=document.documentElement;
+  const cur=html.getAttribute('data-theme');
+  const next=cur==='dark'?'light':'dark';
+  html.setAttribute('data-theme',next);
+  localStorage.setItem('theme',next);
+  document.getElementById('themeBtn').textContent=next==='dark'?'☀️':'🌙';
+}
+function loadTheme(){
+  const saved=localStorage.getItem('theme')||'light';
+  document.documentElement.setAttribute('data-theme',saved);
+  document.getElementById('themeBtn').textContent=saved==='dark'?'☀️':'🌙';
+}
+
+// ── back to top visibility ─────────────────────────────────────────────
+function setupBackToTop(){
+  const btn=document.getElementById('back-to-top');
+  window.addEventListener('scroll',()=>{
+    btn.style.display=window.scrollY>window.innerHeight?'flex':'none';
+  });
+}
+
+// ── init ───────────────────────────────────────────────────────────────
+renderToc();
+loadTheme();
+setupObserver();
+setupCollapse();
+setupBackToTop();
+
+// ── mermaid ────────────────────────────────────────────────────────────
+mermaid.initialize({ startOnLoad: true, theme: 'base', themeVariables: { background: 'transparent' } });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</body>
+</html>

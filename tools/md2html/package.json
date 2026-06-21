@@ -1,0 +1,27 @@
+{
+  "name": "md2codebase-html",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Render CODEBASE.md into a single-file HTML with TOC, search, dark mode",
+  "main": "render.ts",
+  "scripts": {
+    "render": "bun render.ts",
+    "render:watch": "bun --watch render.ts",
+
+    "view": "bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/CODEBASE.html'),{stdio:'inherit'})\"",
+    "view:mac": "bun -e \"const{execSync}=require('child_process');execSync('open '+require('path').resolve(__dirname,'../..','_site/CODEBASE.html'),{stdio:'inherit'})\""
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.0",
+    "marked": "^15.0.11",
+    "marked-katex-extension": "^5.1.10",
+    "mermaid": "^11.15.0"
+  },
+  "md2html": {
+    "input": "CODEBASE.md",
+    "output": "_site/CODEBASE.html",
+    "autoOpen": true,
+    "title": "CODEBASE Documentation",
+    "description": "Auto-generated repository documentation"
+  }
+}
