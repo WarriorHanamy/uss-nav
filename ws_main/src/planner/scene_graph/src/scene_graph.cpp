@@ -157,9 +157,11 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
 // ------------------------------------------------------------------
 bool SceneGraph::isInflateBlocked(const Eigen::Vector3d &p) {
     if (map_interface_ == nullptr) return false;
-    // 仅当点"在 local map 内 且 inflate 占据"才判为坏点; 越界点(getInflateOccupancy 返回 FREE)不算
-    return map_interface_->isInLocalMap(p) &&
-           map_interface_->getInflateOccupancy(p) == ego_planner::MapInterface::OCCUPIED;
+    // 仅当点"在 local map 内 且 inflate 占据 且底层 occupancy 非未知"才判为坏点
+    // 底层 UNKNOWN → 尚未观测到该区域, 不应封锁 topo 节点; 越界点不算
+    if (!map_interface_->isInLocalMap(p)) return false;
+    if (map_interface_->getOccupancy(p) == ego_planner::MapInterface::UNKNOWN) return false;
+    return (map_interface_->getInflateOccupancy(p) == ego_planner::MapInterface::OCCUPIED);
 }
 
 bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out) {
@@ -178,6 +180,7 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
         Eigen::Vector3d probe = p + d * fwd;
         if (!map_interface_->isInLocalMap(probe)) continue;
         if (map_interface_->getInflateOccupancy(probe) != ego_planner::MapInterface::FREE) continue;
+        if (map_interface_->getOccupancy(probe) == ego_planner::MapInterface::UNKNOWN) continue;  // 未观测区域不生成修复点
         if (topo_repair_use_visibility_ && !map_interface_->isVisible(probe, toward)) continue;
         p_out = probe;
         anchor_found = true;
@@ -196,6 +199,7 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
                 if ((c - anchor).norm() > refine) continue;
                 if (!map_interface_->isInLocalMap(c)) continue;
                 if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
+                if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;  // 未观测区域不生成修复点
                 if (topo_repair_use_visibility_ && !map_interface_->isVisible(c, toward)) continue;
                 double sc = (c - anchor).norm();
                 if (sc < best) { best = sc; p_out = c; }
