@@ -1,0 +1,80 @@
+<launch>
+  <arg name="drone_id" default="0"/>
+  <arg name="init_x" default="0.0"/>
+  <arg name="init_y" default="0.0"/>
+  <arg name="init_z" default="1.0"/>
+
+  <!-- Quadrotor dynamics simulator -->
+  <node pkg="so3_quadrotor_simulator" type="quadrotor_simulator_so3"
+        name="drone_$(arg drone_id)_quadrotor_simulator_so3" output="screen">
+    <param name="rate/odom" value="200.0"/>
+    <param name="simulator/init_state_x" value="$(arg init_x)"/>
+    <param name="simulator/init_state_y" value="$(arg init_y)"/>
+    <param name="simulator/init_state_z" value="$(arg init_z)"/>
+    <remap from="~odom" to="drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~cmd" to="drone_$(arg drone_id)_so3_cmd"/>
+  </node>
+
+  <!-- SO(3) controller -->
+  <node pkg="nodelet" type="nodelet" args="standalone so3_control/SO3ControlNodelet"
+        name="drone_$(arg drone_id)_so3_control" required="true" output="screen">
+    <param name="so3_control/init_state_x" value="$(arg init_x)"/>
+    <param name="so3_control/init_state_y" value="$(arg init_y)"/>
+    <param name="so3_control/init_state_z" value="$(arg init_z)"/>
+    <remap from="~odom" to="drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~position_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>
+    <remap from="~motors" to="drone_$(arg drone_id)_motors"/>
+    <remap from="~corrections" to="drone_$(arg drone_id)_corrections"/>
+    <remap from="~so3_cmd" to="drone_$(arg drone_id)_so3_cmd"/>
+    <rosparam command="load" file="$(find sim_bringup)/params/sim_ego_control.yaml"/>
+  </node>
+
+  <!-- 360° LiDAR sensor simulation (pcl_render_node) -->
+  <node pkg="local_sensing_node" type="pcl_render_node"
+        name="drone_$(arg drone_id)_pcl_render_node" output="log">
+    <remap from="~global_map" to="/map_generator/global_cloud"/>
+    <remap from="~odometry" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+
+    <param name="drone_id" value="$(arg drone_id)"/>
+    <param name="quadrotor_name" value="drone_$(arg drone_id)"/>
+    <param name="uav_num" value="1"/>
+    <param name="is_360lidar" value="1"/>
+    <param name="sensing_horizon" value="100.0"/>
+    <param name="sensing_rate" value="10.0"/>
+    <param name="estimation_rate" value="10.0"/>
+    <param name="polar_resolution" value="0.2"/>
+    <param name="yaw_fov" value="360.0"/>
+    <param name="vertical_fov" value="90.0"/>
+    <param name="min_raylength" value="0.5"/>
+    <param name="livox_linestep" value="1.4"/>
+    <param name="curvature_limit" value="100.0"/>
+    <param name="hash_cubesize" value="5.0"/>
+    <param name="use_avia_pattern" value="0"/>
+    <param name="use_vlp32_pattern" value="0"/>
+    <param name="use_minicf_pattern" value="1"/>
+    <param name="downsample_res" value="0.1"/>
+    <param name="dynobj_enable" value="0"/>
+    <param name="dynobject_size" value="0.6"/>
+    <param name="dynobject_num" value="30"/>
+    <param name="dyn_mode" value="2"/>
+    <param name="dyn_velocity" value="3.0"/>
+    <param name="use_uav_extra_model" value="0"/>
+    <param name="collisioncheck_enable" value="0"/>
+    <param name="collision_range" value="0.3"/>
+    <param name="output_pcd" value="0"/>
+  </node>
+
+  <!-- Drone odometry visualization (optional, requires odom_visualization built)
+  <node pkg="odom_visualization" name="drone_$(arg drone_id)_odom_visualization"
+        type="odom_visualization" output="screen">
+    <remap from="~odom" to="drone_$(arg drone_id)_visual_slam/odom"/>
+    <param name="color/a" value="1.0"/>
+    <param name="color/r" value="0.0"/>
+    <param name="color/g" value="0.0"/>
+    <param name="color/b" value="0.0"/>
+    <param name="covariance_scale" value="100.0"/>
+    <param name="robot_scale" value="0.35"/>
+    <param name="tf45" value="true"/>
+    <param name="drone_id" value="$(arg drone_id)"/>
+  </node> -->
+</launch>

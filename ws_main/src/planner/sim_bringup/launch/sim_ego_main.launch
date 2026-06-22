@@ -1,0 +1,39 @@
+<launch>
+  <arg name="drone_id" default="0"/>
+  <arg name="init_x" default="0.0"/>
+  <arg name="init_y" default="0.0"/>
+  <arg name="init_z" default="1.0"/>
+  <arg name="map_size_x" default="200.0"/>
+  <arg name="map_size_y" default="200.0"/>
+  <arg name="map_size_z" default="3.0"/>
+  <arg name="flight_type" default="2"/>
+  <arg name="max_vel" default="0.6"/>
+  <arg name="max_acc" default="1.0"/>
+  <arg name="use_rviz" default="false"/>
+
+  <!-- Procedural random map (global_cloud publisher) -->
+  <include file="$(find sim_bringup)/launch/sim_ego_map.launch">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+  </include>
+
+  <!-- Simulation: quadrotor dynamics + SO3 controller + LiDAR sensor -->
+  <include file="$(find sim_bringup)/launch/sim_ego_sim.launch">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+    <arg name="init_x" value="$(arg init_x)"/>
+    <arg name="init_y" value="$(arg init_y)"/>
+    <arg name="init_z" value="$(arg init_z)"/>
+  </include>
+
+  <!-- EGO planner + command mux -->
+  <include file="$(find sim_bringup)/launch/sim_ego_planner.launch">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+    <arg name="flight_type" value="$(arg flight_type)"/>
+    <arg name="max_vel" value="$(arg max_vel)"/>
+    <arg name="max_acc" value="$(arg max_acc)"/>
+  </include>
+
+  <!-- RViz for visualization (enable with use_rviz:=true) -->
+  <node name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find sim_bringup)/rviz/sim_ego.rviz" output="screen"
+        if="$(arg use_rviz)"/>
+</launch>

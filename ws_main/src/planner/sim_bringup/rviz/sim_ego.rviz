@@ -1,0 +1,69 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+    - Class: rviz/TF
+      Name: TF
+    - Class: rviz/PointCloud2
+      Name: GlobalMap
+      Topic: /map_generator/global_cloud
+      Enabled: true
+      ColorTransformer: RGB8
+    - Class: rviz/PointCloud2
+      Name: LiDAR
+      Topic: /drone_0_pcl_render_node/cloud
+      Enabled: true
+      ColorTransformer: AxisColor
+    - Class: rviz/PointCloud2
+      Name: Occupancy
+      Topic: /grid_map/occupancy
+      Enabled: false
+    - Class: rviz/Path
+      Name: Trajectory
+      Topic: /drone_0_planning/trajectory
+      Enabled: true
+    - Class: rviz/Marker
+      Name: FSM_Status
+      Topic: /drone_0_planning/data_display
+      Enabled: true
+    - Class: rviz/Pose
+      Name: Goal
+      Topic: /move_base_simple/goal
+      Enabled: true
+  Global Options:
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    # Keep MoveCamera first so it is selected when this config is loaded.  If
+    # Tools is omitted RViz has no viewport tool to handle mouse drags.
+    - Class: rviz/MoveCamera
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 20
+      Focal Point: [0, 0, 1]
+      Target Frame: world
+    Saved:
+      - Class: rviz/Orbit
+        Name: Top
+        Distance: 30
+        Focal Point: [0, 0, 1]
+        Pitch: 1.57
+        Target Frame: world

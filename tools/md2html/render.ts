@@ -128,10 +128,78 @@ function openInBrowser(path: string) {
   }
 }
 
+// ── render a single markdown file to body HTML + TOC ──────────────
+function renderMd(inputPath: string): { body: string; toc: TocEntry[] } {
+  const md = readFileSync(inputPath, "utf-8");
+  const toc = buildToc(md);
+  let bodyHtml = marked.parse(md) as string;
+  bodyHtml = stripSurroundingP(bodyHtml);
+  bodyHtml = wrapTables(bodyHtml);
+  bodyHtml = injectHeadingIds(bodyHtml);
+  bodyHtml = convertMermaidBlocks(bodyHtml);
+  bodyHtml = addCodeCopyButtons(bodyHtml);
+  return { body: bodyHtml, toc };
+}
+
+// ── render: multi-tab view ────────────────────────────────────────────
+function renderMulti(outputPath: string, tabs: { label: string; path: string }[]) {
+  mkdirSync(dirname(outputPath), { recursive: true });
+
+  // Render each document
+  const results = tabs.map((t) => {
+    const r = renderMd(t.path);
+    return { ...r, label: t.label };
+  });
+
+  // Build tab panes HTML (pre-rendered, just shown/hidden by JS)
+  const tabPanesHtml = results
+    .map(
+      (r, i) =>
+        `<div class="tab-pane${i === 0 ? " active" : ""}" data-tab="${i}">${r.body}</div>`,
+    )
+    .join("\n");
+
+  // Build JSON data for JS
+  const tabsJson = JSON.stringify(
+    tabs.map((t) => ({ label: t.label, id: t.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") })),
+  );
+  const tocsJson = JSON.stringify(results.map((r) => r.toc));
+
+  const templatePath = resolve(__dirname, "template_tabs.html");
+  let template = readFileSync(templatePath, "utf-8");
+
+  const title = "USS-NAV Architecture Overview";
+  const desc = "Architecture documentation: EGO Planner, SceneGraph, and decision systems";
+  const result = template
+    .replace("{{TITLE}}", title)
+    .replace("{{DESCRIPTION}}", desc)
+    .replace("{{TABS}}", tabsJson)
+    .replace("{{TOCS}}", tocsJson)
+    .replace("{{TAB_PANES}}", tabPanesHtml);
+
+  writeFileSync(outputPath, result, "utf-8");
+  console.log(`✅ Generated ${outputPath} (${(result.length / 1024).toFixed(0)} KB)`);
+
+  openInBrowser(outputPath);
+}
+
 // ── main ────────────────────────────────────────────────────────────
 function main() {
   const args = process.argv.slice(2);
 
+  // ── multi-tab mode ──
+  if (args[0] === "--multi") {
+    const outputPath = resolve(process.cwd(), args[1]);
+    const tabs = args.slice(2).map((arg) => {
+      const colonIdx = arg.indexOf(":");
+      if (colonIdx === -1) throw new Error(`Invalid tab spec "${arg}" — expected label:path`);
+      return { label: arg.slice(0, colonIdx), path: resolve(process.cwd(), arg.slice(colonIdx + 1)) };
+    });
+    renderMulti(outputPath, tabs);
+    return;
+  }
+
+  // ── single-doc mode ──
   const inputPath = args[0]
     ? resolve(process.cwd(), args[0])
     : resolve(PROJECT_ROOT, cfg.input || "CODEBASE.md");
@@ -141,16 +209,8 @@ function main() {
 
   mkdirSync(dirname(outputPath), { recursive: true });
 
-  const md = readFileSync(inputPath, "utf-8");
-  const toc = buildToc(md);
+  const { body, toc } = renderMd(inputPath);
   const tocJson = JSON.stringify(toc);
-
-  let bodyHtml = marked.parse(md) as string;
-  bodyHtml = stripSurroundingP(bodyHtml);
-  bodyHtml = wrapTables(bodyHtml);
-  bodyHtml = injectHeadingIds(bodyHtml);
-  bodyHtml = convertMermaidBlocks(bodyHtml);
-  bodyHtml = addCodeCopyButtons(bodyHtml);
 
   const templatePath = resolve(__dirname, "template.html");
   let template = readFileSync(templatePath, "utf-8");
@@ -161,7 +221,7 @@ function main() {
     .replace("{{TITLE}}", title)
     .replace("{{DESCRIPTION}}", desc)
     .replace("{{TOC}}", tocJson)
-    .replace("{{BODY}}", bodyHtml);
+    .replace("{{BODY}}", body);
 
   writeFileSync(outputPath, result, "utf-8");
   console.log(`✅ Generated ${outputPath} (${(result.length / 1024).toFixed(0)} KB)`);

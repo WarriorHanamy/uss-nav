@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>sim_bringup</name>
+  <version>1.0.0</version>
+  <description>
+    Centralized launch and config package for EGO planner simulation.
+    Consolidates all launch files and parameters in one place.
+  </description>
+  <maintainer email="you@example.com">user</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>tf</depend>
+
+  <depend>quadrotor_msgs</depend>
+  <depend>traj_utils</depend>
+  <depend>uav_utils</depend>
+
+  <depend>plan_env</depend>
+  <depend>path_searching</depend>
+  <depend>traj_opt</depend>
+  <depend>map_interface</depend>
+  <depend>ego_planner</depend>
+
+  <depend>so3_quadrotor_simulator</depend>
+  <depend>so3_control</depend>
+  <depend>local_sensing_node</depend>
+  <depend>map_generator</depend>
+  <depend>odom_visualization</depend>
+
+  <exec_depend>nodelet</exec_depend>
+
+  <export>
+    <architecture_independent/>
+  </export>
+</package>

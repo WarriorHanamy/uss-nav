@@ -7,8 +7,15 @@
   "scripts": {
     "render": "bun render.ts",
     "render:watch": "bun --watch render.ts",
+    "render:ego": "bun render.ts ../../EGO.md ../../_site/EGO.html",
+    "render:scenegraph": "bun render.ts ../../SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
+    "render:next_scenegraph": "bun render.ts ../../NEXT_SCENEGRAPH.md ../../_site/NEXT_SCENEGRAPH.html",
+    "render:view": "bun render.ts --multi ../../_site/VIEW.html EGO:../../EGO.md SCENEGRAPH:../../SCENEGRAPH.md NEXT_SCENEGRAPH:../../NEXT_SCENEGRAPH.md",
 
-    "view": "bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/CODEBASE.html'),{stdio:'inherit'})\"",
+    "view": "bun run render:view && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/VIEW.html'),{stdio:'inherit'})\"",
+    "view:ego": "bun run render:ego && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/EGO.html'),{stdio:'inherit'})\"",
+    "view:scenegraph": "bun run render:scenegraph && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/SCENEGRAPH.html'),{stdio:'inherit'})\"",
+    "view:next_scenegraph": "bun run render:next_scenegraph && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/NEXT_SCENEGRAPH.html'),{stdio:'inherit'})\"",
     "view:mac": "bun -e \"const{execSync}=require('child_process');execSync('open '+require('path').resolve(__dirname,'../..','_site/CODEBASE.html'),{stdio:'inherit'})\""
   },
   "dependencies": {

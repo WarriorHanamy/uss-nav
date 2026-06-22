@@ -1,0 +1,8 @@
+{
+  "name": "map-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "view": "bun render.ts && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/map-demo.html'),{stdio:'inherit'})\""
+  }
+}

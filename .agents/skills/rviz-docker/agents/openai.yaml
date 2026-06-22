@@ -1,0 +1,4 @@
+interface:
+  display_name: "RViz Docker"
+  short_description: "Diagnose and maintain RViz running in Docker"
+  default_prompt: "Use $rviz-docker to diagnose or update this project RViz Docker workflow."

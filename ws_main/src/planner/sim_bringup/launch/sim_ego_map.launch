@@ -1,0 +1,10 @@
+<launch>
+  <arg name="drone_id" default="0"/>
+
+  <node pkg="map_generator" name="random_forest" type="random_forest" output="screen">
+    <rosparam command="load" file="$(find sim_bringup)/params/sim_ego_map.yaml"/>
+  </node>
+
+  <!-- RViz display helper for the global map -->
+  <node pkg="map_generator" name="map_display" type="map_display.py" output="screen"/>
+</launch>

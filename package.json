@@ -1,0 +1,18 @@
+{
+  "name": "uss-nav",
+  "private": true,
+  "scripts": {
+    "render:view": "cd tools/md2html && bun render.ts --multi ../../_site/VIEW.html EGO:../../EGO.md SCENEGRAPH:../../SCENEGRAPH.md NEXT_SCENEGRAPH:../../NEXT_SCENEGRAPH.md",
+    "render:scenegraph": "cd tools/md2html && bun render.ts ../../SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
+    "render:ego": "cd tools/md2html && bun render.ts ../../EGO.md ../../_site/EGO.html",
+    "render:next_scenegraph": "cd tools/md2html && bun render.ts ../../NEXT_SCENEGRAPH.md ../../_site/NEXT_SCENEGRAPH.html",
+    "view": "cd tools/md2html && bun run view",
+    "view:scenegraph": "cd tools/md2html && bun run view:scenegraph",
+    "view:ego": "cd tools/md2html && bun run view:ego",
+    "view:next_scenegraph": "cd tools/md2html && bun run view:next_scenegraph",
+    "view:map-demo": "cd tools/map-demo && bun run view",
+    "infra": "bun tools/infra.ts",
+    "docker:build": "bun tools/infra.ts docker build",
+    "docker:run": "bun tools/infra.ts docker run"
+  }
+}

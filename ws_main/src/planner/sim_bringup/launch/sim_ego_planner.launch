@@ -1,0 +1,55 @@
+<launch>
+  <arg name="drone_id" default="0"/>
+  <arg name="flight_type" default="2"/>
+  <arg name="max_vel" default="0.6"/>
+  <arg name="max_acc" default="1.0"/>
+
+  <!-- Exploration node (EGO planner FSM + map + optimizer) -->
+  <node pkg="exploration_manager" type="exploration_node"
+        name="drone_$(arg drone_id)_ego_planner_node" output="screen">
+
+    <!-- Load consolidated planner params -->
+    <rosparam command="load" file="$(find sim_bringup)/params/sim_ego_planner.yaml"/>
+
+    <!-- Override dynamic params from args -->
+    <param name="fsm/flight_type" value="$(arg flight_type)"/>
+    <param name="manager/max_vel" value="$(arg max_vel)"/>
+    <param name="manager/max_acc" value="$(arg max_acc)"/>
+    <param name="manager/drone_id" value="$(arg drone_id)"/>
+
+    <!-- Topic remaps -->
+    <remap from="~odom_world" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~mandatory_stop" to="/mandatory_stop_to_planner"/>
+    <remap from="~planning/trajectory" to="/drone_$(arg drone_id)_planning/trajectory"/>
+    <remap from="~planning/data_display" to="/drone_$(arg drone_id)_planning/data_display"/>
+    <remap from="~planning/yaw_cmd" to="/drone_$(arg drone_id)_planning/yaw_cmd"/>
+    <remap from="~planning/broadcast_traj_send" to="/broadcast_traj_from_planner"/>
+    <remap from="~planning/broadcast_traj_recv" to="/bridge/broadcast_traj_from_planner"/>
+    <remap from="~planning/heartbeat" to="/drone_$(arg drone_id)_traj_server/heartbeat"/>
+    <remap from="/trigger" to="/move_base_simple/goal"/>
+    <remap from="~grid_map/odom" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~grid_map/cloud" to="/livox/lidar_world"/>
+    <remap from="~grid_map/pose" to="/drone_$(arg drone_id)_pcl_render_node/camera_pose"/>
+    <remap from="~grid_map/depth" to="/drone_$(arg drone_id)_pcl_render_node/depth"/>
+    <remap from="/position_cmd" to="/planner_mux/ego_position_cmd"/>
+
+    <!-- Camera intrinsics (for depth-based grid_map) -->
+    <param name="grid_map/cx" value="320.0"/>
+    <param name="grid_map/cy" value="240.0"/>
+    <param name="grid_map/fx" value="442.025"/>
+    <param name="grid_map/fy" value="442.025"/>
+  </node>
+
+  <!-- Command multiplexer (ego / elastic selection) -->
+  <node pkg="exploration_manager" type="planner_cmd_mux"
+        name="drone_$(arg drone_id)_planner_cmd_mux" output="screen">
+    <remap from="~ego_position_cmd" to="/planner_mux/ego_position_cmd"/>
+    <remap from="~elastic_position_cmd" to="/planner_mux/elastic_position_cmd"/>
+    <remap from="~mode" to="/planner_mux/mode"/>
+    <remap from="~position_cmd" to="/drone_$(arg drone_id)_planning/pos_cmd"/>
+    <param name="default_mode" value="ego" type="string"/>
+    <param name="ego_mode" value="ego" type="string"/>
+    <param name="elastic_mode" value="elastic" type="string"/>
+    <param name="input_timeout" value="0.5" type="double"/>
+  </node>
+</launch>
