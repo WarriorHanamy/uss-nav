@@ -271,6 +271,11 @@ public:
   // temp data
   double temp_distance_to_nxt_poly_;  // 到下一个多面体中心的Astar距离
 
+  // 导航不可达标记(运行时状态, 不参与存档 JSON 序列化, 加载旧地图时默认 false)
+  bool       nav_blocked_   = false;   // 占据导致的导航不可达(独立于 can_reach_)
+  ros::Time  blocked_stamp_;           // 标记时刻, 用于 TTL 重校验
+  int        blocked_hits_  = 0;       // 连续命中占据次数(去抖, 防单帧误判)
+
   Polyhedron(const Eigen::Vector3d center, const PolyhedronFtrPtr &parent_ftr, const bool is_gate = false){
     center_         = center;
     origin_center_  = center;

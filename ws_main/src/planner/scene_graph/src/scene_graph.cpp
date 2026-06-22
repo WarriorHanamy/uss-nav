@@ -104,11 +104,45 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
         return false;
     }
 
-    double dis = skeleton_gen_->astarSearch(cur_poly_, obj->edge.polyhedron_father, path);
-    aim_pos = obj->edge.polyhedron_father->center_;
+    PolyHedronPtr father = obj->edge.polyhedron_father;
+
+    // 搜索 + 占据校验 + 标记不可达 + 自动绕行重搜
+    bool ok = false;
+    for (int iter = 0; iter < topo_block_max_iter_; ++iter) {
+        if (topo_block_enable_) revalidateBlocked();                 // 策略A: 清理过期标记
+        double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
+        skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
+        if (path.empty() || dis >= 99998.0) break;                   // 退化直连(搜索失败)不可接受
+        if (!topo_block_enable_) { ok = true; break; }
+
+        // 校验路径中(在 local map 内的)中间点是否落入膨胀层
+        bool any_blocked = false;
+        for (auto &poly : last_poly_path_) {
+            if (poly == nullptr)              continue;
+            if (poly == cur_poly_ || poly == father) continue;       // 放行起点/终点
+            if (isInflateBlocked(poly->center_)) {
+                markPolyhedronBlocked(poly->center_, true);          // 规划期占据信号置信, 立即标记
+                any_blocked = true;
+            }
+        }
+        if (!any_blocked) { ok = true; break; }                      // 路径无被封锁点 → 接受
+        // 否则下一轮 A* 会自动绕开被标记节点
+    }
+
+    // 策略B: A* 始终找不到干净路径时, 清空标记重试一次(防误杀导致永久死锁)
+    if (!ok && topo_block_revalidate_on_fail_) {
+        INFO_MSG_YELLOW("[SceneGraph] | all topo routes blocked, clear marks and retry once.");
+        clearAllBlocked();
+        double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
+        skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
+        ok = (!path.empty() && dis < 99998.0);   // 仍为退化直连则不可接受
+    }
+    if (!ok) return false;
+
+    aim_pos = father->center_;
 
     // 计算末端目标yaw
-    Eigen::Vector3d dxy = obj->edge.polyhedron_father->center_ - obj->pos;
+    Eigen::Vector3d dxy = father->center_ - obj->pos;
     double aim_direction_ = atan2(dxy(1), dxy(0)) + M_PI;
     if (aim_direction_ > M_PI)
         aim_direction_ -= 2 * M_PI;
@@ -117,6 +151,121 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
     aim_yaw = aim_direction_;
     return true;
 }
+
+// ------------------------------------------------------------------
+// 拓扑点不可达: 检测 / 修复 / 标记 / 恢复
+// ------------------------------------------------------------------
+bool SceneGraph::isInflateBlocked(const Eigen::Vector3d &p) {
+    if (map_interface_ == nullptr) return false;
+    // 仅当点"在 local map 内 且 inflate 占据"才判为坏点; 越界点(getInflateOccupancy 返回 FREE)不算
+    return map_interface_->isInLocalMap(p) &&
+           map_interface_->getInflateOccupancy(p) == ego_planner::MapInterface::OCCUPIED;
+}
+
+bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out) {
+    if (map_interface_ == nullptr) return false;
+    const double step = 0.1;
+    const double R    = topo_repair_radius_;
+
+    Eigen::Vector3d fwd = toward - p;
+    double fl = fwd.norm();
+    if (fl < 1e-3) return false;
+    fwd /= fl;
+
+    // 阶段1: 沿 fwd 方向粗扫, 找离 p 最近的 inflate-free (且 optionally visible to toward) 的锚点
+    bool   anchor_found = false;
+    for (double d = 0.0; d <= R; d += step) {
+        Eigen::Vector3d probe = p + d * fwd;
+        if (!map_interface_->isInLocalMap(probe)) continue;
+        if (map_interface_->getInflateOccupancy(probe) != ego_planner::MapInterface::FREE) continue;
+        if (topo_repair_use_visibility_ && !map_interface_->isVisible(probe, toward)) continue;
+        p_out = probe;
+        anchor_found = true;
+        break;   // 取最近满足条件的点
+    }
+    if (!anchor_found) return false;
+
+    // 阶段2: 以锚点为中心, 在 0.3m 小球内微调取最优(距锚点最近且 inflate-free, optionally 过 isVisible 确认)
+    const double refine = 0.3;
+    const Eigen::Vector3d anchor = p_out;   // 固定锚点, 避免循环内 p_out 被边搜边改导致采样中心漂移
+    double best = 1e9;
+    for (double dx = -refine; dx <= refine + 1e-6; dx += step)
+        for (double dy = -refine; dy <= refine + 1e-6; dy += step)
+            for (double dz = -refine; dz <= refine + 1e-6; dz += step) {
+                Eigen::Vector3d c = anchor + Eigen::Vector3d(dx, dy, dz);
+                if ((c - anchor).norm() > refine) continue;
+                if (!map_interface_->isInLocalMap(c)) continue;
+                if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
+                if (topo_repair_use_visibility_ && !map_interface_->isVisible(c, toward)) continue;
+                double sc = (c - anchor).norm();
+                if (sc < best) { best = sc; p_out = c; }
+            }
+    return true;
+}
+
+void SceneGraph::markPolyhedronBlocked(const Eigen::Vector3d &center, bool force) {
+    for (auto &poly : last_poly_path_) {
+        if (poly == nullptr) continue;
+        if ((poly->center_ - center).norm() < 1e-2) {
+            poly->blocked_hits_++;
+            if ((force || poly->blocked_hits_ >= topo_block_hits_thresh_) && !poly->nav_blocked_) {
+                poly->nav_blocked_   = true;
+                poly->blocked_stamp_ = ros::Time::now();
+                blocked_list_.push_back(poly);
+                INFO_MSG_YELLOW("[SceneGraph] | mark polyhedron blocked @ " << poly->center_.transpose());
+            }
+            return;
+        }
+    }
+}
+
+void SceneGraph::insertReplacementNode(const Eigen::Vector3d &old_center, const Eigen::Vector3d &new_center) {
+    if (!topo_repair_insert_node_) return;
+    auto new_poly = skeleton_gen_->insertPolyhedronAt(new_center);
+    if (new_poly == nullptr) return;
+    // 基于 inflate/occupancy 连接可见邻居(连接半径复用修复半径)
+    skeleton_gen_->connectToVisibleNeighbors(new_poly, topo_repair_radius_ * 2.0);
+    // 永久封锁旧节点: 不参与 TTL 恢复, 不参与跨任务清块
+    markPolyhedronBlocked(old_center, true);
+}
+
+void SceneGraph::revalidateBlocked() {
+    if (map_interface_ == nullptr) return;
+    if (topo_repair_insert_node_) return;   // 插入模式: 旧节点已永久废弃, 不自动恢复
+    ros::Time now = ros::Time::now();
+    std::vector<PolyHedronPtr> still;
+    for (auto &poly : blocked_list_) {
+        if (poly == nullptr || !poly->nav_blocked_) continue;
+        // 不在 local map 内 → 无局部占据证据, 直接解除(避免远距离无法校验导致的永久封锁)
+        if (!map_interface_->isInLocalMap(poly->center_)) {
+            poly->nav_blocked_  = false;
+            poly->blocked_hits_ = 0;
+            INFO_MSG_GREEN("[SceneGraph] | unblock polyhedron(out-of-map) @ " << poly->center_.transpose());
+            continue;
+        }
+        if ((now - poly->blocked_stamp_).toSec() > topo_block_ttl_) {
+            // TTL 到期: 在 local map 内且不再占据 → 解除; 仍占据 → 续期
+            if (!isInflateBlocked(poly->center_)) {
+                poly->nav_blocked_  = false;
+                poly->blocked_hits_ = 0;
+                INFO_MSG_GREEN("[SceneGraph] | unblock polyhedron(TTL) @ " << poly->center_.transpose());
+                continue;
+            }
+            poly->blocked_stamp_ = now;  // 续期
+        }
+        still.push_back(poly);
+    }
+    blocked_list_ = still;
+}
+
+void SceneGraph::clearAllBlocked() {
+    if (topo_repair_insert_node_) return;   // 插入模式: 旧节点已永久废弃, 跨任务也不清块
+    for (auto &poly : blocked_list_) {
+        if (poly) { poly->nav_blocked_ = false; poly->blocked_hits_ = 0; }
+    }
+    blocked_list_.clear();
+}
+
 
 bool SceneGraph::singleRoomPredictionPromptGen(const int room_id, nlohmann::json &prompt_json) {
     if (skeleton_gen_->area_handler_->area_map_.find(room_id) == skeleton_gen_->area_handler_->area_map_.end()) {

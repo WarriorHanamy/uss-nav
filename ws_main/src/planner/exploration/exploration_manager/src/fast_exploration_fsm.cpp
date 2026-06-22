@@ -3053,8 +3053,40 @@ bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
       if (map_->isInLocalMap(path_res[i]) &&
           map_->isVisible(fd_->odom_pos_, path_res[i]))
       {
+        Eigen::Vector3d cand = path_res[i];
+        // inflate 守卫: 候选点落入膨胀层时, 先尝试 C0 投影到最近 inflate-free 且可达点;
+        // 投影趋向下一个路径点(避免回飞); 投影失败才判为真障碍, 去抖标记不可达并跳过(严格不进膨胀层)
+        if (map_->getInflateOccupancy(cand) == MapInterface::OCCUPIED)
+        {
+          // 前向参考: 路径上更靠近目标的下一个点(末点则取自身, 退化为无方向)
+          Eigen::Vector3d toward = (i + 1 < (int)path_res.size()) ? path_res[i + 1] : path_res.back();
+          Eigen::Vector3d repaired;
+          if (scene_graph_->projectToInflateFree(cand, toward, repaired) &&
+              map_->isVisible(fd_->odom_pos_, repaired))
+          {
+            cand = repaired;
+            // 发布红色方块标记修复点
+            { visualization_msgs::Marker rp;
+              rp.header.frame_id = "world"; rp.header.stamp = ros::Time::now();
+              rp.ns = "repair_point"; rp.id = 0;
+              rp.type = visualization_msgs::Marker::CUBE;
+              rp.action = visualization_msgs::Marker::ADD;
+              rp.scale.x = rp.scale.y = rp.scale.z = 0.3;
+              rp.color.r = 1.0f; rp.color.g = 0.0f; rp.color.b = 0.0f; rp.color.a = 1.0f;
+              rp.pose.position.x = repaired(0); rp.pose.position.y = repaired(1); rp.pose.position.z = repaired(2);
+              rp.pose.orientation.w = 1.0;
+              vis_marker_pub_.publish(rp); }
+            // 插入模式: 将修复点编入拓扑图(旧节点永久丢弃, 新节点连接可见邻居后永久可用)
+            scene_graph_->insertReplacementNode(path_res[i], repaired);
+          }
+          else
+          {
+            scene_graph_->markPolyhedronBlocked(path_res[i]);
+            continue;
+          }
+        }
         path_inx = i;
-        local_goal = path_res[i];
+        local_goal = cand;
         INFO_MSG_GREEN("[EXP-FSM] :[getAndPubNextAim] direct aim to local_goal");
         return true;
       }
@@ -3468,6 +3500,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       fd_->object_target_id_ = msg->target_obj_id;
       fd_->go_object_process_phase = 0;
       fd_->find_terminate_target_mode_ = false;
+      scene_graph_->clearAllBlocked();     // 新导航任务: 清除上次遗留的不可达标记, 不跨任务持久
       transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "instructionCallback");
       break;
 

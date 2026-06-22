@@ -36,12 +36,22 @@ public:
     typedef std::shared_ptr<SceneGraph> Ptr;
     SceneGraph(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr& map_interface) {
         nh_ = nh;
+        map_interface_      = map_interface;
         scene_graph_pub_    = nh_.advertise<visualization_msgs::MarkerArray>("/scene_graph/vis", 2);
         prompt_pub_         = nh_.advertise<scene_graph::PromptMsg>("/scene_graph/prompt", 2);
         llm_ans_sub_        = nh_.subscribe("/scene_graph/llm_ans", 2, &SceneGraph::llmAnsCallback, this, ros::TransportHints().tcpNoDelay());
         skeleton_gen_       = std::make_shared<SkeletonGenerator>(nh, map_interface);
         object_factory_     = std::make_unique<ObjectFactory>(nh, skeleton_gen_);
         this_package_path_  = ros::package::getPath("scene_graph");
+        // 拓扑点不可达检测/修复/标记 参数(可被 YAML/launch 覆盖)
+        nh_.param("topo_block/enable",                  topo_block_enable_,             true);
+        nh_.param("topo_block/repair_radius",           topo_repair_radius_,            0.5);
+        nh_.param("topo_block/repair_use_visibility",   topo_repair_use_visibility_,    true);
+        nh_.param("topo_block/hits_thresh",             topo_block_hits_thresh_,        2);
+        nh_.param("topo_block/ttl",                     topo_block_ttl_,                8.0);
+        nh_.param("topo_block/revalidate_on_fail",      topo_block_revalidate_on_fail_, true);
+        nh_.param("topo_block/max_iter",                topo_block_max_iter_,            4);
+        nh_.param("topo_block/repair_insert_node",     topo_repair_insert_node_,        false);
         INFO_MSG("SceneGraph initialized, package path: " << this_package_path_);
     };
     ~SceneGraph() = default;
@@ -65,6 +75,21 @@ public:
     void updateSceneGraph(const Eigen::Vector3d &cur_pos, const double &yaw, bool &new_topo);
     void updateObjectToSceneGraph();
     bool getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3d> &path, Eigen::Vector3d & aim_pos, double &aim_yaw);
+
+    // 拓扑点不可达: 检测 / 修复 / 标记 / 恢复 //
+    // C0: 把不可达点投影到最近的 (在local map内 且 inflate-free) 点;
+    //     toward 为前进参考点(下一个路径点/目标), 投影结果趋向该方向且排除往回方向; 失败返回 false
+    bool projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out);
+    // 按 center 在上次 A* 路径多面体中查找并标记 nav_blocked_(force=true 时立即置位, 否则按去抖累计)
+    void markPolyhedronBlocked(const Eigen::Vector3d &center, bool force = false);
+    // 策略A: 遍历被标记节点, 超过 TTL 的重新校验 occupancy, 已空闲则清除标记
+    void revalidateBlocked();
+    // 策略B: 清空全部不可达标记(A* 全失败时调用)
+    void clearAllBlocked();
+    // 将修复点插入拓扑图: 创建新多面体+注册kdtree+连接可见邻居; 旧节点永久封锁不恢复
+    void insertReplacementNode(const Eigen::Vector3d &old_center, const Eigen::Vector3d &new_center);
+    // 某点是否处于"在local map内 且 inflate占据"(仅此情形判为坏点; 越界点不算)
+    bool isInflateBlocked(const Eigen::Vector3d &p);
 
     // LLM interface //
     std::map<unsigned int, std::string> llm_ans_str_poll_;
@@ -116,6 +141,19 @@ private:
     ros::NodeHandle        nh_;
     ros::Publisher         scene_graph_pub_;
     std::mutex             mutex_;
+
+    // 拓扑点不可达 相关 //
+    ego_planner::MapInterface::Ptr map_interface_;       // 占据/可达查询接口
+    std::vector<PolyHedronPtr>     last_poly_path_;      // 上次 getPathToObjectWithId 的多面体序列(供按 center 标记)
+    std::vector<PolyHedronPtr>     blocked_list_;        // 当前被标记不可达的多面体(供 TTL 重校验/清除)
+    bool   topo_block_enable_               = true;
+    double topo_repair_radius_              = 0.5;
+    bool   topo_repair_use_visibility_      = true;
+    int    topo_block_hits_thresh_          = 2;
+    double topo_block_ttl_                = 8.0;
+    bool   topo_block_revalidate_on_fail_ = true;
+    int    topo_block_max_iter_            = 4;
+    bool   topo_repair_insert_node_       = false;   // 修复点插入拓扑图: true=丢弃旧节点+生成新节点并连接; false=标记+TTL恢复
 
     // LLM interface //
     std::string            this_package_path_;
