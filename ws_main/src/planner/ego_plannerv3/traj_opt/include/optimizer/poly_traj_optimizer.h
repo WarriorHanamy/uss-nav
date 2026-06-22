@@ -203,7 +203,7 @@ namespace ego_planner
     /**
      * Set ROS parameters from the node handle.
      *
-     * @param[in] nh  ROS node handle
+     * @param[inout] nh  ROS node handle
      */
     void setParam(ros::NodeHandle &nh);
     /**
@@ -344,7 +344,7 @@ namespace ego_planner
      * @param[out] pts_check  Output check points container
      * @return True if computation succeeded
      */
-    bool computePointsToCheck(poly_traj::Trajectory &traj, int id_end, PtsChk_t &pts_check);
+    bool computePointsToCheck(const poly_traj::Trajectory &traj, int id_end, PtsChk_t &pts_check);
 
     /**
      * Check the trajectory for numerical normality (no NaN/inf).
@@ -361,7 +361,7 @@ namespace ego_planner
      * For each constraint point in collision, searches a collision-free path
      * via A* and sets the repulsion direction {base_point, direction}.
      *
-     * @param[in]  segments        Piece segments to check
+     * @param[out] segments        Piece segment indices (collision intervals)
      * @param[out] a_star_pathes   A* collision-free paths per segment
      * @param[in]  pt_data         MINCO trajectory data
      * @param[in]  cps_num_prePiece  Constraint points per piece [--]

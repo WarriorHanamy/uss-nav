@@ -3,7 +3,7 @@
 //
 #include "../include/scene_graph/skeleton_cluster.h"
 
-void SpectralCluster::calculate(std::vector<PolyHedronPtr> &polys_without_gate,
+void SpectralCluster::calculate(const std::vector<PolyHedronPtr> &polys_without_gate,
                                 std::vector<PolyhedronCluster> &clusters) {
     Eigen::MatrixXd W, ED, D, L, U;
     ros::Time t1 = ros::Time::now();
@@ -407,7 +407,7 @@ void AreaHandler::findCurAreaNbrs(int cur_area_id) {
     }
 }
 
-void AreaHandler::incrementalUpdateAreas(vector<PolyHedronPtr>& new_polys) {
+void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys) {
     Eigen::Vector3d new_poly_center = Eigen::Vector3d::Zero();
     for (auto& poly : new_polys) {
         if (poly->is_gate_) {

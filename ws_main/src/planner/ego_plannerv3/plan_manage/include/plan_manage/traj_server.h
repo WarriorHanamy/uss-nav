@@ -86,7 +86,7 @@ namespace ego_planner
         /**
          * Initialize the trajectory server with ROS node handle.
          *
-         * @param[in] node  ROS node handle
+         * @param[inout] node  ROS node handle
          */
         void initTrajServer(ros::NodeHandle &node);
         /**
@@ -95,7 +95,7 @@ namespace ego_planner
          * @param[in] traj        Polynomial trajectory
          * @param[in] start_time  World start time [s]
          */
-        void setTrajectory(poly_traj::Trajectory &traj, double start_time);
+        void setTrajectory(const poly_traj::Trajectory &traj, double start_time);
         /**
          * Set target yaw for the trajectory.
          *
@@ -152,7 +152,7 @@ namespace ego_planner
          * @param[in]  dt     Time step for derivative [s]
          * @return Pair of (yaw [rad], yaw_rate [rad/s])
          */
-        std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, double dt);
+        std::pair<double, double> calculate_yaw(double t_cur, const Eigen::Vector3d &pos, double dt);
         /**
          * Publish a position command message.
          *

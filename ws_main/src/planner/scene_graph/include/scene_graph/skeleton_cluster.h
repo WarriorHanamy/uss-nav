@@ -46,7 +46,7 @@ public:
      * @param[in]  polys_without_gate  Input polyhedra (excluding gates)
      * @param[out] clusters            Output area clusters
      */
-    void calculate(std::vector<PolyHedronPtr>&polys_without_gate, std::vector<PolyhedronCluster>& clusters);
+    void calculate(const std::vector<PolyHedronPtr>&polys_without_gate, std::vector<PolyhedronCluster>& clusters);
 
 private:
     ros::NodeHandle& nh_;
@@ -97,7 +97,7 @@ public:
      *
      * @param[in] new_polys  Vector of newly added polyhedra
      */
-    void incrementalUpdateAreas(vector<PolyHedronPtr>& new_polys);
+    void incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys);
     
     // load map
     void resetForMapLoad();

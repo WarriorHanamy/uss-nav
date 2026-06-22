@@ -51,7 +51,7 @@ namespace ego_planner
     /**
      * Initialize the FSM: set up ROS topics, timers, and sub-modules.
      *
-     * @param[in] nh  ROS node handle
+     * @param[inout] nh  ROS node handle
      */
     void init(ros::NodeHandle &nh);
     inline MapManager::Ptr getMapPtr() { return planner_manager_->map_; };
@@ -197,7 +197,7 @@ namespace ego_planner
      *
      * @param[in] flag_use_last_optimal  Use last optimal trajectory as init
      * @param[in] flag_random_init       Randomize initial control points
-     * @param[in] pathes                 Density evaluation ray data (optional)
+     * @param[out] pathes                Density evaluation ray data (optional)
      * @return Plan result (SUCCESS / LOCAL_TGT_FAIL / INIT_FAIL / DEFAULT_FAIL)
      */
     PLAN_RET callReboundReplan(bool flag_use_last_optimal, bool flag_random_init, vector<DensityEvalRayData> *pathes);

@@ -49,7 +49,7 @@ namespace ego_planner
     /**
      * Initialize all planning modules (map, optimizer, A*, visualization).
      *
-     * @param[in] nh  ROS node handle
+     * @param[inout] nh  ROS node handle
      * @param[in] vis  Visualization instance
      */
     void initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);

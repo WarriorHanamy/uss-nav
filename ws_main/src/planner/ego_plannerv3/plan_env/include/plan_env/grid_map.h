@@ -220,7 +220,7 @@ public:
   /**
    * Initialize the map from ROS parameters.
    *
-   * @param[in] nh  ROS node handle
+   * @param[inout] nh  ROS node handle
    */
   void initMap(ros::NodeHandle &nh);
   /**

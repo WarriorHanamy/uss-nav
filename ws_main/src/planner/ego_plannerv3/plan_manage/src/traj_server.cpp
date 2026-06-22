@@ -117,7 +117,7 @@ namespace ego_planner
     }
   }
 
-  void TrajServer::setTrajectory(poly_traj::Trajectory &traj, double start_time)
+  void TrajServer::setTrajectory(const poly_traj::Trajectory &traj, double start_time)
   {
     panorama_yaw_active_ = false;
     traj_ = traj;
@@ -129,7 +129,7 @@ namespace ego_planner
     traj_state_   = TrajState::IDLE;
   }
 
-  std::pair<double, double> TrajServer::calculate_yaw(double t_cur, Eigen::Vector3d &pos, double dt)
+  std::pair<double, double> TrajServer::calculate_yaw(double t_cur, const Eigen::Vector3d &pos, double dt)
   {
     // constexpr double YAW_DOT_MAX_PER_SEC = 1.5 * M_PI;
     // constexpr double YAW_DOT_MAX_PER_SEC = 0.8 * M_PI;

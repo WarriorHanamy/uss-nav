@@ -480,7 +480,7 @@ namespace ego_planner
   }
 
   bool PolyTrajOptimizer::computePointsToCheck(
-      poly_traj::Trajectory &traj,
+      const poly_traj::Trajectory &traj,
       int id_cps_end, PtsChk_t &pts_check)
   {
     TicToc t0;
