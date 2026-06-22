@@ -35,11 +35,24 @@ using std::vector;
 namespace ego_planner
 {
 
+  /**
+   * 12-state finite state machine for receding-horizon trajectory planning.
+   *
+   * Manages the planning lifecycle: initialization, target acquisition,
+   * trajectory generation/replanning/execution, emergency stop, crash
+   * recovery, and yaw handling. Drives EGOPlannerManager through the
+   * reboundReplan pipeline based on odometry and goal triggers.
+   */
   class EGOReplanFSM {
   public:
     EGOReplanFSM() {}
     ~EGOReplanFSM();
 
+    /**
+     * Initialize the FSM: set up ROS topics, timers, and sub-modules.
+     *
+     * @param[in] nh  ROS node handle
+     */
     void init(ros::NodeHandle &nh);
     inline MapManager::Ptr getMapPtr() { return planner_manager_->map_; };
 
@@ -93,17 +106,16 @@ namespace ego_planner
     TrajServer traj_server_;
 
     /* parameters */
-    int target_type_; // 1 mannual select, 2 hard code
-    double no_replan_thresh_ /*, replan_thresh_*/;
+    int target_type_; // 1: manual select, 2: hard code, 3: preset, 4: reference path
+    double no_replan_thresh_;                          // no-replan distance threshold [m]
     double waypoints_[50][3];
     int waypoint_num_, wpt_id_;
-    // double planning_horizen_;
-    double emergency_time_;
-    double ego_state_trigger_pos_thresh_;
-    double ego_state_trigger_vel_thresh_;
-    double ego_state_trigger_acc_thresh_;
-    double ego_state_trigger_yaw_rate_thresh_;
-    double ego_state_trigger_hold_time_;
+    double emergency_time_;                            // emergency stop duration [s]
+    double ego_state_trigger_pos_thresh_;              // state trigger position threshold [m]
+    double ego_state_trigger_vel_thresh_;              // state trigger velocity threshold [m/s]
+    double ego_state_trigger_acc_thresh_;              // state trigger acceleration threshold [m/s^2]
+    double ego_state_trigger_yaw_rate_thresh_;         // state trigger yaw rate threshold [rad/s]
+    double ego_state_trigger_hold_time_;               // state trigger hold duration [s]
     bool flag_realworld_experiment_;
     bool enable_fail_safe_;
     bool enable_ground_height_measurement_;
@@ -119,28 +131,27 @@ namespace ego_planner
     ros::Time goal_finish_stable_start_time_;
     FSM_EXEC_STATE exec_state_;
 
-    Eigen::Vector3d start_pt_, start_vel_, start_acc_, start_jerk_; // start state
-    Eigen::Vector3d glb_start_pt_, final_goal_;                     // goal state
-    // Eigen::Vector3d local_target_pt_, local_target_vel_; // local target state
-    Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_, odom_omega_;
+    Eigen::Vector3d start_pt_, start_vel_, start_acc_, start_jerk_; // start state [m], [m/s], [m/s^2], [m/s^3]
+    Eigen::Vector3d glb_start_pt_, final_goal_;                     // goal state [m]
+    Eigen::Vector3d odom_pos_, odom_vel_, odom_acc_, odom_omega_;   // odometry: pos [m], vel [m/s], acc [m/s^2], omega [rad/s]
     Eigen::Vector3d last_odom_vel_;
     bool odom_acc_ready_{false};
     bool traj_server_yaw_synced_{false};
     ros::Time last_odom_stamp_{ros::Time(0)};
-    double odom_yaw_; // odometry state
+    double odom_yaw_; // odometry yaw [rad]
     Eigen::Quaterniond odom_q_;
     Eigen::Vector3d odom_euler_;
     std::vector<Eigen::Vector3d> wps_;
     quadrotor_msgs::EgoPlannerResult ego_plan_result_;
 
     // handle yaw
-    Eigen::Vector3d target_pos_;
-    double target_yaw_;
+    Eigen::Vector3d target_pos_;           // target position [m]
+    double target_yaw_;                    // target yaw [rad]
     bool target_look_forward_;
-    uint8_t target_yaw_mode_{quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL};
-    uint8_t target_yaw_path_mode_{quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST};
+    uint8_t target_yaw_mode_;
+    uint8_t target_yaw_path_mode_;
     void handleYaw();
-    double aim_direction_; // rad
+    double aim_direction_;                 // yaw aim direction [rad]
     bool yaw_init_finished_{false};
 
     /* ROS utils */
@@ -152,7 +163,18 @@ namespace ego_planner
     ros::Publisher ego_plan_state_pub_;
 
     /* state machine functions */
+    /**
+     * Main FSM execution callback triggered by ROS timer at ~10-20 Hz.
+     *
+     * @param[in] e  Timer event
+     */
     void execFSMCallback(const ros::TimerEvent &e);
+    /**
+     * Transition the FSM to a new execution state.
+     *
+     * @param[in] new_state  Target FSM state
+     * @param[in] pos_call   Call site identifier for logging
+     */
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
     void printFSMExecState() const;
     void planningReturnsChk();
@@ -160,12 +182,38 @@ namespace ego_planner
 
     /* safety */
     void checkCollision();
+    /**
+     * Execute emergency stop at a given position.
+     *
+     * @param[in] stop_pos  Braking position [m]
+     * @return True if emergency stop trajectory generated
+     */
     bool callEmergencyStop(Eigen::Vector3d stop_pos);
     bool callCrashRecovery();
 
     /* local planning */
+    /**
+     * Call the main rebound replanning pipeline.
+     *
+     * @param[in] flag_use_last_optimal  Use last optimal trajectory as init
+     * @param[in] flag_random_init       Randomize initial control points
+     * @param[in] pathes                 Density evaluation ray data (optional)
+     * @return Plan result (SUCCESS / LOCAL_TGT_FAIL / INIT_FAIL / DEFAULT_FAIL)
+     */
     PLAN_RET callReboundReplan(bool flag_use_last_optimal, bool flag_random_init, vector<DensityEvalRayData> *pathes);
+    /**
+     * Plan trajectory from the current global reference trajectory.
+     *
+     * @param[in] trial_times  Number of retry attempts [--]
+     * @return True if planning succeeded
+     */
     bool planFromGlobalTraj(const int trial_times = 1);
+    /**
+     * Plan trajectory from local start to local target.
+     *
+     * @param[in] trial_times  Number of retry attempts [--]
+     * @return True if planning succeeded
+     */
     bool planFromLocalTraj(const int trial_times = 1);
     bool getTrajPVAJ(const string data_source);
     void execTraj();
@@ -176,6 +224,16 @@ namespace ego_planner
     void aimCallbackYawPreset(const quadrotor_msgs::EgoGoalSetPtr &msg);
     void execAim();
     void readGivenWpsAndPlan();
+    /**
+     * Plan trajectory to the next waypoint.
+     *
+     * @param[in] next_wp       Next waypoint position [m]
+     * @param[in] next_yaw      Next waypoint yaw [rad]
+     * @param[in] look_forward  Enable look-forward yaw
+     * @param[in] yaw_mode      Yaw control mode
+     * @param[in] yaw_path_mode Yaw path mode
+     * @return True if planning succeeded
+     */
     bool planNextWaypoint(
         const Eigen::Vector3d next_wp, const double next_yaw = 0.0, const bool look_forward = true,
         uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,

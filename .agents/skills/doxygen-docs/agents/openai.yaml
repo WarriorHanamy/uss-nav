@@ -1,0 +1,4 @@
+interface:
+  display_name: "Doxygen Docs"
+  short_description: "Add Doxygen-style unit annotations to C++ header files and generate API docs"
+  default_prompt: "Use $doxygen-docs to add unit annotations or generate Doxygen documentation."

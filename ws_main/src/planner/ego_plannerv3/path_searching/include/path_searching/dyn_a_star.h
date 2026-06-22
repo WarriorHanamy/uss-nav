@@ -53,6 +53,13 @@ namespace dyn_a_star
 		}
 	};
 
+	/**
+	 * Dynamic A* path search on the occupancy grid.
+	 *
+	 * Finds collision-free paths using standard A* with Manhattan heuristic
+	 * on a 3D grid. Supports start/end point adjustment for obstacle clearance
+	 * and an unknown-region-aware mode for exploration planning.
+	 */
 	class AStar
 	{
 	private:
@@ -73,15 +80,13 @@ namespace dyn_a_star
 		inline Eigen::Vector3d Index2Coord(const Eigen::Vector3i &index) const;
 		inline bool Coord2Index(const Eigen::Vector3d &pt, Eigen::Vector3i &idx) const;
 
-		// bool (*checkOccupancyPtr)( const Eigen::Vector3d &pos );
-
 		inline bool checkOccupancy(const Eigen::Vector3d &pos) { return map_->cur_->getInflateOccupancy(pos) > 0; }
 		inline bool checkRawOccupancy(const Eigen::Vector3d &pos) { return map_->cur_->getRawInflateOccupancy(pos) != 0; }
 
 		std::vector<GridNodePtr> retrievePath(GridNodePtr current);
 
-		double step_size_, inv_step_size_;
-		Eigen::Vector3d center_;
+		double step_size_, inv_step_size_; // grid step size [m], inverse step size [1/m]
+		Eigen::Vector3d center_;           // grid center position [m]
 		Eigen::Vector3i CENTER_IDX_, POOL_SIZE_;
 		const double tie_breaker_ = 1.0 + 1.0 / 10000;
 
@@ -98,11 +103,38 @@ namespace dyn_a_star
 		AStar(){};
 		~AStar();
 
+		/**
+		 * Initialize the A* path planner.
+		 *
+		 * @param[in] map        Map manager instance
+		 * @param[in] pool_size  Grid node pool dimensions [voxel]
+		 */
 		void initAstar(MapManager::Ptr map, const Eigen::Vector3i pool_size);
 
+		/**
+		 * Run A* search between start and end points.
+		 *
+		 * @param[in] step_size  Grid resolution / step size [m]
+		 * @param[in] start_pt   Start position [m]
+		 * @param[in] end_pt     End position [m]
+		 * @return Search result (SUCCESS / INIT_ERR / SEARCH_ERR / NO_PATH / TIME_LIM)
+		 */
 		ASTAR_RET AstarSearch(const double step_size, Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+		/**
+		 * Run A* search with unknown-region awareness (treats unknown as free).
+		 *
+		 * @param[in] step_size  Grid resolution / step size [m]
+		 * @param[in] start_pt   Start position [m]
+		 * @param[in] end_pt     End position [m]
+		 * @return Search result
+		 */
 		ASTAR_RET AstarSearchConsideredUKRegion(const double step_size, Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
 
+		/**
+		 * Retrieve the last found path.
+		 *
+		 * @return Vector of path waypoints [m]
+		 */
 		std::vector<Eigen::Vector3d> getPath();
 	};
 

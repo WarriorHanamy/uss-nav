@@ -12,19 +12,26 @@
 
 namespace ego_planner
 {
+    /**
+     * 100 Hz trajectory interpolation and command publishing server.
+     *
+     * Evaluates the optimized polynomial trajectory at 100 Hz, generates
+     * PositionCommand messages with position/velocity/acceleration/yaw,
+     * and handles yaw planning (normal, look-forward, and panorama modes).
+     */
     class TrajServer
     {
     private:
 
         enum class TrajState {
-            IDLE,          // 空闲（无轨迹）
-            PRE_YAW,       // 预转yaw阶段（未执行轨迹）
-            EXECUTING_TRAJ // 执行轨迹阶段
+            IDLE,          // No trajectory loaded
+            PRE_YAW,       // Pre-rotation yaw phase before trajectory execution
+            EXECUTING_TRAJ // Executing loaded trajectory
           };
 
-        TrajState traj_state_ = TrajState::IDLE; // 默认初始状态为空闲
-        double traj_init_yaw_{0.0};
-        Eigen::Vector3d traj_init_pos_{Eigen::Vector3d::Zero()};
+        TrajState traj_state_ = TrajState::IDLE;
+        double traj_init_yaw_{0.0};        // yaw at trajectory start [rad]
+        Eigen::Vector3d traj_init_pos_{Eigen::Vector3d::Zero()}; // position at trajectory start [m]
 
         ros::NodeHandle node_;
         ros::Publisher pos_cmd_pub_, cmd_vis_pub_;
@@ -33,8 +40,8 @@ namespace ego_planner
 
         bool receive_traj_{false};
         poly_traj::Trajectory traj_;
-        double traj_duration_;
-        double start_time_;
+        double traj_duration_;  // total trajectory duration [s]
+        double start_time_;     // world time at trajectory start [s]
         int traj_id_{0};
         ros::Time heartbeat_time_{0};
         bool do_once_ = true;
@@ -43,8 +50,8 @@ namespace ego_planner
         double last_yaw_, last_yawdot_, slowly_flip_yaw_target_, slowly_turn_to_center_target_;
         double time_forward_;
 
-        double yaw_vel_limit_, yaw_acc_limit_, yaw_vel_low_limit_, yaw_acc_low_limit_;
-        double yaw_vel_panorama_, yaw_acc_panorama_;
+        double yaw_vel_limit_, yaw_acc_limit_, yaw_vel_low_limit_, yaw_acc_low_limit_; // yaw limits [rad/s], [rad/s^2]
+        double yaw_vel_panorama_, yaw_acc_panorama_;                                   // panorama yaw limits [rad/s], [rad/s^2]
         bool panorama_yaw_active_{false};
 
         struct LAST_POS
@@ -76,22 +83,86 @@ namespace ego_planner
         TrajServer(){};
         ~TrajServer(){};
         
+        /**
+         * Initialize the trajectory server with ROS node handle.
+         *
+         * @param[in] node  ROS node handle
+         */
         void initTrajServer(ros::NodeHandle &node);
+        /**
+         * Set the trajectory to be executed.
+         *
+         * @param[in] traj        Polynomial trajectory
+         * @param[in] start_time  World start time [s]
+         */
         void setTrajectory(poly_traj::Trajectory &traj, double start_time);
+        /**
+         * Set target yaw for the trajectory.
+         *
+         * @param[in] des_yaw       Desired yaw [rad]
+         * @param[in] cur_yaw       Current yaw [rad]
+         * @param[in] pos           Current position [m]
+         * @param[in] look_forward  Enable look-forward yaw mode
+         * @param[in] control_mode  Yaw control mode
+         * @param[in] path_mode     Yaw path mode
+         */
         void setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward = true,
                     uint8_t control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
                     uint8_t path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+        /**
+         * Set panorama yaw (continuous 360-degree rotation).
+         *
+         * @param[in] des_yaw   Desired yaw [rad]
+         * @param[in] cur_yaw   Current yaw [rad]
+         * @param[in] hold_pos  Position to hold during panorama [m]
+         */
         void setPanoramaYaw(double des_yaw, double cur_yaw, const Eigen::Vector3d& hold_pos);
+        /**
+         * Reset yaw look-forward direction to the given position.
+         *
+         * @param[in] pos  Position to look toward [m]
+         */
         void resetYawLookforward(Eigen::Vector3d pos);
+        /**
+         * Synchronize internal yaw state from odometry.
+         *
+         * @param[in] yaw     Odometry yaw [rad]
+         * @param[in] source  Source identifier for logging
+         */
         void syncYawFromOdom(const double yaw, const std::string& source = "");
+        /**
+         * Periodic heartbeat callback for trajectory execution.
+         */
         void feedDog();
+        /**
+         * Reset the last commanded position.
+         *
+         * @param[in] pos  Position to reset to [m]
+         */
         void resetLastPos(const Eigen::Vector3d pos);
 
         YAW_GIVEN yaw_given_;
 
     private:
-        // void heartbeatCallback(std_msgs::EmptyPtr msg);
+        /**
+         * Calculate target yaw and yaw rate at the given trajectory time.
+         *
+         * @param[in]  t_cur  Current trajectory time [s]
+         * @param[in]  pos    Current position [m]
+         * @param[in]  dt     Time step for derivative [s]
+         * @return Pair of (yaw [rad], yaw_rate [rad/s])
+         */
         std::pair<double, double> calculate_yaw(double t_cur, Eigen::Vector3d &pos, double dt);
+        /**
+         * Publish a position command message.
+         *
+         * @param[in] p   Position [m]
+         * @param[in] v   Velocity [m/s]
+         * @param[in] a   Acceleration [m/s^2]
+         * @param[in] j   Jerk [m/s^3]
+         * @param[in] y   Yaw [rad]
+         * @param[in] yd  Yaw rate [rad/s]
+         */
         void publish_cmd(Eigen::Vector3d p, Eigen::Vector3d v, Eigen::Vector3d a, Eigen::Vector3d j, double y, double yd);
         static void cmdThread(void *obj);
         void cmdFun();

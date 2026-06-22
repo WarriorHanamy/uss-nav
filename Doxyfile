@@ -1,0 +1,37 @@
+# Doxyfile for USS-NAV: full-stack autonomous UAV navigation
+
+PROJECT_NAME           = "USS-NAV"
+PROJECT_BRIEF          = "Full-stack autonomous UAV navigation — EGO Planner v3 trajectory optimization, Scene Graph environment representation, and RC FSM manual control"
+OUTPUT_DIRECTORY       = docs/api
+INPUT                  = ws_main/src/planner/ego_plannerv3 \
+                         ws_main/src/utils/traj_utils \
+                         ws_main/src/planner/mission_fsm \
+                         ws_main/src/planner/scene_graph
+RECURSIVE              = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+HTML_HEADER            =
+HTML_FOOTER            =
+HTML_STYLESHEET        =
+HTML_EXTRA_STYLESHEET  =
+HAVE_DOT               = YES
+DOT_NUM_THREADS        = 0
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+UML_LOOK               = YES
+SORT_MEMBER_DOCS       = YES
+INPUT_ENCODING         = UTF-8
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+OPTIMIZE_OUTPUT_FOR_C  = NO
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+SKIP_FUNCTION_MACROS   = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES

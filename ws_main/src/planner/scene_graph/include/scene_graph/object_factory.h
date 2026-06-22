@@ -61,17 +61,29 @@ typedef message_filters::sync_policies::ApproximateTime
 using ObjectKDTree = skeleton_gen::KD_TREE<skeleton_gen::ikdTree_ObjectDataType>;
 using ObjectKDTreeNodeVector = ObjectKDTree::PointVector;
 
+/**
+ * Object detection, tracking, and fusion factory.
+ *
+ * Processes segmented point clouds from RGB-D data, extracts oriented
+ * bounding boxes, computes CLIP semantic features, and maintains a
+ * persistent object map with spatial/semantic similarity merging.
+ * Supports multi-view detection, temporal filtering, and KD-tree
+ * based nearest-neighbor queries for object association.
+ */
 class ObjectFactory {
 public:
     typedef std::shared_ptr<ObjectFactory> Ptr;
     typedef std::unique_ptr<ObjectFactory> UPtr;
 
+    /**
+     * Input data structure for a single frame of segmentation output.
+     */
     struct SemanticDataInput {
-        cv::Mat cur_depth_, cur_rgb_;
-        nav_msgs::Odometry cur_depth_odom_;
-        Eigen::Matrix4d    cur_tf_;
-        Eigen::Vector3d    cur_pos_;
-        scene_graph::EncodeMask::ConstPtr cur_semantic_recv_msg_;
+        cv::Mat cur_depth_, cur_rgb_;                           ///< Depth and RGB images
+        nav_msgs::Odometry cur_depth_odom_;                     ///< Depth sensor odometry
+        Eigen::Matrix4d    cur_tf_;                             ///< Camera-to-world transform [m]
+        Eigen::Vector3d    cur_pos_;                            ///< Camera position [m]
+        scene_graph::EncodeMask::ConstPtr cur_semantic_recv_msg_; ///< Segmentation result message
     };
 
     ObjectFactory(ros::NodeHandle& nh);
@@ -89,7 +101,12 @@ public:
     void unlock(){mutex_.unlock();};
     bool ok();
 
-    // scene graph interface
+    /**
+     * Get object-skeleton edges for scene graph visualization.
+     *
+     * @param[in]  poly_clusterId_map  Mapping of polyhedron centroids to area IDs
+     * @param[out] edges               Output edge end points [m]
+     */
     void getObjectEdgesWithArea(const std::unordered_map<Eigen::Vector3d, int, Vector3dHash_SpecClus>& poly_clusterId_map,
                                 std::vector<std::vector<Eigen::Vector3d>>& edges);
     std::map<int, ObjectNode::Ptr>* getAllObjs(){return &object_map_;};
@@ -99,7 +116,6 @@ public:
     void finishMapLoad();
     void visualizeResult(bool force_full_refresh = false);
 
-    // area interface
     std::map<int, ObjectNode::Ptr> object_map_, object_map_needMoreDetection_;
 
 private:
@@ -107,16 +123,22 @@ private:
     std::mutex mutex_;
     std::shared_ptr<SkeletonGenerator> skel_gen_ptr_;
 
-    double _camera_fx, _camera_fy, _camera_cx, _camera_cy;
-    double _lidar_cam_tx, _lidar_cam_ty, _lidar_cam_tz;
-    double _lidar_cam_pitch, _lidar_cam_roll, _lidar_cam_yaw;
-    double _voxel_size, _max_depth, _min_depth, _max_ray_length;
-    double _std_dev_thresh;
-    int    _mean_k, _max_threads;
-    double _fov_vertical, _fov_horizontal;
-    int    _cam_resolution_h, _cam_resolution_w;
+    double _camera_fx, _camera_fy, _camera_cx, _camera_cy;  ///< Camera intrinsics [pixel]
+    double _lidar_cam_tx, _lidar_cam_ty, _lidar_cam_tz;       ///< LiDAR-camera extrinsic translation [m]
+    double _lidar_cam_pitch, _lidar_cam_roll, _lidar_cam_yaw; ///< LiDAR-camera extrinsic rotation [rad]
+    double _voxel_size;           ///< Voxel grid size for downsampling [m]
+    double _max_depth;            ///< Maximum depth range [m]
+    double _min_depth;            ///< Minimum depth range [m]
+    double _max_ray_length;       ///< Maximum ray length for depth filtering [m]
+    double _std_dev_thresh;       ///< Standard deviation threshold for outlier removal [--]
+    int    _mean_k;               ///< K for mean filter / statistical outlier removal [--]
+    int    _max_threads;          ///< Maximum threads for parallel processing [--]
+    double _fov_vertical;         ///< Vertical field of view [rad]
+    double _fov_horizontal;       ///< Horizontal field of view [rad]
+    int    _cam_resolution_h, _cam_resolution_w; ///< Camera resolution [pixel]
 
-    int    _obj_cloud_num_thresh, _detection_counter_thresh;
+    int    _obj_cloud_num_thresh;       ///< Min point cloud size for valid object [--]
+    int    _detection_counter_thresh;   ///< Detection count threshold for persistence [--]
 
     int    _max_deque_size;
 
@@ -179,8 +201,23 @@ private:
     void mergeObjAIntoB(ObjectNode::Ptr& obj_src, ObjectNode::Ptr& obj_target);
     void mergeObjectIntoMap(ObjectNode::Ptr &cur_obj);
 
-    // kdtree operate utils
+    /**
+     * Get objects within a radius of the center position.
+     *
+     * @param[in]  center             Query center [m]
+     * @param[in]  radius             Search radius [m]
+     * @param[out] objects_in_range   Result objects
+     * @return True if results found
+     */
     bool getObjectsInRange(const Eigen::Vector3d &center, double radius, ObjectKDTreeNodeVector &objects_in_range);
+    /**
+     * Get nearest N objects to the center position.
+     *
+     * @param[in]  center            Query center [m]
+     * @param[in]  n                 Number of nearest objects [--]
+     * @param[out] objects_nearest_n Result objects
+     * @return True if results found
+     */
     bool getObjectsNearestN(const Eigen::Vector3d &center, int n, ObjectKDTreeNodeVector &objects_nearest_n);
     void addNewObject(ObjectNode::Ptr& obj_node);
     bool deleteObjectInTree(const ObjectNode::Ptr &obj_node);

@@ -16,11 +16,18 @@ namespace poly_traj
     typedef Eigen::Matrix<double, 3, 5> VelCoefficientMat;
     typedef Eigen::Matrix<double, 3, 4> AccCoefficientMat;
 
+    /**
+     * Single polynomial piece (5th order).
+     *
+     * Represents one segment of a minimum-jerk trajectory as a
+     * 5th-order polynomial in time: p(t) = c0 + c1*t + ... + c5*t^5.
+     * Coefficients stored as 3x6 matrix (3 dimensions, 6 coefficients).
+     */
     class Piece
     {
     private:
-        double duration;
-        CoefficientMat coeffMat;
+        double duration;      // piece duration [s]
+        CoefficientMat coeffMat; // coefficient matrix (3x6)
 
     public:
         Piece() = default;
@@ -60,6 +67,12 @@ namespace poly_traj
             return velCoeffMat;
         }
 
+        /**
+         * Evaluate position at time t within this piece.
+         *
+         * @param[in] t  Time from piece start [s]
+         * @return Position [m]
+         */
         inline Eigen::Vector3d getPos(const double &t) const
         {
             Eigen::Vector3d pos(0.0, 0.0, 0.0);
@@ -72,6 +85,12 @@ namespace poly_traj
             return pos;
         }
 
+        /**
+         * Evaluate velocity at time t within this piece.
+         *
+         * @param[in] t  Time from piece start [s]
+         * @return Velocity [m/s]
+         */
         inline Eigen::Vector3d getVel(const double &t) const
         {
             Eigen::Vector3d vel(0.0, 0.0, 0.0);
@@ -86,6 +105,12 @@ namespace poly_traj
             return vel;
         }
 
+        /**
+         * Evaluate acceleration at time t within this piece.
+         *
+         * @param[in] t  Time from piece start [s]
+         * @return Acceleration [m/s^2]
+         */
         inline Eigen::Vector3d getAcc(const double &t) const
         {
             Eigen::Vector3d acc(0.0, 0.0, 0.0);
@@ -102,6 +127,12 @@ namespace poly_traj
             return acc;
         }
 
+        /**
+         * Evaluate jerk at time t within this piece.
+         *
+         * @param[in] t  Time from piece start [s]
+         * @return Jerk [m/s^3]
+         */
         inline Eigen::Vector3d getJer(const double &t) const
         {
             Eigen::Vector3d jer(0.0, 0.0, 0.0);
@@ -120,6 +151,12 @@ namespace poly_traj
             return jer;
         }
 
+        /**
+         * Evaluate snap at time t within this piece.
+         *
+         * @param[in] t  Time from piece start [s]
+         * @return Snap (4th derivative of position) [m/s^4]
+         */
         inline Eigen::Vector3d getSna(const double &t) const
         {
             Eigen::Vector3d sna(0.0, 0.0, 0.0);
@@ -405,6 +442,14 @@ namespace poly_traj
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     };
 
+    /**
+     * Multi-piece polynomial trajectory (5th order).
+     *
+     * Composed of Piece objects, provides time-indexed evaluation
+     * of position, velocity, acceleration, jerk, and snap across
+     * the entire trajectory. Each piece is a 5th-order polynomial
+     * in the position flat-output space.
+     */
     class Trajectory
     {
     private:
@@ -425,11 +470,21 @@ namespace poly_traj
             }
         }
 
+        /**
+         * Get the number of polynomial pieces.
+         *
+         * @return Piece count [--]
+         */
         inline int getPieceNum() const
         {
             return pieces.size();
         }
 
+        /**
+         * Get all piece durations.
+         *
+         * @return Vector of piece durations [s]
+         */
         inline Eigen::VectorXd getDurations() const
         {
             int N = getPieceNum();
@@ -441,6 +496,11 @@ namespace poly_traj
             return durations;
         }
 
+        /**
+         * Get the total duration of the trajectory.
+         *
+         * @return Total duration [s]
+         */
         inline double getTotalDuration() const
         {
             int N = getPieceNum();
@@ -452,6 +512,11 @@ namespace poly_traj
             return totalDuration;
         }
 
+        /**
+         * Get all junction positions.
+         *
+         * @return 3x(N+1) matrix of junction positions [m]
+         */
         inline Eigen::MatrixXd getPositions() const
         {
             int N = getPieceNum();
@@ -525,6 +590,12 @@ namespace poly_traj
             return;
         }
 
+        /**
+         * Locate the piece index containing time t (modifies t to local time).
+         *
+         * @param[inout] t  Query time [s], returns local time within the piece
+         * @return Piece index [--]
+         */
         inline int locatePieceIdx(double &t) const
         {
             int N = getPieceNum();
@@ -549,36 +620,72 @@ namespace poly_traj
             return idx;
         }
 
+        /**
+         * Evaluate position at trajectory time t.
+         *
+         * @param[in] t  Trajectory time [s]
+         * @return Position [m]
+         */
         inline Eigen::Vector3d getPos(double t) const
         {
             int pieceIdx = locatePieceIdx(t);
             return pieces[pieceIdx].getPos(t);
         }
 
+        /**
+         * Evaluate velocity at trajectory time t.
+         *
+         * @param[in] t  Trajectory time [s]
+         * @return Velocity [m/s]
+         */
         inline Eigen::Vector3d getVel(double t) const
         {
             int pieceIdx = locatePieceIdx(t);
             return pieces[pieceIdx].getVel(t);
         }
 
+        /**
+         * Evaluate acceleration at trajectory time t.
+         *
+         * @param[in] t  Trajectory time [s]
+         * @return Acceleration [m/s^2]
+         */
         inline Eigen::Vector3d getAcc(double t) const
         {
             int pieceIdx = locatePieceIdx(t);
             return pieces[pieceIdx].getAcc(t);
         }
 
+        /**
+         * Evaluate jerk at trajectory time t.
+         *
+         * @param[in] t  Trajectory time [s]
+         * @return Jerk [m/s^3]
+         */
         inline Eigen::Vector3d getJer(double t) const
         {
             int pieceIdx = locatePieceIdx(t);
             return pieces[pieceIdx].getJer(t);
         }
 
+        /**
+         * Evaluate snap at trajectory time t.
+         *
+         * @param[in] t  Trajectory time [s]
+         * @return Snap (4th derivative) [m/s^4]
+         */
         inline Eigen::Vector3d getSna(double t) const
         {
             int pieceIdx = locatePieceIdx(t);
             return pieces[pieceIdx].getSna(t);
         }
 
+        /**
+         * Get position at a junction (piece boundary).
+         *
+         * @param[in] juncIdx  Junction index [0, pieceNum] [--]
+         * @return Junction position [m]
+         */
         inline Eigen::Vector3d getJuncPos(int juncIdx) const
         {
             if (juncIdx != getPieceNum())
@@ -591,6 +698,12 @@ namespace poly_traj
             }
         }
 
+        /**
+         * Get velocity at a junction (piece boundary).
+         *
+         * @param[in] juncIdx  Junction index [0, pieceNum] [--]
+         * @return Junction velocity [m/s]
+         */
         inline Eigen::Vector3d getJuncVel(int juncIdx) const
         {
             if (juncIdx != getPieceNum())
@@ -603,6 +716,12 @@ namespace poly_traj
             }
         }
 
+        /**
+         * Get acceleration at a junction (piece boundary).
+         *
+         * @param[in] juncIdx  Junction index [0, pieceNum] [--]
+         * @return Junction acceleration [m/s^2]
+         */
         inline Eigen::Vector3d getJuncAcc(int juncIdx) const
         {
             if (juncIdx != getPieceNum())
@@ -759,11 +878,24 @@ namespace poly_traj
     // A is an N*N band matrix with lower band width lowerBw
     // and upper band width upperBw.
     // Banded LU factorization has O(N) time complexity.
+    /**
+     * Banded linear system solver for MINCO optimization.
+     *
+     * Solves banded linear systems Ax = b in O(N) time using
+     * banded LU factorization without pivoting. Used internally
+     * by MinJerkOpt for minimum-jerk trajectory computation.
+     * Storage format follows "Matrix Computation" conventions.
+     */
     class BandedSystem
     {
     public:
-        // The size of A, as well as the lower/upper
-        // banded width p/q are needed
+        /**
+         * Initialize the banded system with size and bandwidth.
+         *
+         * @param[in] n  Matrix size (N x N) [--]
+         * @param[in] p  Lower bandwidth [--]
+         * @param[in] q  Upper bandwidth [--]
+         */
         inline void create(const int &n, const int &p, const int &q)
         {
             N = n;
@@ -901,15 +1033,25 @@ namespace poly_traj
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     };
 
+    /**
+     * Minimum-jerk trajectory optimizer (5th-order polynomial).
+     *
+     * Computes the minimum-jerk trajectory parameterized as a piecewise
+     * 5th-order polynomial in position flat-output space. Uses a banded
+     * linear system formulation for O(N) computation of the optimal
+     * coefficients given boundary states and intermediate waypoints.
+     * Supports analytical gradient back-propagation through time and
+     * control points for end-to-end optimization.
+     */
     class MinJerkOpt
     {
     private:
-        int N;
-        Eigen::Matrix3d headPVA;
-        Eigen::Matrix3d tailPVA;
-        Eigen::VectorXd T1;
-        BandedSystem A;
-        Eigen::MatrixXd b;
+        int N;                        // number of polynomial pieces [--]
+        Eigen::Matrix3d headPVA;      // initial state: pos/vel/acc [m], [m/s], [m/s^2]
+        Eigen::Matrix3d tailPVA;      // final state: pos/vel/acc [m], [m/s], [m/s^2]
+        Eigen::VectorXd T1;           // piece durations [s]
+        BandedSystem A;               // banded system matrix (6N x 6N)
+        Eigen::MatrixXd b;            // coefficient matrix for all pieces (6N x 3)
 
         // Temp variables
         Eigen::VectorXd T2;
@@ -1097,6 +1239,13 @@ namespace poly_traj
         }
 
     public:
+        /**
+         * Reset the optimizer with new boundary states and piece count.
+         *
+         * @param[in] headState  Initial state (3x3: pos/vel/acc) [m], [m/s], [m/s^2]
+         * @param[in] tailState  Final state (3x3: pos/vel/acc) [m], [m/s], [m/s^2]
+         * @param[in] pieceNum   Number of polynomial pieces [--]
+         */
         inline void reset(const Eigen::Matrix3d &headState,
                           const Eigen::Matrix3d &tailState,
                           const int &pieceNum)
@@ -1108,10 +1257,20 @@ namespace poly_traj
             A.create(6 * N, 6, 6);
             b.resize(6 * N, 3);
             gdC.resize(6 * N, 3);
-            // gdT.resize(6 * N);
             return;
         }
 
+        /**
+         * Generate the minimum-jerk trajectory coefficients.
+         *
+         * Solves the banded linear system A * x = b derived from the
+         * minimum-jerk optimality conditions. If inPs has zero columns
+         * (no intermediate waypoints), generates a single-piece trajectory
+         * using the closed-form minimum-jerk solution.
+         *
+         * @param[in] inPs  Intermediate waypoints (3 x (N-1)) [m]
+         * @param[in] ts    Piece durations (N) [s]
+         */
         inline void generate(const Eigen::MatrixXd &inPs,
                              const Eigen::VectorXd &ts)
         {
@@ -1223,31 +1382,42 @@ namespace poly_traj
             }
         }
 
+        /**
+         * Get the polynomial coefficient matrix.
+         *
+         * @return Coefficient matrix (6N x 3)
+         */
         inline const Eigen::MatrixXd &get_b() const
         {
             return b;
         }
 
+        /**
+         * Get the piece duration vector.
+         *
+         * @return Duration vector (N) [s]
+         */
         inline const Eigen::VectorXd &get_T1() const
         {
             return T1;
         }
 
+        /**
+         * Get the gradient matrix for coefficients (mutable).
+         *
+         * @return Gradient matrix (6N x 3)
+         */
         inline Eigen::MatrixXd &get_gdC()
         {
             return gdC;
         }
 
-        // inline Eigen::MatrixXd get_gdT() const
-        // {
-        //     return gdT;
-        // }
-
-        // inline Eigen::MatrixXd get_gdT(size_t i) const
-        // {
-        //     return gdT(i);
-        // }
-
+        /**
+         * Compute the minimum-jerk cost objective for pieces [0, PieceEnd).
+         *
+         * @param[in] PieceEnd  End piece index (exclusive) [--]
+         * @return Jerk integral cost J = integral of ||jerk(t)||^2 dt [--]
+         */
         inline double getTrajJerkCost(const int PieceEnd)
         {
             double objective = 0.0;
@@ -1271,6 +1441,11 @@ namespace poly_traj
             return objective;
         }
 
+        /**
+         * Compute the minimum-acceleration cost for all pieces.
+         *
+         * @return Acceleration integral cost [--]
+         */
         inline double getTrajAccCost()
         {
             double objective = 0.0;

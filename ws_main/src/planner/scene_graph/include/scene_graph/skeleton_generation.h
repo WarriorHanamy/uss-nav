@@ -42,27 +42,110 @@ using Vector3dKDTreeVector = Vector3dKDTree::PointVector;
 
 using skeleton_gen::KD_TREE;
 
+/**
+ * Skeleton generator for free-space decomposition.
+ *
+ * Generates a topological skeleton of free space by expanding polyhedra
+ * into unknown regions via sphere sampling, frontier detection, and
+ * connectivity verification. Each polyhedron node in the skeleton graph
+ * represents a collision-free convex region. Interfaces with A* search
+ * on the skeleton graph and area (room) clustering.
+ */
 class SkeletonGenerator {
   public:
     typedef std::shared_ptr<SkeletonGenerator> Ptr;
     typedef std::unique_ptr<SkeletonGenerator> UPtr;
-    SpectralCluster::Ptr spectral_cluster_;
-    AreaHandler::Ptr area_handler_;
+    SpectralCluster::Ptr spectral_cluster_; ///< Spectral clustering for area detection
+    AreaHandler::Ptr area_handler_;         ///< Area (room) handler
 
     SkeletonGenerator(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr &map_interface);
     ~SkeletonGenerator();
+    /**
+     * Check if the skeleton generator is initialized and ready.
+     *
+     * @return True if ready
+     */
     bool ready() const;
+    /**
+     * Get the number of skeleton nodes (polyhedra).
+     *
+     * @return Node count [--]
+     */
     int  getNodeNum() const;
 
-    bool expandSkeleton(const Eigen::Vector3d &start_point, double yaw);                        // 扩展骨架 （core function）
-    PolyHedronPtr mountCurTopoPoint(const Eigen::Vector3d& cur_pos, bool ignore_connectivity);  // 寻找挂载点
+    /**
+     * Expand the skeleton by generating a new polyhedron at the frontier.
+     *
+     * Core function: samples points on a sphere around the start point,
+     * checks collision to build black/white vertices, and constructs a
+     * new convex polyhedron.
+     *
+     * @param[in] start_point  Expansion start position [m]
+     * @param[in] yaw          Robot yaw for body-frame checks [rad]
+     * @return True if a new polyhedron was generated
+     */
+    bool expandSkeleton(const Eigen::Vector3d &start_point, double yaw);
+    /**
+     * Find the mount (current) polyhedron containing the robot position.
+     *
+     * @param[in] cur_pos            Current robot position [m]
+     * @param[in] ignore_connectivity  Whether to skip connectivity check [--]
+     * @return Mounted polyhedron (nullptr if not found)
+     */
+    PolyHedronPtr mountCurTopoPoint(const Eigen::Vector3d& cur_pos, bool ignore_connectivity);
+    /**
+     * Get the polyhedron that is the parent of an object at the given position.
+     *
+     * @param[in] cur_pos  Object position [m]
+     * @return Parent polyhedron
+     */
     PolyHedronPtr getObjFatherNode(const Eigen::Vector3d& cur_pos);
+    /**
+     * Get the frontier polyhedron (gate) closest to the given position.
+     *
+     * @param[in] cur_pos  Position [m]
+     * @return Frontier polyhedron
+     */
     PolyHedronPtr getFrontierTopo(const Eigen::Vector3d& cur_pos);
+    /**
+     * Get all polyhedron nodes in the skeleton.
+     *
+     * @param[out] polyhedrons  Output vector of all polyhedra
+     */
     void getAllPolys(std::vector<PolyHedronPtr>& polyhedrons);
-    void updateMountedTopoPoint(const Eigen::Vector3d& cur_pos);                                // 更新机器人挂载点
-    bool doDenseCheckAndExpand(const Eigen::Vector3d &cur_pos, double yaw);                     // 检查是否需要扩展，并做处理
+    /**
+     * Update the mount polyhedron at the current robot position.
+     *
+     * @param[in] cur_pos  Current robot position [m]
+     */
+    void updateMountedTopoPoint(const Eigen::Vector3d& cur_pos);
+    /**
+     * Dense check: verify if skeleton expansion is needed and perform it.
+     *
+     * @param[in] cur_pos  Current robot position [m]
+     * @param[in] yaw      Current robot yaw [rad]
+     * @return True if expansion was performed
+     */
+    bool doDenseCheckAndExpand(const Eigen::Vector3d &cur_pos, double yaw);
+    /**
+     * Run A* search on the skeleton graph between two positions.
+     *
+     * @param[in]  start_point    Start position [m]
+     * @param[in]  end_point      End position [m]
+     * @param[out] path           Output path waypoints [m]
+     * @param[in]  add_input_pts  Add start/end points to the path [--]
+     * @return Path length [m]
+     */
     double astarSearch(const Eigen::Vector3d& start_point, const Eigen::Vector3d& end_point,
                        std::vector<Eigen::Vector3d>& path, bool add_input_pts);
+    /**
+     * Run A* search between two polyhedron nodes.
+     *
+     * @param[in]  start_polyhedron  Start polyhedron
+     * @param[in]  end_polyhedron    End polyhedron
+     * @param[out] path              Output path waypoints [m]
+     * @return Path length [m]
+     */
     double astarSearch(const PolyHedronPtr start_polyhedron, const PolyHedronPtr end_polyhedron,
                        std::vector<Eigen::Vector3d>& path);
     void resetForMapLoad();
@@ -117,50 +200,27 @@ class SkeletonGenerator {
     skeleton_astar::SkeletonAstar::Ptr  skeleton_astar_;
 
     //  ------- Parameters -------
-    // 局部更新范围
-    double _local_x_max, _local_x_min, _local_y_max, _local_y_min, _local_z_max, _local_z_min;
-    Eigen::Vector3d _local_range_min, _local_range_max;   // (body frame update range)
-    // Map representation
-    // 0: point cloud; 1: occupancy map 2: map interface
-    int _map_type;
-    // Whether the map is in simulation
-    bool _is_simulation;
-    // An edge will be considered as a frontier if:
-    // the dist to its nearest point exceeds this threshold
-    double _frontier_creation_threshold;
-    // Jump frontier
-    double _frontier_jump_threshold;
-    // Facets will be split into diff frontier if the angle between exceeds this threshold
-    double _frontier_split_threshold;
-    // A flowback will be created if number of contact vertices exceeds this threshold
-    int _min_flowback_creation_threshold;
-    // A flowback will not be created if the radius of contact vertices is below this threshold
-    double _min_flowback_creation_radius_threshold;
-    // A node will be discarded if its average vertex-center distance is below
-    // this threshold
-    double _min_node_radius;
-    double _min_node_dense_radius;
-    // A point on the ray will be considered as hit the pcl if:
-    // the dist to its nearest point is below this margin
-    // search_margin > sqrt((resolution/2)^2 + (raycast_step/2)^2)
-    double _search_margin;
-    // A ray will be discarded if length exceeds this max
-    double _max_ray_length;
-    // A new node will be set at the midpoint if length exceeds this max
-    double _max_expansion_ray_length;
-    // A node will be absorbed if difference of distance to floor with its parent exceeds this limit
-    double _max_height_diff;
-    // Number of sampings on the unit sphere
-    int _sampling_density, _sampling_level;
-    // Max number of facets grouped in a frontier
-    int _max_facets_grouped;
-    // Resolution for map, raycast,
-    double _resolution;
-    // Visualization
-    double _truncated_z_high;
-    double _truncated_z_low;
-    // Expand time limit
-    double _expand_time_limit;
+    double _local_x_max, _local_x_min, _local_y_max, _local_y_min, _local_z_max, _local_z_min; ///< Local update range bounds [m]
+    Eigen::Vector3d _local_range_min, _local_range_max; ///< Body-frame update range [m]
+    int _map_type;                              ///< Map type: 0=point cloud, 1=occupancy, 2=map interface
+    bool _is_simulation;                        ///< Whether running in simulation [--]
+    double _frontier_creation_threshold;        ///< Min edge distance to consider as frontier [m]
+    double _frontier_jump_threshold;            ///< Max jump distance for frontier grouping [m]
+    double _frontier_split_threshold;           ///< Angle threshold for splitting frontiers [rad]
+    int _min_flowback_creation_threshold;       ///< Min contact vertices for flowback creation [--]
+    double _min_flowback_creation_radius_threshold; ///< Min radius for flowback creation [m]
+    double _min_node_radius;                    ///< Min avg vertex-center distance to keep node [m]
+    double _min_node_dense_radius;              ///< Min radius for dense node check [m]
+    double _search_margin;                      ///< Ray-to-point search margin [m]
+    double _max_ray_length;                     ///< Max raycast length [m]
+    double _max_expansion_ray_length;           ///< Max expansion ray length (creates midpoint) [m]
+    double _max_height_diff;                    ///< Max height difference for node absorption [m]
+    int _sampling_density, _sampling_level;     ///< Sphere sampling parameters [--]
+    int _max_facets_grouped;                    ///< Max facets per frontier group [--]
+    double _resolution;                         ///< Map and raycast resolution [m]
+    double _truncated_z_high;                   ///< High Z truncation for visualization [m]
+    double _truncated_z_low;                    ///< Low Z truncation for visualization [m]
+    double _expand_time_limit;                  ///< Expand time limit per call [s]
 
     /* ------------------ Development Tune ------------------ */
     bool _debug_mode;
@@ -181,11 +241,11 @@ class SkeletonGenerator {
     bool has_init_polyhedron_kdtree_{false};
 
     //  ------- basic data -------
-    PolyHedronPtr   mount_polyhedron_, last_mount_polyhedron_;                          // current and last polyhedron mounted
-    Eigen::Vector3d local_box_min_, local_box_max_;                                     // local skeleton update range (in world frame!!!)
-    double          cur_yaw_;                                                           // current yaw of the robot
-    Eigen::Vector3d cur_pos_;                                                           // current position of the robot
-    std::unordered_map<Eigen::Vector3d, PolyHedronPtr, Vector3dHash> polyhedron_map_;   // hash map of all polyhedrons generated (pointers)
+    PolyHedronPtr   mount_polyhedron_, last_mount_polyhedron_; ///< Current/last mounted polyhedron
+    Eigen::Vector3d local_box_min_, local_box_max_;             ///< Local skeleton update range in world frame [m]
+    double          cur_yaw_;                                   ///< Current robot yaw [rad]
+    Eigen::Vector3d cur_pos_;                                   ///< Current robot position [m]
+    std::unordered_map<Eigen::Vector3d, PolyHedronPtr, Vector3dHash> polyhedron_map_; ///< All polyhedra mapped by centroid
 
     KD_TREE<skeleton_gen::ikdTree_PolyhedronType>::Ptr               polyhedron_kd_tree_;
     KD_TREE<skeleton_gen::ikdTree_PolyhedronType_FixedCenter>::Ptr   polyhedron_kd_tree_fixed_center_;
@@ -203,32 +263,31 @@ class SkeletonGenerator {
     // ROS functions
     void cmdCallback(const std_msgs::Empty::ConstPtr &msg);
 
-    // fucntions
     void getROSParams();
     void sampleUnitSphere();
 
     // polyhedron generation processes
-    void adjustExpandStartPt(Eigen::Vector3d &start_point);          // 调整扩展起点
-    bool initNewPolyhedron(PolyHedronPtr new_polyhedron);            // 初始化一个新的多面体
-    void initFacetVerticesDirection();                               // 初始化每个采样面的三个顶点的方向
-    void generatePolyVertices(PolyHedronPtr poly);                   // 生成黑白多边形
-    void centralizePolyhedronCoord(PolyHedronPtr polyhedron);        // 计算多面体几何中心
-    double getRadiusOfPolyhedron(PolyHedronPtr polyhedron);          // 计算多面体半径
-    pair<bool, Eigen::Vector3d> checkIfContainedByAnotherPolyhedron(PolyHedronPtr polyhedron);  // 是否包含于其他多面体
-    void initFacetsFromPolyhedron(PolyHedronPtr polyhedron);         // 初始化多面体的面
+    void adjustExpandStartPt(Eigen::Vector3d &start_point);
+    bool initNewPolyhedron(PolyHedronPtr new_polyhedron);
+    void initFacetVerticesDirection();
+    void generatePolyVertices(PolyHedronPtr poly);
+    void centralizePolyhedronCoord(PolyHedronPtr polyhedron);
+    double getRadiusOfPolyhedron(PolyHedronPtr polyhedron);
+    pair<bool, Eigen::Vector3d> checkIfContainedByAnotherPolyhedron(PolyHedronPtr polyhedron);
+    void initFacetsFromPolyhedron(PolyHedronPtr polyhedron);
     void findFacetsGroupFromVertices(PolyHedronPtr polyhedron, std::vector<VertexPtr> colli_v_group, std::vector<FacetPtr> &res);
     void findNeighborFacets(std::vector<FacetPtr> facets);
     void splitFrontier(PolyHedronPtr polyhedron, std::vector<FacetPtr> single_cluster, std::vector<PolyhedronFtrPtr> &res);
-    bool initSingleFrontier(PolyhedronFtrPtr cur_ftr);               // 根据facet簇生成一个边界
-    void verifyFrontier(PolyhedronFtrPtr ftr);                       // 验证当前边界的有效性
-    void adjustFrontier(PolyhedronFtrPtr ftr);                       // 调整边界, 使其符合checking要求
-    bool processAValidFrontier(PolyhedronFtrPtr cur_ftr);            // 处理有效的边界 (生成gate\链接多面体等...)
-    void generateFrontiers(PolyHedronPtr polyhedron);                // 生成多面体的边界
+    bool initSingleFrontier(PolyhedronFtrPtr cur_ftr);
+    void verifyFrontier(PolyhedronFtrPtr ftr);
+    void adjustFrontier(PolyhedronFtrPtr ftr);
+    bool processAValidFrontier(PolyhedronFtrPtr cur_ftr);
+    void generateFrontiers(PolyHedronPtr polyhedron);
 
     // topological functions
-    void findNewTopoConnection(PolyHedronPtr polyhedron);                             // 给定节点，寻找其附近可能存在连接性的节点
-    void findLoopbackConnectionFromCandidate(PolyHedronPtr polyhedron);               // 给定节点，寻找其loop back连接
-    bool checkConnectivityBetweenPolyhedrons(PolyHedronPtr p1, PolyHedronPtr p2);    // 检查多面体的连通性
+    void findNewTopoConnection(PolyHedronPtr polyhedron);
+    void findLoopbackConnectionFromCandidate(PolyHedronPtr polyhedron);
+    bool checkConnectivityBetweenPolyhedrons(PolyHedronPtr p1, PolyHedronPtr p2);
 
     // objects functions
 
@@ -251,19 +310,52 @@ class SkeletonGenerator {
     void getItemsInRangeAndSortByDistance(const Eigen::Vector3d& pt, const double &radius, std::vector<T, Eigen::aligned_allocator<T>>& polyhedrons_in_range);
 
     void recordNewPolyhedron(PolyHedronPtr polyhedron);
+    /**
+     * Raycast from a point in a direction, checking for obstacle contact.
+     *
+     * @param[in]  orin_point      Ray origin [m]
+     * @param[in]  direction       Ray direction (not necessarily normalized)
+     * @param[in]  max_ray_length  Maximum ray length [m]
+     * @param[in]  step_size       Raycast step size [m]
+     * @return Tuple of (hit_position [m], hit_type, hit_normal [--])
+     */
     tuple<Eigen::Vector3d, int, Eigen::Vector3d> rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction, double max_ray_length, double step_size);
+    /**
+     * Search for a collision-free path in the raw occupancy map.
+     *
+     * @param[in]  start_point     Start position [m]
+     * @param[in]  end_point       End position [m]
+     * @param[out] path            Output path waypoints [m]
+     * @param[in]  step_size       A* step size [m]
+     * @param[in]  consider_uk     Treat unknown as traversable [--]
+     * @param[in]  only_directly_vis  Only use direct visibility check [--]
+     * @return True if a path was found
+     */
     bool searchPathInRawMap(Eigen::Vector3d start_point, Eigen::Vector3d end_point, std::vector<Eigen::Vector3d> &path, double step_size, bool
                             consider_uk, bool only_directly_vis);
+    /**
+     * Get the vertex of a polyhedron in a given direction.
+     *
+     * @param[in] polyhedron  Polyhedron to search
+     * @param[in] direction   Query direction [--]
+     * @return Vertex pointer, or nullptr if not found
+     */
     VertexPtr getVertexFromDirection(PolyHedronPtr polyhedron, const Eigen::Vector3d &direction);
 
-
-    //inline pair<double, Eigen::Vector3d>   collisionCheck(const Eigen::Vector3d &point);
-    static inline double getDistance(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2);
-    inline bool isSamePose(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2);
+    static inline double getDistance(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2) { return (point1 - point2).norm(); }
+    inline bool isSamePose(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2) { return (point1 - point2).squaredNorm() < 1e-4; }
     Eigen::Vector3d transPointToBodyFrame(const Eigen::Vector3d &point_in_world);
 
-    // collision check whit facets
+    // collision check with facets
 
+    /**
+     * Find the contact point of a ray with a facet.
+     *
+     * @param[in] facet     Facet to check
+     * @param[in] point     Ray origin [m]
+     * @param[in] direction Ray direction [--]
+     * @return Pair of (hit flag [--], hit position [m])
+     */
     pair<bool, Eigen::Vector3d> findContactWithFacetInDirection(const FacetPtr &facet, const Eigen::Vector3d &point, const Eigen::Vector3d &direction);
     static inline pair<bool, Eigen::Vector3d> rayPlaneIntersection (const Eigen::Vector3d& rayOrigin,
                                                                     const Eigen::Vector3d& rayDirection,

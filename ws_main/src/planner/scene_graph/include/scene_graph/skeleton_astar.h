@@ -15,13 +15,29 @@
 
 namespace skeleton_astar{
 
+  /**
+   * A* search node on the skeleton graph.
+   *
+   * Each node corresponds to a polyhedron in the skeleton, with
+   * accumulated cost (g), heuristic (h), and parent reference.
+   */
   class AstarNode{
   public:
     typedef std::shared_ptr<AstarNode> Ptr;
-    PolyHedronPtr              polyhedron_;
-    Eigen::Vector3d            pos_;
-    double                     cost_g_, cost_h_, cost_f_;
-    std::shared_ptr<AstarNode> parent_;
+    PolyHedronPtr              polyhedron_;  ///< Associated polyhedron node
+    Eigen::Vector3d            pos_;         ///< Node position (polyhedron centroid) [m]
+    double                     cost_g_;      ///< Accumulated cost from start [m]
+    double                     cost_h_;      ///< Heuristic cost to goal [m]
+    double                     cost_f_;      ///< Total cost f = g + h [m]
+    std::shared_ptr<AstarNode> parent_;      ///< Parent node for path reconstruction
+    /**
+     * Construct an A* node.
+     *
+     * @param[in] poly    Associated polyhedron
+     * @param[in] cost_g  Accumulated cost [m]
+     * @param[in] cost_h  Heuristic cost [m]
+     * @param[in] parent  Parent node
+     */
     AstarNode(PolyHedronPtr poly, double cost_g, double cost_h, std::shared_ptr<AstarNode> parent):
       polyhedron_(poly), cost_g_(cost_g), cost_h_(cost_h), parent_(parent){
       cost_f_ = cost_g_ + cost_h_;
@@ -34,6 +50,13 @@ namespace skeleton_astar{
     }
   };
 
+  /**
+   * A* path search on the skeleton graph.
+   *
+   * Searches for the shortest path between two polyhedra using the
+   * skeleton graph edges and Euclidean distance heuristic.
+   * Used by SkeletonGenerator for topology-aware navigation planning.
+   */
   class SkeletonAstar{
   public:
     typedef std::shared_ptr<SkeletonAstar> Ptr;
@@ -60,8 +83,27 @@ namespace skeleton_astar{
       vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("skeleton_vis", 1);
     }
     ~SkeletonAstar(){}
+    /**
+     * Euclidean distance heuristic between two positions.
+     *
+     * @param[in] pos_a  First position [m]
+     * @param[in] pos_b  Second position [m]
+     * @return Euclidean distance [m]
+     */
     inline double getEuclHeu(Eigen::Vector3d pos_a, Eigen::Vector3d pos_b);
+    /**
+     * Run A* search on the skeleton graph between two polyhedra.
+     *
+     * @param[in] poly_start  Start polyhedron
+     * @param[in] poly_end    Goal polyhedron
+     * @return True if a path was found
+     */
     bool astarSearch(PolyHedronPtr poly_start, PolyHedronPtr poly_end);
+    /**
+     * Get the found path as a vector of positions.
+     *
+     * @param[out] path  Path waypoints [m]
+     */
     void getPath(std::vector<Eigen::Vector3d>& path);
     void getNeighborPolyhedronsNotInCloseList(AstarNode::Ptr cur_node, std::vector<AstarNode::Ptr>& neighbor_nodes);
     void visualizePath();

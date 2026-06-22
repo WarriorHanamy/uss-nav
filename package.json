@@ -11,6 +11,7 @@
     "view:ego": "cd tools/md2html && bun run view:ego",
     "view:next_scenegraph": "cd tools/md2html && bun run view:next_scenegraph",
     "view:map-demo": "cd tools/map-demo && bun run view",
+    "doxygen": "bun tools/doxygen/render.ts",
     "infra": "bun tools/infra.ts",
     "docker:build": "bun tools/infra.ts docker build",
     "docker:run": "bun tools/infra.ts docker run"

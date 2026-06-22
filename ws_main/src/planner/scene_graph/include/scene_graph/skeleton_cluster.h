@@ -26,6 +26,13 @@ struct Vector3dHash_SpecClus {
     }
 };
 
+/**
+ * Spectral clustering for polyhedron area detection.
+ *
+ * Clusters polyhedron nodes into areas (rooms) using spectral
+ * clustering on a similarity matrix derived from centroid distances.
+ * The Gaussian kernel bandwidth sigma_sq controls cluster granularity.
+ */
 class SpectralCluster {
 public:
     typedef std::shared_ptr<SpectralCluster> Ptr;
@@ -33,13 +40,19 @@ public:
         cluster_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/cluster_vis", 2);
     };
     ~SpectralCluster() = default;
+    /**
+     * Compute spectral clustering on the given polyhedra.
+     *
+     * @param[in]  polys_without_gate  Input polyhedra (excluding gates)
+     * @param[out] clusters            Output area clusters
+     */
     void calculate(std::vector<PolyHedronPtr>&polys_without_gate, std::vector<PolyhedronCluster>& clusters);
 
 private:
     ros::NodeHandle& nh_;
     ros::Publisher cluster_vis_pub_;
 
-    double sigma_sq_{1.0};    // bandwidth of kernel function
+    double sigma_sq_{1.0};    ///< Gaussian kernel bandwidth for similarity [m^2]
     unsigned int k_{0};       // number of clusters
     void calSimilarityMatrix(Eigen::MatrixXd& W, Eigen::MatrixXd& ED, std::vector<PolyHedronPtr> polys);
     void calDegreeMatrix(Eigen::MatrixXd& W, Eigen::MatrixXd& D);
@@ -50,6 +63,14 @@ private:
     void visualizeClusters(const std::vector<PolyhedronCluster>& clusters);
 };
 
+/**
+ * Area (room) handler for the skeleton graph.
+ *
+ * Manages incremental area updates as new polyhedra are added
+ * to the skeleton. Uses community detection (Louvain/Leiden on
+ * the polyhedron adjacency graph) for area refinement.
+ * Maintains area-neighbor relationships and un/predicted area lists.
+ */
 class AreaHandler {
 public:
     typedef std::shared_ptr<AreaHandler> Ptr;
@@ -58,8 +79,24 @@ public:
         edge_weight_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/edge_weight_vis", 2);
     };
     ~AreaHandler() = default;
+    /**
+     * Get the current area clusters.
+     *
+     * @param[out] clusters  Output area cluster list
+     */
     void getCurAreas(std::vector<PolyhedronCluster::Ptr>& clusters);
+    /**
+     * Get the area ID for a given polyhedron.
+     *
+     * @param[in] poly  Polyhedron pointer
+     * @return Area ID [--]
+     */
     int getAreaFromPoly(const PolyHedronPtr &poly);
+    /**
+     * Incrementally update areas when new polyhedra are added.
+     *
+     * @param[in] new_polys  Vector of newly added polyhedra
+     */
     void incrementalUpdateAreas(vector<PolyHedronPtr>& new_polys);
     
     // load map

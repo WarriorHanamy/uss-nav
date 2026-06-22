@@ -15,17 +15,24 @@ namespace ego_planner
 
 #define UNKNOWN_COUND_THRES 20
 
+  /**
+   * Collision constraint points container.
+   *
+   * Stores deformation control points with associated obstacle avoidance
+   * direction vectors, velocity/acceleration limits, and timing information.
+   * Used by PolyTrajOptimizer for collision-free trajectory optimization.
+   */
   class ConstraintPoints
   {
   public:
-    int cp_size; // deformation points
-    Eigen::MatrixXd points;
-    std::vector<std::vector<Eigen::Vector3d>> base_point; // The point at the statrt of the direction vector (collision point)
-    std::vector<std::vector<Eigen::Vector3d>> direction;  // Direction vector, must be normalized.
-    std::vector<bool> flag_got_pvpair;                    // A flag that used in many places. Initialize it everytime before using it.
-    std::vector<double> vel_limit;
-    std::vector<double> acc_limit;
-    std::vector<double> t;
+    int cp_size; // number of deformation control points
+    Eigen::MatrixXd points;                                                      // control point positions [m]
+    std::vector<std::vector<Eigen::Vector3d>> base_point;                       // collision point on obstacle surface [m]
+    std::vector<std::vector<Eigen::Vector3d>> direction;                        // normalized repulsion direction [--]
+    std::vector<bool> flag_got_pvpair;                                          // whether position-velocity pair is computed
+    std::vector<double> vel_limit;                                              // velocity limit per point [m/s]
+    std::vector<double> acc_limit;                                              // acceleration limit per point [m/s^2]
+    std::vector<double> t;                                                      // time at each constraint point [s]
     std::vector<std::pair<std::pair<Eigen::Vector3d, double>, Eigen::Vector3d>> curve_fitting;
     bool dyn_limit_valid;
     EnterUnknownRegionInfo ent_uk;
@@ -122,6 +129,15 @@ namespace ego_planner
     }
   };
 
+  /**
+   * MINCO + L-BFGS trajectory optimizer.
+   *
+   * Optimizes a multi-piece polynomial trajectory in position flat-output space
+   * using the Minimum Control eNergy (MINCO) formulation. Supports collision
+   * avoidance (ESDF + obstacle gradient), swarm deconfliction, feasibility
+   * enforcement (velocity/acceleration/jerk/snap limits), and multi-topology
+   * trajectory generation. Uses L-BFGS solver with bounded step sizes.
+   */
   class PolyTrajOptimizer
   {
 
@@ -136,10 +152,10 @@ namespace ego_planner
 
     int drone_id_;
     int cps_num_prePiece_, cps_num_prePiece_Long_; // number of distinctive constraint points each piece
-    int variable_num_;                             // optimization variables
-    int piece_num_;                                // poly traj piece numbers
-    int iter_num_, total_iter_num_;                // iteration of the solver
-    std::vector<double> min_ellip_dist2_;          // min trajectory distance in swarm
+    int variable_num_;                             // number of optimization variables
+    int piece_num_;                                // number of polynomial trajectory pieces
+    int iter_num_, total_iter_num_;                // L-BFGS solver iteration counters
+    std::vector<double> min_ellip_dist2_;          // minimum trajectory distance to swarm agents [m]
     bool touch_goal_;
     struct MultitopologyData_t
     {
@@ -158,16 +174,16 @@ namespace ego_planner
     } force_stop_type_;
 
     /* optimization parameters */
-    double wei_obs_, wei_obs_soft_; // obstacle weight
-    double wei_trust_region_;
-    double wei_curve_fitting_;
-    double wei_plane_;
-    double wei_swarm_, wei_swarm_mod_;                                             // swarm weight
-    double wei_feas_, wei_feas_mod_;                                               // feasibility weight
-    double wei_sqrvar_;                                                            // squared variance weight
-    double wei_time_;                                                              // time weight
-    double obs_clearance_, obs_clearance4_, obs_clearance_soft_, swarm_clearance_; // safe distance
-    double max_vel_, max_acc_, max_jer_, max_sna_;                                 // dynamic limits
+    double wei_obs_, wei_obs_soft_;       // obstacle avoidance weight [--]
+    double wei_trust_region_;             // trust region penalty weight [--]
+    double wei_curve_fitting_;            // curve fitting weight [--]
+    double wei_plane_;                    // restrict plane penalty weight [--]
+    double wei_swarm_, wei_swarm_mod_;    // swarm deconfliction weight [--]
+    double wei_feas_, wei_feas_mod_;      // dynamic feasibility weight [--]
+    double wei_sqrvar_;                   // squared variance weight [--]
+    double wei_time_;                     // time regularization weight [--]
+    double obs_clearance_, obs_clearance4_, obs_clearance_soft_, swarm_clearance_; // safe clearance distances [m]
+    double max_vel_, max_acc_, max_jer_, max_sna_;                                 // dynamic limits [m/s], [m/s^2], [m/s^3], [m/s^4]
     Eigen::Vector3d start_jerk_;
 
     double t_now_;
@@ -184,62 +200,226 @@ namespace ego_planner
       TIME_LIM
     };
 
-    /* set variables */
+    /**
+     * Set ROS parameters from the node handle.
+     *
+     * @param[in] nh  ROS node handle
+     */
     void setParam(ros::NodeHandle &nh);
+    /**
+     * Set the environment map pointer.
+     *
+     * @param[in] map  Map manager instance
+     */
     void setEnvironment(const MapManager::Ptr map);
+    /**
+     * Set the initial control point positions.
+     *
+     * @param[in] points  Control point positions matrix (3 x N) [m]
+     */
     void setControlPoints(const Eigen::MatrixXd &points);
+    /**
+     * Set swarm trajectory data for deconfliction.
+     *
+     * @param[in] swarm_trajs_ptr  Pointer to swarm trajectory data
+     */
     void setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr);
+    /**
+     * Set the drone ID for this optimizer instance.
+     *
+     * @param[in] drone_id  Drone identifier (>= 0 for swarm, < 0 for single)
+     */
     void setDroneId(const int drone_id);
+    /**
+     * Set whether the trajectory should reach the goal.
+     *
+     * @param[in] touch_goal  True if trajectory must reach the final goal
+     */
     void setIfTouchGoal(const bool touch_goal);
+    /**
+     * Set constraint points directly.
+     *
+     * @param[in] cps  Constraint points container
+     */
     void setConstraintPoints(ConstraintPoints cps);
+    /**
+     * Enable or disable multi-topology trajectory support.
+     *
+     * @param[in] use_multitopology_trajs  True to enable multi-topology
+     */
     void setUseMultitopologyTrajs(bool use_multitopology_trajs);
+    /**
+     * Set maximum velocity and acceleration limits.
+     *
+     * @param[in] max_vel  Maximum velocity [m/s]
+     * @param[in] max_acc  Maximum acceleration [m/s^2]
+     */
     void setMaxVelAcc(double max_vel, double max_acc);
+    /**
+     * Set number of constraint points per polynomial piece.
+     *
+     * @param[in] N  Constraint points per piece
+     */
     void setCPsNumPerPiece(const int N);
+    /**
+     * Set a copy of the planning parameters.
+     *
+     * @param[in] pp_cpy  Planning parameters copy
+     */
     void setPlanParametersCopy(const PlanParameters &pp_cpy);
 
-    /* helper functions */
+    /**
+     * Get the current constraint points (control points).
+     *
+     * @return Reference to constraint points container
+     */
     inline const ConstraintPoints &getControlPoints(void) { return cps_; }
+    /**
+     * Get the current MINCO optimizer instance.
+     *
+     * @return Reference to MinJerkOpt instance
+     */
     inline const poly_traj::MinJerkOpt &getMinJerkOpt(void) { return jerkOpt_; }
+    /**
+     * Get the number of constraint points per piece.
+     *
+     * @return Constraint points per piece [--]
+     */
     inline int get_cps_num_prePiece_(void) { return cps_num_prePiece_; }
+    /**
+     * Get the swarm deconfliction clearance distance.
+     *
+     * @return Clearance distance [m]
+     */
     inline double get_swarm_clearance_(void) { return swarm_clearance_; }
 
-    /* main planning API */
+    /**
+     * Optimize the trajectory (shape + time) using MINCO + L-BFGS.
+     *
+     * @param[in]  iniState     Initial state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  finState     Final state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  initInnerPts Initial inner control points (3 x N) [m]
+     * @param[in]  initT        Initial piece durations (N-1) [s]
+     * @param[out] final_cost   Final optimization cost [--]
+     * @return True if optimization succeeded
+     */
     bool optimizeTrajectory(const Eigen::MatrixXd &iniState, const Eigen::MatrixXd &finState,
                             const Eigen::MatrixXd &initInnerPts, const Eigen::VectorXd &initT,
                             double &final_cost);
 
+    /**
+     * Optimize trajectory shape only (keep piece durations fixed).
+     *
+     * @param[in]  iniState     Initial state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  finState     Final state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  initInnerPts Initial inner control points (3 x N) [m]
+     * @param[in]  initT        Fixed piece durations (N-1) [s]
+     * @param[in]  CPsNumPerPiece  Constraint points per piece [--]
+     * @param[out] final_cost   Final optimization cost [--]
+     * @return True if optimization succeeded
+     */
     bool optimizeTrajectoryShapeOnly(const Eigen::MatrixXd &iniState, const Eigen::MatrixXd &finState,
                                      const Eigen::MatrixXd &initInnerPts, const Eigen::VectorXd &initT,
                                      const int CPsNumPerPiece, double &final_cost);
 
+    /**
+     * Optimize trajectory time only (keep shape fixed).
+     *
+     * @param[in]  iniState     Initial state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  finState     Final state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in]  initInnerPts Fixed inner control points (3 x N) [m]
+     * @param[in]  initT        Initial piece durations (N-1) [s]
+     * @param[out] final_cost   Final optimization cost [--]
+     * @return True if optimization succeeded
+     */
     bool optimizeTrajectoryTimeOnly(const Eigen::MatrixXd &iniState, const Eigen::MatrixXd &finState,
                                     const Eigen::MatrixXd &initInnerPts, const Eigen::VectorXd &initT,
                                     double &final_cost);
 
+    /**
+     * Compute points along the trajectory for collision checking.
+     *
+     * @param[in]  traj       Trajectory to check
+     * @param[in]  id_end     End piece index [--]
+     * @param[out] pts_check  Output check points container
+     * @return True if computation succeeded
+     */
     bool computePointsToCheck(poly_traj::Trajectory &traj, int id_end, PtsChk_t &pts_check);
 
+    /**
+     * Check the trajectory for numerical normality (no NaN/inf).
+     *
+     * @return True if trajectory is normal
+     */
     bool normalityCheck();
 
     // std::vector<std::pair<int, int>> finelyCheckConstraintPointsOnly(Eigen::MatrixXd &init_points);
 
-    /* check collision and set {p,v} pairs to constraint points */
+    /**
+     * Finely check collision for constraint points and set position-velocity pairs.
+     *
+     * For each constraint point in collision, searches a collision-free path
+     * via A* and sets the repulsion direction {base_point, direction}.
+     *
+     * @param[in]  segments        Piece segments to check
+     * @param[out] a_star_pathes   A* collision-free paths per segment
+     * @param[in]  pt_data         MINCO trajectory data
+     * @param[in]  cps_num_prePiece  Constraint points per piece [--]
+     * @param[in]  flag_first_init  True on first initialization
+     * @return Check result (OBS_FREE / ERR / FINISH / TIME_LIM)
+     */
     CHK_RET finelyCheckAndSetConstraintPoints(std::vector<std::pair<int, int>> &segments,
                                               vector<vector<Eigen::Vector3d>> &a_star_pathes,
                                               const poly_traj::MinJerkOpt &pt_data,
                                               const int cps_num_prePiece,
                                               const bool flag_first_init /*= true*/);
 
+    /**
+     * Roughly check constraint points for collision (without A* search).
+     *
+     * @return True if all constraint points are collision-free
+     */
     bool roughlyCheckConstraintPoints(void);
 
+    /**
+     * Try to extend a point in the repulsion direction and check for collision.
+     *
+     * @param[in] p  Point to extend [m]
+     * @param[in] v  Repulsion direction (normalized) [--]
+     * @param[in] q  Target point for fallback [m]
+     * @return Extended collision-free point [m]
+     */
     Eigen::Vector3d tryExtendAndChkP(Eigen::Vector3d p, Eigen::Vector3d v, Eigen::Vector3d q);
 
+    /**
+     * Check whether the optimizer should allow a rebound (re-initialization).
+     *
+     * @return True if rebound is allowed
+     */
     bool allowRebound(void);
 
+    /**
+     * Compute per-piece velocity limits from the initial and final states.
+     *
+     * @param[in] iniState  Initial state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     * @param[in] finState  Final state (3x3: pos/vel/acc) [m, m/s, m/s^2]
+     */
     void computeVelLim(const Eigen::MatrixXd &iniState, Eigen::MatrixXd finState);
 
+    /**
+     * Prepare fitted curve data for constraint point regularization.
+     */
     void prepareFittedCurve();
 
-    /* multi-topo support */
+    /**
+     * Generate distinctive trajectory candidates for multi-topology planning.
+     *
+     * Samples multiple collision-free topologies by perturbing control points
+     * in different directions around obstacles.
+     *
+     * @param[in] segments  Piece segments to generate topologies for
+     * @return Vector of distinctive constraint point sets
+     */
     std::vector<ConstraintPoints> distinctiveTrajs(vector<std::pair<int, int>> segments);
 
   private:
@@ -276,11 +456,29 @@ namespace ego_planner
 
     void addPGradCost2C(Eigen::VectorXd &costs, const int &N, const int &K);
 
+    /**
+     * Obstacle avoidance gradient and cost via ESDF.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  p      Point position [m]
+     * @param[out] gradp  Gradient w.r.t. p [--/m]
+     * @param[out] costp  Cost contribution [--]
+     * @return True if gradient/cost computed successfully
+     */
     bool obstacleGradCostP(const int i_dp,
                            const Eigen::Vector3d &p,
                            Eigen::Vector3d &gradp,
                            double &costp);
 
+    /**
+     * ESDF-based gradient and cost for obstacle proximity.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  p      Point position [m]
+     * @param[out] gradp  Gradient w.r.t. p [--/m]
+     * @param[out] costp  Cost contribution [--]
+     * @return True if ESDF evaluation succeeded
+     */
     bool ESDFGradCostP(const int i_dp,
                        const Eigen::Vector3d &p,
                        Eigen::Vector3d &gradp,
@@ -318,21 +516,57 @@ namespace ego_planner
                         double &grad_prev_t,
                         double &costp);
 
+    /**
+     * Velocity feasibility gradient and cost.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  v      Velocity [m/s]
+     * @param[out] gradv  Gradient w.r.t. v [--/(m/s)]
+     * @param[out] costv  Cost contribution [--]
+     * @return True if gradient/cost computed
+     */
     bool feasibilityGradCostV(const int i_dp,
                               const Eigen::Vector3d &v,
                               Eigen::Vector3d &gradv,
                               double &costv);
 
+    /**
+     * Acceleration feasibility gradient and cost.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  a      Acceleration [m/s^2]
+     * @param[out] grada  Gradient w.r.t. a [--/(m/s^2)]
+     * @param[out] costa  Cost contribution [--]
+     * @return True if gradient/cost computed
+     */
     bool feasibilityGradCostA(const int i_dp,
                               const Eigen::Vector3d &a,
                               Eigen::Vector3d &grada,
                               double &costa);
 
+    /**
+     * Jerk feasibility gradient and cost.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  j      Jerk [m/s^3]
+     * @param[out] gradj  Gradient w.r.t. j [--/(m/s^3)]
+     * @param[out] costj  Cost contribution [--]
+     * @return True if gradient/cost computed
+     */
     bool feasibilityGradCostJ(const int i_dp,
                               const Eigen::Vector3d &j,
                               Eigen::Vector3d &gradj,
                               double &costj);
 
+    /**
+     * Snap feasibility gradient and cost.
+     *
+     * @param[in]  i_dp   Constraint point index [--]
+     * @param[in]  s      Snap [m/s^4]
+     * @param[out] grads  Gradient w.r.t. s [--/(m/s^4)]
+     * @param[out] costs  Cost contribution [--]
+     * @return True if gradient/cost computed
+     */
     bool feasibilityGradCostS(const int i_dp,
                               const Eigen::Vector3d &s,
                               Eigen::Vector3d &grads,

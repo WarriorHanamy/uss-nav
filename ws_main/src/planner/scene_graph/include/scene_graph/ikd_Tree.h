@@ -126,11 +126,20 @@ public:
 
 
 
+/**
+ * Incremental KD-Tree for 3D point storage and spatial queries.
+ *
+ * Supports point insertion, deletion, nearest-neighbor search, range
+ * search, radius search, box search, and box deletion with automatic
+ * rebalancing. Based on the incremental KD-Tree algorithm for
+ * dynamic point cloud management in robotics applications.
+ *
+ * @tparam PointType  Point type with `.x`, `.y`, `.z` float members
+ */
 template<typename PointType>
 class KD_TREE{
 public:
     using PointVector = vector<PointType, Eigen::aligned_allocator<PointType>>;
-    // using PointVector = vector<PointType>;
     using Ptr = shared_ptr<KD_TREE<PointType>>;
     struct KD_TREE_NODE{
         PointType point;
@@ -294,7 +303,14 @@ private:
     static bool point_cmp_z(PointType a, PointType b);
 
 public:
-    KD_TREE(float delete_param = 0.5, float balance_param = 0.6 , float box_length = 0.2);
+    /**
+     * Construct a KD-Tree with given parameters.
+     *
+     * @param[in] delete_param    Delete criterion parameter [--]
+     * @param[in] balance_param   Balance criterion parameter [--]
+     * @param[in] box_length      Box length for downsample [m]
+     */
+    KD_TREE(float delete_param = 0.5, float balance_param = 0.6, float box_length = 0.2);
     ~KD_TREE();
     void Set_delete_criterion_param(float delete_param);
     void Set_balance_criterion_param(float balance_param);
@@ -303,7 +319,21 @@ public:
     int size();
     int validnum();
     void root_alpha(float &alpha_bal, float &alpha_del);
+    /**
+     * Build the KD-Tree from a point cloud.
+     *
+     * @param[in] point_cloud  Input point vector
+     */
     void Build(PointVector point_cloud);
+    /**
+     * K-nearest-neighbor search.
+     *
+     * @param[in]  point           Query point
+     * @param[in]  k_nearest       Number of neighbors [--]
+     * @param[out] Nearest_Points  Output neighbor points
+     * @param[out] Point_Distance  Output distances [m]
+     * @param[in]  max_dist        Maximum search distance [m]
+     */
     void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);
     void Box_Search(const BoxPointType &Box_of_Point, PointVector &Storage);
     void Radius_Search(PointType point, const float radius, PointVector &Storage);

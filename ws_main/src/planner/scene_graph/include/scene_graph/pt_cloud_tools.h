@@ -38,8 +38,22 @@
 #include <ros/ros.h>
 #include <omp.h> // 引入 OpenMP 头文件
 
+/**
+ * Point cloud overlap calculator.
+ *
+ * Computes the fraction of points in cloud B that have a neighbor
+ * within a distance threshold in cloud A, using PCL KD-tree.
+ */
 class PointCloudOverlapCalculator {
 public:
+    /**
+     * Calculate what fraction of cloud B points overlap with cloud A.
+     *
+     * @param[in] cloud_a             Reference point cloud
+     * @param[in] cloud_b             Query point cloud
+     * @param[in] distance_threshold  Neighbor distance threshold [m]
+     * @return Overlap ratio [0, 1] [--]
+     */
     double calculateOverlapBInA(
         const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud_a,
         const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud_b,
@@ -104,18 +118,30 @@ public:
 };
 
 
+/**
+ * 3D cuboid intersection volume server.
+ *
+ * Computes the intersection volume of two axis-aligned cuboids
+ * defined by their 8 corner points using plane clipping and
+ * the divergence theorem for convex polyhedron volume calculation.
+ */
 class CloudIntersectionServer {
 private:
-    // 定义平面方程 ax + by + cz + d = 0
     struct Plane {
-        float a, b, c, d;
+        float a, b, c, d;  ///< Plane equation: ax+by+cz+d=0 [--]
     };
 
 public:
     CloudIntersectionServer() = default;
     ~CloudIntersectionServer() = default;
 
-    // 计算两个任意放置长方体的相交体积
+    /**
+     * Compute intersection volume of two cuboids.
+     *
+     * @param[in] cuboid1  First cuboid (8 corners) [m]
+     * @param[in] cuboid2  Second cuboid (8 corners) [m]
+     * @return Intersection volume [m^3]
+     */
     double calculateIntersectionVolume(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cuboid1,
                                       const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cuboid2) {
         // 验证输入

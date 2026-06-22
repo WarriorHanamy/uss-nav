@@ -20,9 +20,14 @@
 
 namespace ego_planner {
 
-// In order to maintain code easily, 
-// we use an interface to isolate exploration from the underlying map,
-// facilitating map code replacement.
+/**
+ * Exploration-planner map interface.
+ *
+ * Isolates the exploration planner from the underlying GridMap
+ * implementation, facilitating map code replacement. Provides
+ * occupancy queries, path search, visibility checks, and box
+ * management in a planner-friendly API.
+ */
 class MapInterface{
  public:
   enum OCCUPANCY { FREE, OCCUPIED, UNKNOWN };
@@ -53,38 +58,184 @@ class MapInterface{
 
   typedef std::shared_ptr<MapInterface> Ptr;
 
+  /**
+   * Reset the global bounding box from parameter file defaults.
+   */
   void   resetGlobalBox();
+  /**
+   * Reset the global bounding box to explicit min/max coordinates.
+   *
+   * @param[in] box_min  Minimum corner [m]
+   * @param[in] box_max  Maximum corner [m]
+   */
   void   resetGlobalBox(const Eigen::Vector3d & box_min, const Eigen::Vector3d & box_max);
+  /**
+   * Reset all map occupancy to unknown.
+   */
   void   resetOccupancyToUnknown();
+  /**
+   * Get the occupancy update sequence counter.
+   *
+   * @return Current update sequence number [--]
+   */
   uint64_t getOccupancyUpdateSeq() const;
+  /**
+   * Get the global bounding box.
+   *
+   * @param[out] box_min  Minimum corner [m]
+   * @param[out] box_max  Maximum corner [m]
+   */
   void   getGlobalBox(Eigen::Vector3d & box_min, Eigen::Vector3d & box_max) const;
+  /**
+   * Get the map resolution.
+   *
+   * @return Grid resolution [m]
+   */
   double getResolution() const;
+  /**
+   * Get the updated region bounding box.
+   *
+   * @param[out] bmin  Minimum corner [m]
+   * @param[out] bmax  Maximum corner [m]
+   */
   void   getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax) const;
+  /**
+   * Get the updated region bounding box in voxel indices.
+   *
+   * @param[out] bmin_inx  Minimum index [voxel]
+   * @param[out] bmax_inx  Maximum index [voxel]
+   */
   void   getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx) const;
+  /**
+   * Get the frontier updated region bounding box in voxel indices.
+   *
+   * @param[out] bmin_inx        Minimum index [voxel]
+   * @param[out] bmax_inx        Maximum index [voxel]
+   * @param[in]  reset_after_read  Clear the frontier flag after read
+   * @return True if frontier data exists
+   */
   bool   getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx,
                                   bool reset_after_read) const;
+  /**
+   * Search for a collision-free path between two points using A*.
+   *
+   * @param[in]  start_pos  Start position [m]
+   * @param[in]  end_pos    End position [m]
+   * @param[out] path       Output path waypoints [m]
+   * @param[in]  step_size  A* step size [m]
+   * @return True if a path was found
+   */
   bool searchPath(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
                   std::vector<Eigen::Vector3d>& path, double step_size);
+  /**
+   * Search for a path treating unknown regions as traversable.
+   *
+   * @param[in]  start_pos  Start position [m]
+   * @param[in]  end_pos    End position [m]
+   * @param[out] path       Output path waypoints [m]
+   * @param[in]  step_size  A* step size [m]
+   * @return True if a path was found
+   */
   bool   searchPathConsiderUKRegion(const Eigen::Vector3d& start_pos, const Eigen::Vector3d& end_pos,
                                     std::vector<Eigen::Vector3d>& path, double step_size);
 
+  /**
+   * Convert global position to voxel index.
+   *
+   * @param[in] pos  Global position [m]
+   * @return Voxel index [voxel]
+   */
   Eigen::Vector3i pos2GlobalIdx(const Eigen::Vector3d &pos)   const;
+  /**
+   * Convert voxel index to global position (grid center).
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Grid center position [m]
+   */
   Eigen::Vector3d globalIdx2Pos(const Eigen::Vector3i &id)    const;
+  /**
+   * Convert voxel index to linear buffer index.
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Linear buffer index [--]
+   */
   size_t          globalIdx2BufIdx(const Eigen::Vector3i &id) const;
 
+  /**
+   * Set the target position for dynamic map updates.
+   *
+   * @param[in] target_pos       Target position [m]
+   * @param[in] target_pos_valid Whether the target is valid
+   */
   void setTarget(const Eigen::Vector3d &target_pos, const bool &target_pos_valid);
 
+  /**
+   * Get occupancy at a voxel index.
+   *
+   * @param[in] idx  Voxel index [voxel]
+   * @return Occupancy (FREE / OCCUPIED / UNKNOWN)
+   */
   int getOccupancy(const Eigen::Vector3i &idx) const;
+  /**
+   * Get occupancy at a global position.
+   *
+   * @param[in] pos  Global position [m]
+   * @return Occupancy (FREE / OCCUPIED / UNKNOWN)
+   */
   int getOccupancy(const Eigen::Vector3d &pos) const;
+  /**
+   * Get inflated occupancy at a global position.
+   *
+   * @param[in] pos  Global position [m]
+   * @return Occupancy (FREE / OCCUPIED)
+   */
   int getInflateOccupancy(const Eigen::Vector3d &pos) const;
+  /**
+   * Get raw inflated occupancy at a position (with/without unknown region consideration).
+   *
+   * @param[in] pos  Global position [m]
+   * @return Pair of (consider_uk, ignore_uk) occupancy
+   */
   pair<int, int> getRawInflateOccupancy(const Eigen::Vector3d &pos) const;
 
+  /**
+   * Check if a voxel index is within the global map.
+   *
+   * @param[in] idx  Voxel index [voxel]
+   * @return True if within global map bounds
+   */
   bool isInGlobalMap(const Eigen::Vector3i &idx) const;
+  /**
+   * Check if a position is within the global map.
+   *
+   * @param[in] pos  Global position [m]
+   * @return True if within global map bounds
+   */
   bool isInGlobalMap(const Eigen::Vector3d &pos) const;
 
+  /**
+   * Check if a voxel index is within the local map buffer.
+   *
+   * @param[in] idx  Voxel index [voxel]
+   * @return True if within local map buffer
+   */
   bool isInLocalMap(const Eigen::Vector3i &idx) const;
+  /**
+   * Check if a position is within the local map buffer.
+   *
+   * @param[in] pos  Global position [m]
+   * @return True if within local map buffer
+   */
   bool isInLocalMap(const Eigen::Vector3d &pos) const;
 
+  /**
+   * Check line-of-sight visibility between two points.
+   *
+   * @param[in] p1         First point [m]
+   * @param[in] p2         Second point [m]
+   * @param[in] check_res  Check resolution [m]
+   * @return True if line-of-sight is clear
+   */
   bool isVisible(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, double check_res = 0.0) const;
 
   inline int getVoxelNum() const { return map_->sml_->getVoxelNum(); };

@@ -11,27 +11,30 @@
 #include <string>
 #include <vector>
 
+/**
+ * Trajectory visualizer with speed-based color gradient.
+ *
+ * Publishes a LINE_STRIP marker with per-point color based on
+ * instantaneous velocity (blue=slow, red=fast). Used for
+ * visualizing executed trajectories in RViz.
+ */
 class TrajectoryVisualizer {
 public:
-    // 构造函数现在也初始化了新成员
     TrajectoryVisualizer(ros::NodeHandle& nh) : nh_(nh) {
-        // 从参数服务器获取参数
         nh_.param<std::string>("/traj_vis/map_frame_id", map_frame_id_, "world");
-        nh_.param<double>("/traj_vis/min_speed", min_speed_, 0.0);
-        nh_.param<double>("/traj_vis/max_speed", max_speed_, 0.65); // m/s
-        nh_.param<double>("/traj_vis/distance_threshold", distance_threshold_, 0.1); // 最小距离阈值
+        nh_.param<double>("/traj_vis/min_speed", min_speed_, 0.0);   ///< [m/s]
+        nh_.param<double>("/traj_vis/max_speed", max_speed_, 0.65);  ///< [m/s]
+        nh_.param<double>("/traj_vis/distance_threshold", distance_threshold_, 0.1); ///< [m]
 
-        // 初始化发布者和订阅者
         marker_pub_ = nh_.advertise<visualization_msgs::Marker>("/scene_graph/traj_with_vel", 10);
-
-        // 初始化Marker消息
         initMarker();
     }
 
     /**
-     * @brief 核心功能接口：向轨迹中添加一个点 (已修改)
-     * @param pos 新的位置点 (Eigen::Vector3d)
-     * @param vel 当前的速度（用于着色）
+     * Add a trajectory point with velocity for speed-based coloring.
+     *
+     * @param[in] pos  Point position [m]
+     * @param[in] vel  Instantaneous velocity [m/s]
      */
     void addPoint(const Eigen::Vector3d& pos, double vel) {
         // 如果是第一个点，或者与上一个点的距离超过阈值
@@ -67,9 +70,9 @@ private:
     // 配置参数
     std::string odom_topic_;
     std::string map_frame_id_;
-    double min_speed_;
-    double max_speed_;
-    double distance_threshold_;
+    double min_speed_;            ///< Minimum speed for color mapping [m/s]
+    double max_speed_;            ///< Maximum speed for color mapping [m/s]
+    double distance_threshold_;   ///< Minimum distance between trajectory points [m]
 
     // 状态变量
     Eigen::Vector3d last_point_; // 2. 修改成员变量类型

@@ -19,18 +19,34 @@
 
 class SceneGraphMapIO;
 
+/**
+ * SceneGraph runtime data: list of clustered areas.
+ */
 struct SceneGraph_Data {
 std::vector<AreaHandler::Ptr> area;
 };
 
+/**
+ * VLA + swarm LLM prompt result container.
+ *
+ * Stores the parsed result of a visual-language-action (VLA) swarm prompt,
+ * including success status, error details, and the raw JSON payload.
+ */
 struct VLASwarmPromptResult {
-    bool valid{false};
-    bool success{false};
-    std::string error;
-    std::string detail;
-    nlohmann::json payload;
+    bool valid{false};       ///< Whether the result is valid [--]
+    bool success{false};     ///< Whether the action succeeded [--]
+    std::string error;       ///< Error description
+    std::string detail;      ///< Detailed result description
+    nlohmann::json payload;  ///< Raw JSON payload from LLM
 };
 
+/**
+ * Top-level scene graph orchestrator.
+ *
+ * Manages skeleton generation, object detection/fusion, area clustering,
+ * and LLM-based reasoning for autonomous exploration and search.
+ * Coordinates SkeletonGenerator, ObjectFactory, and AreaHandler.
+ */
 class SceneGraph {
 public:
     typedef std::shared_ptr<SceneGraph> Ptr;
@@ -46,32 +62,81 @@ public:
     };
     ~SceneGraph() = default;
     // submodules //
-    SkeletonGenerator::Ptr  skeleton_gen_;
-    ObjectFactory::UPtr     object_factory_;
-    PolyHedronPtr           cur_poly_;
-    std::vector<int>        history_visited_area_ids_;
+    SkeletonGenerator::Ptr  skeleton_gen_;     ///< Skeleton (free-space decomposition) generator
+    ObjectFactory::UPtr     object_factory_;    ///< Object detection and tracking module
+    PolyHedronPtr           cur_poly_;          ///< Current polyhedron the robot is in
+    std::vector<int>        history_visited_area_ids_; ///< IDs of areas visited in this session
 
-    std::string target_cmd_string_;
-    std::string prior_knowledge_string_;
+    std::string target_cmd_string_;       ///< Natural language target command
+    std::string prior_knowledge_string_;   ///< Prior knowledge for LLM context
 
+    /**
+     * Set the target command and prior knowledge string for LLM prompts.
+     *
+     * @param[in] target_cmd_str       Natural-language target command
+     * @param[in] prior_knowledge_str  Prior knowledge / context string
+     */
     void setTargetAndPriorKnowledge(const std::string& target_cmd_str, const std::string& prior_knowledge_str);
 
-    // current state interface
+    /**
+     * Mount the current polyhedron at the robot's position and yaw.
+     *
+     * @param[in] pos  Robot position [m]
+     * @param[in] yaw  Robot yaw [rad]
+     */
     void mountCurPoly(const Eigen::Vector3d pos, const double yaw);
     PolyHedronPtr getCurPoly() {return cur_poly_;};
 
-    // scene graph operations //
+    /**
+     * Initialize the scene graph from the current position.
+     *
+     * @param[in] cur_pos  Current robot position [m]
+     * @param[in] yaw      Current robot yaw [rad]
+     * @return True if initialization succeeded
+     */
     bool initSceneGraph(const Eigen::Vector3d &cur_pos, double yaw);
+    /**
+     * Update the scene graph with the current robot state.
+     *
+     * @param[in]  cur_pos  Current robot position [m]
+     * @param[in]  yaw      Current robot yaw [rad]
+     * @param[out] new_topo  Whether new topology (polyhedron/frontier) was discovered
+     */
     void updateSceneGraph(const Eigen::Vector3d &cur_pos, const double &yaw, bool &new_topo);
+    /**
+     * Update object positions and associations in the scene graph.
+     */
     void updateObjectToSceneGraph();
+    /**
+     * Get a path to an object by its ID.
+     *
+     * @param[in]  id       Object ID [--]
+     * @param[out] path     Path waypoints to the object [m]
+     * @param[out] aim_pos  Target position for yaw aiming [m]
+     * @param[out] aim_yaw  Target yaw [rad]
+     * @return True if a path was found
+     */
     bool getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3d> &path, Eigen::Vector3d & aim_pos, double &aim_yaw);
 
-    // LLM interface //
-    std::map<unsigned int, std::string> llm_ans_str_poll_;
-    std::map<unsigned int, scene_graph::PromptMsg> llm_prompts_;
+    /**
+     * Send a prompt to the LLM and return a future for the response.
+     *
+     * @param[in] prompt_id    Unique prompt identifier [--]
+     * @param[in] prompt_type  Prompt type code [--]
+     * @param[in] prompt_str   Prompt text string
+     * @param[in] timeout      Maximum wait time for response [s]
+     * @param[in] max_retries  Maximum retry count on failure [--]
+     * @return Future containing the LLM response string
+     */
     std::future<std::string> sendPrompt(unsigned int prompt_id, unsigned char prompt_type, std::string prompt_str,
                                         const std::chrono::seconds &timeout, int max_retries);
     int wait_recv_id_;
+    /**
+     * Check whether a prompt answer has been received.
+     *
+     * @param[in] prompt_id  Prompt identifier [--]
+     * @return True if an answer exists
+     */
     bool hasPromptAnswer(unsigned int prompt_id);
     void clearPromptData(unsigned int prompt_id);
 
@@ -103,10 +168,21 @@ public:
     unsigned int getCurPromptId(){return cur_prompt_id_;}
     int getAreaFromPoly(const PolyHedronPtr& poly){return poly->area_id_;}
     bool needAreaPrediction(){ return !skeleton_gen_->area_handler_->areas_need_predict_.empty();}
+    /**
+     * Save the current scene graph map to disk.
+     *
+     * @param[in] save_name  File name (empty = auto-generated timestamp)
+     * @return True if save succeeded
+     */
     bool saveMap(const std::string& save_name = "");
+    /**
+     * Load a scene graph map from disk.
+     *
+     * @param[in] save_name  File name
+     * @return True if load succeeded
+     */
     bool loadMap(const std::string& save_name);
 
-    // visualization //
     void refreshLoadedMapVisualization();
     void visualizeSceneGraph();
 

@@ -201,6 +201,14 @@ struct TimeStatistics
   double max_esdftime = 0;
 };
 
+/**
+ * Occupancy grid map with ESDF and inflation support.
+ *
+ * Maintains a ring-buffered 3D occupancy grid from depth camera input,
+ * computes a Euclidean Signed Distance Field (ESDF), and provides
+ * inflation layers for collision checking. Supports dual-resolution
+ * maps (small local + large global) via MapManager.
+ */
 class GridMap
 {
 public:
@@ -209,43 +217,200 @@ public:
 
   enum OCCUPANCY { FREE, OCCUPIED, UNKNOWN };
 
+  /**
+   * Initialize the map from ROS parameters.
+   *
+   * @param[in] nh  ROS node handle
+   */
   void initMap(ros::NodeHandle &nh);
+  /**
+   * Adjust map parameters at runtime.
+   *
+   * @param[in] reso         Grid resolution [m]
+   * @param[in] rangex       Local map X range [m]
+   * @param[in] rangey       Local map Y range [m]
+   * @param[in] rangez       Local map Z range [m]
+   * @param[in] esdf_en      Enable ESDF computation
+   * @param[in] inf_en       Enable inflation
+   * @param[in] multi_thread Enable multi-threaded update
+   * @param[in] suffix       Parameter namespace suffix
+   */
   void paramAdjust(double reso, double rangex, double rangey, double rangez, bool esdf_en, bool inf_en, bool multi_thread, std::string suffix);
+  /**
+   * Get raw occupancy at a position.
+   *
+   * @param[in] pos  Position [m]
+   * @return (-1) out of map, (0) FREE, (1) OCCUPIED, (2) UNKNOWN
+   */
   inline int getRawOccupancy(const Eigen::Vector3d &pos) const;
+  /**
+   * Get raw occupancy at a voxel index.
+   *
+   * @param[in] idx  Voxel index [voxel]
+   * @return (-1) out of map, (0) FREE, (1) OCCUPIED, (2) UNKNOWN
+   */
   inline int getRawOccupancy(const Eigen::Vector3i &idx) const;
+  /**
+   * Get raw occupancy from the output buffer at a position.
+   *
+   * @param[in] pos  Position [m]
+   * @return (-1) out of map, (0) FREE, (1) OCCUPIED, (2) UNKNOWN
+   */
   inline int getRawOccupancyOutput(const Eigen::Vector3d &pos) const;
+  /**
+   * Get raw occupancy from the output buffer at a voxel index.
+   *
+   * @param[in] idx  Voxel index [voxel]
+   * @return (-1) out of map, (0) FREE, (1) OCCUPIED, (2) UNKNOWN
+   */
   inline int getRawOccupancyOutput(const Eigen::Vector3i &idx) const;
+  /**
+   * Get inflated occupancy at a position.
+   *
+   * @param[in] pos                Position [m]
+   * @param[in] ignore_virtual_wall  Ignore virtual ceiling/floor walls
+   * @return (-1) out of map/wall, (0) free, (1) occupied
+   */
   inline int getOccupancy(const Eigen::Vector3d &pos, bool ignore_virtual_wall = false) const;
+  /**
+   * Get inflated occupancy with full obstacle flag.
+   *
+   * @param[in] pos  Position [m]
+   * @return (20000) out of region, (0) free, (>0) obstacle count
+   */
   inline int getInflateOccupancy(const Eigen::Vector3d &pos) const;
+  /**
+   * Get raw inflated occupancy including UNKNOWN region flags.
+   *
+   * @param[in] pos  Position [m]
+   * @return (20000) out of region, (-15000) unknown, (0) free, (>0) obstacle count
+   */
   inline int getRawInflateOccupancy(const Eigen::Vector3d &pos) const;
+  /**
+   * Get the ESDF distance at a position (trilinearly interpolated).
+   *
+   * @param[in] pos  Position [m]
+   * @return Distance to nearest obstacle [m]
+   */
   inline double getDistance(const Eigen::Vector3d &pos) const;
-  inline double getDistance(const Eigen::Vector3i &id) const; // not recommaneded
+  /**
+   * Get the ESDF distance at a voxel index (not recommended, use position overload).
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Distance to nearest obstacle [m]
+   */
+  inline double getDistance(const Eigen::Vector3i &id) const;
+  /**
+   * Get pessimistic distance (clamped to 0 for unknown/map-exterior regions).
+   *
+   * @param[in] pos  Position [m]
+   * @return Distance to nearest obstacle [m], 0 if unknown/out of bounds
+   */
   inline double getDistancePessi(const Eigen::Vector3d &pos) const;
+  /**
+   * Get the grid resolution.
+   *
+   * @return Grid resolution [m]
+   */
   inline double getResolution() const;
+  /**
+   * Set the target position for dynamic map centering.
+   *
+   * @param[in] target_pos       Target position [m]
+   * @param[in] target_pos_valid Whether the target is valid
+   */
   inline void setTarget(const Eigen::Vector3d &target_pos, const bool &target_pos_valid);
+  /**
+   * Check whether odometry-depth data has timed out.
+   *
+   * @return True if no depth data received within the timeout window
+   */
   bool getOdomDepthTimeout() const { return md_.flag_have_ever_received_depth_ ? (ros::Time::now() - md_.last_occ_update_time_).toSec() > mp_.odom_depth_timeout_ : false; }
+  /**
+   * Evaluate ESDF distance and gradient at a position (trilinear interpolation).
+   *
+   * @param[in]  pos   Position [m]
+   * @param[out] dist  Interpolated ESDF distance [m]
+   * @param[out] grad  Gradient vector (3 elements, may be NULL) [--/m]
+   * @return True if evaluation succeeded (position within known region)
+   */
   inline bool evaluateESDFWithGrad(const Eigen::Vector3d &pos, double &dist, double *grad) const;
+  /**
+   * Get the camera field of view.
+   *
+   * @return Pair of (horizontal FOV, vertical FOV) [rad]
+   */
   inline std::pair<double, double> getFOV() const { return std::pair<double, double>(mp_.cx_ / mp_.fx_, mp_.cy_ / mp_.fy_); };
+  /**
+   * Get the grid center position of the voxel containing pos.
+   *
+   * @param[in] pos  Position [m]
+   * @return Grid center position [m]
+   */
   inline Eigen::Vector3d getGridCenter(Eigen::Vector3d pos) const { return globalIdx2Pos(pos2GlobalIdx(pos)); };
+  /**
+   * Get the local map update range.
+   *
+   * @return Local update range vector [m]
+   */
   inline Eigen::Vector3d getLocalMapRange() const { return mp_.local_update_range3d_; };
   void LockCopyToOutputInfMap(bool lock);
   void LockCopyToOutputAllMap(bool lock);
   void resetOccupancyToUnknown();
+  /**
+   * Get the occupancy update sequence counter.
+   *
+   * @return Current update sequence number [--]
+   */
   inline uint64_t getOccupancyUpdateSeq() const { return occupancy_update_seq_.load(); }
 
   int getu(int cols);
+  /**
+   * Get the total number of voxels in the map.
+   *
+   * @return Voxel count [--]
+   */
   inline int getVoxelNum() const { return md_.map_voxel_num_; };
   void getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax);
   void getUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx);
   bool getFrontierUpdatedBoxIdx(Eigen::Vector3i& bmin_inx, Eigen::Vector3i& bmax_inx,
                                 bool reset_after_read);
+  /**
+   * Check whether the map has received initial sensor data.
+   *
+   * @return True if odometry and depth/pointcloud data have been received
+   */
   inline bool isInited() const {return (md_.has_odom_ && (md_.flag_have_ever_received_depth_ || md_.flag_have_ever_received_pc_)); }
 
   inline bool isInBuf(const Eigen::Vector3d &pos) const;
   inline bool isInBuf(const Eigen::Vector3i &idx) const;
-  inline Eigen::Vector3d globalIdx2Pos(const Eigen::Vector3i &id) const;  // 1.69ns
-  inline Eigen::Vector3i pos2GlobalIdx(const Eigen::Vector3d &pos) const; // 0.13ns
-  inline size_t globalIdx2BufIdx(const Eigen::Vector3i &id) const;        // 2.2ns
+  /**
+   * Convert voxel index to global position (grid center).
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Grid center position [m]
+   */
+  inline Eigen::Vector3d globalIdx2Pos(const Eigen::Vector3i &id) const;
+  /**
+   * Convert global position to voxel index.
+   *
+   * @param[in] pos  Global position [m]
+   * @return Voxel index [voxel]
+   */
+  inline Eigen::Vector3i pos2GlobalIdx(const Eigen::Vector3d &pos) const;
+  /**
+   * Convert voxel index to linear ring-buffer index.
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Linear buffer index [--]
+   */
+  inline size_t globalIdx2BufIdx(const Eigen::Vector3i &id) const;
+  /**
+   * Convert voxel index to temporary 3D buffer index (for ESDF computation).
+   *
+   * @param[in] id  Voxel index [voxel]
+   * @return Temporary buffer index [voxel]
+   */
   inline Eigen::Vector3i globalIdx2TmpBuf3dIdx(const Eigen::Vector3i &id) const;
 
   typedef std::shared_ptr<GridMap> Ptr;
@@ -860,6 +1025,13 @@ inline void GridMap::recordFrontierUpdate(const Eigen::Vector3i& idx)
   md_.frontier_update_range_ub3i_ = max3i(md_.frontier_update_range_ub3i_, idx);
 }
 
+/**
+ * Dual-map manager (small local + large global).
+ *
+ * Manages two GridMap instances: a small-resolution local map for
+ * real-time planning and a larger map for global awareness.
+ * Provides a unified interface via the `cur_` pointer.
+ */
 class MapManager
 {
 public:
