@@ -20,6 +20,36 @@ Demonstrations about the planner have been reported on the [IEEE Spectrum](https
 - `fsm/frontier_update_dt`: frontier后台刷新周期，单位秒；仿真配置默认使用`0.2`，实机配置默认使用`0.5`。
 - `exploration/frontier_tsp_mode`: frontier与TSP的耦合模式。`0`表示沿用本仓库当前帧更新盒、异步timer刷新frontier、TSP读取已有列表的方案；`1`表示累计自上次搜索以来的雷达地图更新盒，按FUEL方式膨胀新frontier搜索区域，并在TSP规划前同步消费最新更新。两种模式均保留HGrid过滤和现有frontier消除逻辑。
 
+## VLA_Swarm Path Execution
+
+VLA_Swarm 的门目标使用 SmallMap 八邻域 A* 生成二维路径，并通过现有
+`MapInterface::searchPath()` 验证三维终点可达性。房间、场景对象和 bbox
+定位目标直接使用三维 A*。所有路径按 `vla_swarm/waypoint_distance` 采样后，
+复用 `local_goal`、`/planning/ego_plan_result` 和 `exec_finish_trigger` 完成推进。
+
+主要参数：
+
+- `vla_swarm/flight_height`：房间和门路径的飞行高度。
+- `vla_swarm/waypoint_distance`：连续 waypoint 的目标间距。
+- `vla_swarm/goal_tolerance`：里程计判定 waypoint 到达的距离阈值。
+- `vla_swarm/astar_clearance_px`：SmallMap A* 前对自由空间执行的像素级安全收缩。
+- `vla_swarm/ego_plan_timeout`：等待当前 waypoint 规划结果的超时时间。
+- `vla_swarm/ego_exec_timeout`：等待当前 waypoint 执行完成的超时时间。
+- `vla_swarm/max_plan_retries`：规划失败或超时后的最大重发次数。
+- `vla_swarm/camera_topic`：单前视相机压缩图像话题。
+- `vla_swarm/observation_topic`：固化 Observation 的发布话题。
+- `vla_swarm/scan_yaw_offsets_deg`：相对基准方向的渐进扫描顺序，默认 `[0, 90, -90, 180]`。
+- `vla_swarm/scan_yaw_tolerance`：判定 yaw 到位的角度误差，单位弧度。
+- `vla_swarm/scan_settle_time`：yaw 到位后等待机体和图像稳定的时间。
+- `vla_swarm/scan_timeout`：单个观察方向的旋转与取图总超时。
+
+到达门或相关房间后，状态机以路径末端方向作为扫描基准，优先检查正面；未发现任务目标时
+再按左、右、后方渐进旋转。每次 yaw 到位后，状态机固化前视图像、session、批次、序号和
+历史位姿并发布 `VLASwarmObservation`。视觉模型返回 `found=true` 时立即进入 bbox 定位，
+不会继续完成剩余方向。到达明确对象或 bbox 三维目标后发布 `target_reached`。不可达、
+规划失败和执行超时会进入统一
+`VLA_SWARM_RECOVERY`，并在结果消息中保留具体失败原因。
+
 
 
 

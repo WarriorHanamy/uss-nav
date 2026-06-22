@@ -10,8 +10,10 @@ find_package(catkin REQUIRED COMPONENTS
     roscpp
     roslib
     std_msgs
+    geometry_msgs
     nav_msgs
     sensor_msgs
+    cv_bridge
     map_interface
     tf
     message_generation 
@@ -42,6 +44,7 @@ add_message_files(
   WordVector.msg
   EncodeMask.msg
   PromptMsg.msg
+  VLASwarmObservation.msg
 )
 
 generate_messages(
@@ -55,8 +58,17 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES scene_graph
-  CATKIN_DEPENDS message_generation message_runtime 
-  DEPENDS system_lib
+  CATKIN_DEPENDS
+    roscpp
+    roslib
+    std_msgs
+    geometry_msgs
+    nav_msgs
+    sensor_msgs
+    cv_bridge
+    map_interface
+    tf
+    message_runtime
 )
 
 # 建立一个文件列表，存放所有需要编译的源文件

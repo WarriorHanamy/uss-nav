@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>box_odom_estimator</name>
+  <version>0.1.0</version>
+  <description>VLA_Swarm LiDAR target estimator with MoGe fallback.</description>
+  <maintainer email="todo@todo.todo">VLA_Diff Maintainer</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>nav_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>roscpp</depend>
+  <depend>scene_graph</depend>
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <export/>
+</package>

@@ -321,6 +321,7 @@ void SceneGraph::sendSceneGraphJson(std::string &scene_graph_json_str){
 
 bool SceneGraph::vlaSwarmPromptGen(unsigned char prompt_type, const std::string &command,
                                   uint32_t task_session_id, uint32_t observation_batch_id,
+                                  const nlohmann::json &semantic_context,
                                   std::string &prompt_str) const
 {
     const bool supported =
@@ -330,32 +331,46 @@ bool SceneGraph::vlaSwarmPromptGen(unsigned char prompt_type, const std::string 
         return false;
     }
 
-    // 阶段四统一构造会话字段。地图、房间、门和 Observation 数据由后续阶段填充，
-    // 当前使用空数组明确表示数据尚未产生，避免处理端误用实时流或历史任务数据。
+    // 会话字段由 SceneGraph 统一构造，SmallMap 模块只提供当前地图语义快照。
     nlohmann::json data;
     data["overall_task"] = command;
     data["task_session_id"] = task_session_id;
     data["observation_batch_id"] = observation_batch_id;
     data["single_robot"] = true;
+    if (semantic_context.is_object()) {
+        for (auto context_iter = semantic_context.begin();
+             context_iter != semantic_context.end(); ++context_iter) {
+            data[context_iter.key()] = context_iter.value();
+        }
+    }
 
     switch (prompt_type) {
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION:
-            data["candidate_ids"] = nlohmann::json::array();
-            data["room_descriptions"] = nlohmann::json::array();
+            if (!data.contains("candidate_ids")) {
+                data["candidate_ids"] = nlohmann::json::array();
+            }
+            if (!data.contains("room_descriptions")) {
+                data["room_descriptions"] = nlohmann::json::array();
+            }
             break;
         case scene_graph::PromptMsg::PROMPT_TYPE_TASK_CHAT_PREDICTION:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_AA:
             data["key_action_history"] = nlohmann::json::array();
             break;
         case scene_graph::PromptMsg::PROMPT_TYPE_PLACE_PREDICTION:
-            data["explored_rooms"] = nlohmann::json::array();
-            data["detected_objects"] = nlohmann::json::array();
+            if (!data.contains("explored_rooms")) {
+                data["explored_rooms"] = nlohmann::json::array();
+            }
+            if (!data.contains("detected_objects")) {
+                data["detected_objects"] = nlohmann::json::array();
+            }
             break;
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A1:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A2:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A3:
-            data["object_need"] = nlohmann::json::array();
+            // 单机渐进观察直接使用总体任务描述约束目标，避免空 object_need 诱发无关 bbox。
+            data["object_need"] = nlohmann::json::array({command});
             break;
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B1:

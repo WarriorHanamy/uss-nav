@@ -16,7 +16,7 @@ from scene_graph.msg import PromptMsg
 from vla_swarm_prompt_router import (
     create_answer,
     load_prompt_specs,
-    resolve_text_request,
+    resolve_prompt_request,
     structured_error,
 )
 
@@ -113,9 +113,19 @@ def call_llm_api(prompt_in: PromptMsg) -> PromptMsg:
     prompt_id = prompt_in.prompt_id
 
     try:
-        route, route_error = resolve_text_request(prompt_in, prompt_routes)
+        route, route_error = resolve_prompt_request(prompt_in, prompt_routes)
         if route_error:
             return create_answer(PromptMsg, prompt_in, route_error, rospy.Time.now())
+        if route["visual_input"]:
+            capability_error = structured_error(
+                "vision_model_not_supported",
+                "{} requires {}, but this DeepSeek node is text-only".format(
+                    route["mode"], route["visual_input"]
+                ),
+            )
+            return create_answer(
+                PromptMsg, prompt_in, capability_error, rospy.Time.now()
+            )
 
         logger.info("   [ID: {}] Calling DeepSeek in [{}] mode...", prompt_id, route["mode"])
         answer_text = _create_deepseek_message(route["system_prompt"], prompt_in.prompt)

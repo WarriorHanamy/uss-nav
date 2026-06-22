@@ -88,6 +88,7 @@ public:
     void sendSceneGraphJson(std::string &scene_graph_json_str);
     bool vlaSwarmPromptGen(unsigned char prompt_type, const std::string &command,
                            uint32_t task_session_id, uint32_t observation_batch_id,
+                           const nlohmann::json &semantic_context,
                            std::string &prompt_str) const;
 
     // result handle //

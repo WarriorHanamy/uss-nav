@@ -9,10 +9,13 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -Wall")
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  sensor_msgs
   geometry_msgs
+  scene_graph
   quadrotor_msgs
   traj_utils
   active_perception
@@ -25,8 +28,8 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES exploration_manager
- CATKIN_DEPENDS active_perception traj_utils ego_planner mavros # lkh_tsp_solver
-#  DEPENDS system_lib
+ CATKIN_DEPENDS active_perception traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph # lkh_tsp_solver
+ DEPENDS OpenCV
 )
 
 include_directories(
@@ -35,18 +38,21 @@ include_directories(
   ${catkin_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/include
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 add_executable(exploration_node
   src/exploration_node.cpp 
   src/fast_exploration_fsm.cpp
   src/frontier_manager.cpp
+  src/vla_swarm_map.cpp
 #        src/perception_data_factory.cpp
 )
 add_dependencies(exploration_node ${catkin_EXPORTED_TARGETS})
 
 target_link_libraries(exploration_node 
   ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
   # -ldw
   )
 
