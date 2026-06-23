@@ -107,15 +107,20 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
     PolyHedronPtr father = obj->edge.polyhedron_father;
 
     // 搜索 + 占据校验 + 标记不可达 + 自动绕行重搜
+    // iter=0: 首次搜索仅依赖 scene-graph 拓扑, 不做 occupancy inflate 校验, 快速确认初始路径
+    // iter>=1: 对中间 polyhedron 做 inflate 校验, 封锁不可达节点后触发 A* 绕行重搜
     bool ok = false;
     for (int iter = 0; iter < topo_block_max_iter_; ++iter) {
         if (topo_block_enable_) revalidateBlocked();                 // 策略A: 清理过期标记
         double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
         skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
         if (path.empty() || dis >= 99998.0) break;                   // 退化直连(搜索失败)不可接受
+
+        // 首次搜索(iter=0)直接接受 scene-graph 拓扑路径, 不校验 inflate
+        if (iter == 0) { ok = true; break; }
         if (!topo_block_enable_) { ok = true; break; }
 
-        // 校验路径中(在 local map 内的)中间点是否落入膨胀层
+        // iter>=1: 校验路径中(在 local map 内的)中间点是否落入膨胀层
         bool any_blocked = false;
         for (auto &poly : last_poly_path_) {
             if (poly == nullptr)              continue;
