@@ -37,6 +37,7 @@ struct FSMData
   Eigen::Vector3d         odom_pos_, odom_vel_;
   Eigen::Quaterniond      odom_orient_;
   double                  odom_yaw_;
+  double                  odom_yaw_rate_;            // 角速度 rad/s(里程计回调填充)
 
   // start state
   Eigen::Vector3d         start_pt_, start_vel_, start_acc_, start_yaw_;
@@ -90,6 +91,10 @@ struct FSMData
   int object_target_id_;
   u_int8_t go_object_process_phase{0};
   u_int8_t go_waypoint_process_phase{0};
+  // 卡死强制推进
+  double  stuck_begin_time_{-1.0};       // 进入卡死计时起点(秒), -1表示未进入
+  int     stuck_force_advance_count_{0}; // 连续强制推进计数
+  bool    stuck_force_advance_triggered_{false}; // 本轮是否已触发(防重复)
   bool new_topo_need_predict_immediately_{false};
   bool regular_explore_{false};
   bool find_terminate_target_mode_{false};
@@ -127,6 +132,12 @@ struct FSMParam
   std::string             elastic_tracker_trigger_topic_{"/triger"};
   std::string             elastic_tracker_finish_topic_{"/elastic_tracker/tracking_finish"};
   std::string             elastic_tracker_stop_topic_{"/elastic_tracker/stop"};
+  // 卡死强制推进参数
+  bool   stuck_force_advance_enable_{true};
+  double stuck_force_advance_vel_thresh_{0.1};
+  double stuck_force_advance_yaw_rate_thresh_{0.1};
+  double stuck_force_advance_duration_{3.0};
+  int    stuck_force_advance_max_consecutive_{2};
 };
 
 struct ExplorationData {

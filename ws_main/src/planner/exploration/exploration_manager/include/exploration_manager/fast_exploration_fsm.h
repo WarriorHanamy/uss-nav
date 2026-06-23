@@ -310,6 +310,7 @@ private:
 
   void displayMissionState();
   void displayPath();
+  void displayLocalAim();   // 当前导航点橙色marker可视化
   void visualize(const ros::TimerEvent& e);
 
   // TOOLS

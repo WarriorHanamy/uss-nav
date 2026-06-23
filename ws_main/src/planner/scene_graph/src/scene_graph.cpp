@@ -179,24 +179,42 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
     if (fl < 1e-3) return false;
     fwd /= fl;
 
-    // 阶段1: 沿 fwd 方向粗扫, 找离 p 最近的 inflate-free (且 optionally visible to toward) 的锚点
+    // 阶段1: 沿 fwd 方向粗扫, 找离 p 最近的 inflate-free 点
+    // 可见性策略由 topo_repair_vis_mode_ 控制:
+    //   0: isVisible 拦截; 1: 关闭 isVisible; 2: 优先 isVisible, 无解时回退到首个inflate-free点(后续由调用方尝试球交会)
     bool   anchor_found = false;
+    bool   anchor_fallback_found = false;
+    Eigen::Vector3d anchor_fallback;
     for (double d = 0.0; d <= R; d += step) {
         Eigen::Vector3d probe = p + d * fwd;
         if (!map_interface_->isInLocalMap(probe)) continue;
         if (map_interface_->getInflateOccupancy(probe) != ego_planner::MapInterface::FREE) continue;
-        if (map_interface_->getOccupancy(probe) == ego_planner::MapInterface::UNKNOWN) continue;  // 未观测区域不生成修复点
-        if (topo_repair_use_visibility_ && !map_interface_->isVisible(probe, toward)) continue;
+        if (map_interface_->getOccupancy(probe) == ego_planner::MapInterface::UNKNOWN) continue;
+        // 记录首个 inflate-free 已知点作为模式2回退锚点
+        if (!anchor_fallback_found) {
+            anchor_fallback = probe;
+            anchor_fallback_found = true;
+        }
+        // 可见性检查 — 模式1跳过, 模式0/2执行
+        if (topo_repair_vis_mode_ != 1 && !map_interface_->isVisible(probe, toward)) continue;
         p_out = probe;
         anchor_found = true;
         break;   // 取最近满足条件的点
     }
+    // 模式2回退: 所有 probe 都未通过 isVisible → 使用首个 inflate-free 点, 后续由调用方处理球交会
+    if (!anchor_found && topo_repair_vis_mode_ == 2 && anchor_fallback_found) {
+        p_out = anchor_fallback;
+        anchor_found = true;
+    }
     if (!anchor_found) return false;
 
-    // 阶段2: 以锚点为中心, 在 0.3m 小球内微调取最优(距锚点最近且 inflate-free, optionally 过 isVisible 确认)
+    // 阶段2: 以锚点为中心, 在 0.3m 小球内微调取最优(距锚点最近且 inflate-free)
     const double refine = 0.3;
     const Eigen::Vector3d anchor = p_out;   // 固定锚点, 避免循环内 p_out 被边搜边改导致采样中心漂移
     double best = 1e9;
+    bool   best_found = false;
+    Eigen::Vector3d best_fallback;
+    double best_fallback_dist = 1e9;
     for (double dx = -refine; dx <= refine + 1e-6; dx += step)
         for (double dy = -refine; dy <= refine + 1e-6; dy += step)
             for (double dz = -refine; dz <= refine + 1e-6; dz += step) {
@@ -204,12 +222,71 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
                 if ((c - anchor).norm() > refine) continue;
                 if (!map_interface_->isInLocalMap(c)) continue;
                 if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
-                if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;  // 未观测区域不生成修复点
-                if (topo_repair_use_visibility_ && !map_interface_->isVisible(c, toward)) continue;
+                if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
                 double sc = (c - anchor).norm();
-                if (sc < best) { best = sc; p_out = c; }
+                // 记录最优回退点(不考虑isVisible)
+                if (sc < best_fallback_dist) {
+                    best_fallback_dist = sc;
+                    best_fallback = c;
+                }
+                // 可见性检查 — 模式1跳过, 模式0/2执行
+                if (topo_repair_vis_mode_ != 1 && !map_interface_->isVisible(c, toward)) continue;
+                if (sc < best) { best = sc; p_out = c; best_found = true; }
             }
+    // 模式2回退: 细化阶段无 isVisible 通过点 → 使用距锚点最近的回退点
+    if (!best_found && topo_repair_vis_mode_ == 2 && best_fallback_dist < 1e9) {
+        p_out = best_fallback;
+    }
     return true;
+}
+
+bool SceneGraph::findIntersectionMidpoint(const Eigen::Vector3d &probe, const Eigen::Vector3d &toward,
+                                          double sphere_radius, Eigen::Vector3d &mid_out) {
+    if (map_interface_ == nullptr) return false;
+    const double d_full = (probe - toward).norm();
+    // 两球不相交
+    if (d_full > 2.0 * sphere_radius) return false;
+    if (d_full < 1e-3) return false;
+
+    // 交会圆: 圆心在 probe→toward 中点, 半径 r_cross = sqrt(R² - (d/2)²)
+    const Eigen::Vector3d mid_center = (probe + toward) * 0.5;
+    const double half_d = d_full * 0.5;
+    const double r_cross_sq = sphere_radius * sphere_radius - half_d * half_d;
+    if (r_cross_sq < 0.0) return false;
+    const double r_cross = std::sqrt(r_cross_sq);
+
+    // 在 probe→toward 方向的垂直平面上采样
+    // 构建局部坐标系: vz = normalize(toward - probe), vx/vy 为垂直平面基向量
+    const Eigen::Vector3d vz = (toward - probe) / d_full;
+    Eigen::Vector3d vx, vy;
+    if (std::fabs(vz.z()) < 0.9) {
+        vx = vz.cross(Eigen::Vector3d::UnitZ()).normalized();
+    } else {
+        vx = vz.cross(Eigen::Vector3d::UnitX()).normalized();
+    }
+    vy = vz.cross(vx).normalized();
+
+    const double step = 0.1;
+    // 交会圆平面采样
+    for (double r = 0.0; r <= r_cross + 1e-6; r += step) {
+        const int n_angle = (r < step) ? 1 : std::max(6, (int)(2.0 * M_PI * r / step));
+        for (int ai = 0; ai < n_angle; ++ai) {
+            const double angle = 2.0 * M_PI * (double)ai / (double)n_angle;
+            const Eigen::Vector3d c = mid_center + r * std::cos(angle) * vx + r * std::sin(angle) * vy;
+            // 验证: c 在 probe 和 toward 的 sphere_radius 范围内
+            if ((c - probe).norm() > sphere_radius + 1e-3) continue;
+            if ((c - toward).norm() > sphere_radius + 1e-3) continue;
+            if (!map_interface_->isInLocalMap(c)) continue;
+            if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
+            if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
+            // 双向 isVisible 检查
+            if (!map_interface_->isVisible(probe, c)) continue;
+            if (!map_interface_->isVisible(c, toward)) continue;
+            mid_out = c;
+            return true;
+        }
+    }
+    return false;
 }
 
 void SceneGraph::markPolyhedronBlocked(const Eigen::Vector3d &center, bool force) {

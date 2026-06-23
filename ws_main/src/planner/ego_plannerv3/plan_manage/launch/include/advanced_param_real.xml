@@ -268,12 +268,21 @@
         <!-- topo 导航不可达: 检测/修复/标记/恢复 -->
         <param name="topo_block/enable"                  type="bool"   value="true"/>
         <param name="topo_block/repair_radius"           type="double" value="0.5"/>
-        <param name="topo_block/repair_use_visibility"   type="bool"   value="false"/>
+        <!-- repair可见性模式: 0=当前方案(isVisible拦截projectToInflateFree内部检查), 1=关闭isVisible, 2=isVisible+球交会中间点 -->
+        <param name="topo_block/repair_vis_mode"         type="int"    value="0"/>
+        <!-- 模式2专用: 可见性球半径(m), probe和toward各自画球, 在交会区域采样中间点 -->
+        <param name="topo_block/repair_vis_sphere_radius" type="double" value="2.0"/>
         <param name="topo_block/hits_thresh"             type="int"    value="2"/>
         <param name="topo_block/repair_insert_node"     type="bool"   value="false"/>
         <param name="topo_block/ttl"                     type="double" value="8.0"/>
         <param name="topo_block/revalidate_on_fail"      type="bool"   value="true"/>
         <param name="topo_block/max_iter"                type="int"    value="4"/>
+        <!-- 卡死强制推进: 速度/角速度均低于阈值且持续超时后, 强制推进一个topo节点 -->
+        <param name="topo_block/stuck_force_advance_enable"          type="bool"   value="true"/>
+        <param name="topo_block/stuck_force_advance_vel_thresh"      type="double" value="0.1"/>
+        <param name="topo_block/stuck_force_advance_yaw_rate_thresh" type="double" value="0.1"/>
+        <param name="topo_block/stuck_force_advance_duration"        type="double" value="3.0"/>
+        <param name="topo_block/stuck_force_advance_max_consecutive" type="int"    value="2"/>
 
         <!-- skeleton -->
         <param name="skeleton/local_x_max" value="4"/>

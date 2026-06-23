@@ -46,7 +46,8 @@ public:
         // 拓扑点不可达检测/修复/标记 参数(可被 YAML/launch 覆盖)
         nh_.param("topo_block/enable",                  topo_block_enable_,             true);
         nh_.param("topo_block/repair_radius",           topo_repair_radius_,            0.5);
-        nh_.param("topo_block/repair_use_visibility",   topo_repair_use_visibility_,    true);
+        nh_.param("topo_block/repair_vis_mode",         topo_repair_vis_mode_,           0);
+        nh_.param("topo_block/repair_vis_sphere_radius", topo_repair_vis_sphere_radius_, 2.0);
         nh_.param("topo_block/hits_thresh",             topo_block_hits_thresh_,        2);
         nh_.param("topo_block/ttl",                     topo_block_ttl_,                8.0);
         nh_.param("topo_block/revalidate_on_fail",      topo_block_revalidate_on_fail_, true);
@@ -80,6 +81,9 @@ public:
     // C0: 把不可达点投影到最近的 (在local map内 且 inflate-free) 点;
     //     toward 为前进参考点(下一个路径点/目标), 投影结果趋向该方向且排除往回方向; 失败返回 false
     bool projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out);
+    // 球交会中间点: probe和toward各自画半径为sphere_radius的可见性球, 在交会区域搜索inflate-free且双向isVisible的中间点
+    bool findIntersectionMidpoint(const Eigen::Vector3d &probe, const Eigen::Vector3d &toward,
+                                  double sphere_radius, Eigen::Vector3d &mid_out);
     // 按 center 在上次 A* 路径多面体中查找并标记 nav_blocked_(force=true 时立即置位, 否则按去抖累计)
     void markPolyhedronBlocked(const Eigen::Vector3d &center, bool force = false);
     // 策略A: 遍历被标记节点, 超过 TTL 的重新校验 occupancy, 已空闲则清除标记
@@ -148,7 +152,8 @@ private:
     std::vector<PolyHedronPtr>     blocked_list_;        // 当前被标记不可达的多面体(供 TTL 重校验/清除)
     bool   topo_block_enable_               = true;
     double topo_repair_radius_              = 0.5;
-    bool   topo_repair_use_visibility_      = true;
+    int    topo_repair_vis_mode_            = 0;    // 0=isVisible拦截, 1=关闭isVisible, 2=isVisible+球交会中间点
+    double topo_repair_vis_sphere_radius_   = 2.0;  // 模式2专用球半径
     int    topo_block_hits_thresh_          = 2;
     double topo_block_ttl_                = 8.0;
     bool   topo_block_revalidate_on_fail_ = true;

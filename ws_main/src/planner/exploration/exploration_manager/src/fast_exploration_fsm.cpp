@@ -109,6 +109,12 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("elastic_tracker/trigger_topic",    fp_->elastic_tracker_trigger_topic_, std::string("/triger"));
   nh.param("elastic_tracker/finish_topic",     fp_->elastic_tracker_finish_topic_, std::string("/elastic_tracker/tracking_finish"));
   nh.param("elastic_tracker/stop_topic",       fp_->elastic_tracker_stop_topic_, std::string("/elastic_tracker/stop"));
+  // 卡死强制推进参数
+  nh.param("topo_block/stuck_force_advance_enable",          fp_->stuck_force_advance_enable_, true);
+  nh.param("topo_block/stuck_force_advance_vel_thresh",      fp_->stuck_force_advance_vel_thresh_, 0.1);
+  nh.param("topo_block/stuck_force_advance_yaw_rate_thresh", fp_->stuck_force_advance_yaw_rate_thresh_, 0.1);
+  nh.param("topo_block/stuck_force_advance_duration",        fp_->stuck_force_advance_duration_, 3.0);
+  nh.param("topo_block/stuck_force_advance_max_consecutive", fp_->stuck_force_advance_max_consecutive_, 2);
   nh.param("vla_swarm/enable",                  vla_swarm_enabled_, false);
   nh.param("vla_swarm/result_topic",            vla_swarm_result_topic_, std::string("/planning/vla_swarm_result"));
   nh.param("vla_swarm/bbox_topic",              vla_swarm_bbox_topic_, std::string("/vla_swarm/bbox"));
@@ -2717,6 +2723,9 @@ void FastExplorationFSM::goTargetObject() {
       getAndPublishNextAim(fd_->path_res_, true, 0.0f);
       fd_->path_inx_        = 0;
       fd_->has_rotated_     = false;
+      fd_->stuck_begin_time_ = -1.0;                  // 新路径生成时重置卡死计时
+      fd_->stuck_force_advance_count_ = 0;             // 新路径生成时重置强制推进计数
+      fd_->stuck_force_advance_triggered_ = false;
       fd_->last_pub_time_   = ros::Time::now();
       INFO_MSG("[Targ Obj] | PubNxtLocalAim, aim: " << fd_->local_aim_pos_ << ", global aim: " << fd_->aim_pos_);
 
@@ -2747,6 +2756,8 @@ void FastExplorationFSM::goTargetObject() {
     ROS_INFO_STREAM_THROTTLE(0.5, "[Targ Obj] : ego plan times: " << fd_->ego_plan_times_
                                                                   << "  ego plan statue: " << ego_plan_status_str_
                                                                   << "  ego modify status: " << ego_modify_status_str_);
+
+    displayLocalAim();  // 橙色marker标记当前导航点
 
     if (dis_2_aim_2d < fp_->replan_dis_thresh_ && fabs(fd_->odom_yaw_ - fd_->aim_yaw_) / 3.14 * 180.0f < 5.0) {
       ROS_WARN("-------------> Finish: [Reach Both Pos&Yaw Aim] <-------------");
@@ -2780,6 +2791,42 @@ void FastExplorationFSM::goTargetObject() {
       return;
     }
 
+    // 卡死强制推进: 速度/角速度均低于阈值且持续超时后, 强行推进一个topo节点(最后判定)
+    if (fp_->stuck_force_advance_enable_) {
+      double vel_norm = fd_->odom_vel_.norm();
+      double yaw_rate = fabs(fd_->odom_yaw_rate_);
+      if (vel_norm < fp_->stuck_force_advance_vel_thresh_ &&
+          yaw_rate < fp_->stuck_force_advance_yaw_rate_thresh_) {
+        if (fd_->stuck_begin_time_ < 0.0) {
+          fd_->stuck_begin_time_ = ros::Time::now().toSec();
+        }
+        double stuck_duration = ros::Time::now().toSec() - fd_->stuck_begin_time_;
+        if (stuck_duration > fp_->stuck_force_advance_duration_ &&
+            !fd_->stuck_force_advance_triggered_ &&
+            fd_->stuck_force_advance_count_ < fp_->stuck_force_advance_max_consecutive_) {
+          if (fd_->path_inx_ < (int)fd_->path_res_.size() - 1) {
+            fd_->path_inx_++;
+            fd_->stuck_force_advance_count_++;
+            fd_->stuck_force_advance_triggered_ = true;
+            fd_->stuck_begin_time_ = -1.0;
+            getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+            fd_->last_pub_time_ = ros::Time::now();
+            ROS_WARN("[Targ Obj] Stuck force advance! path_inx=%d, count=%d",
+                     fd_->path_inx_, fd_->stuck_force_advance_count_);
+          } else {
+            // 已是最后一个点无法再推进 → 走全局重规划
+            ROS_WARN("[Targ Obj] Stuck at final waypoint, forced replan");
+            fd_->go_object_process_phase = 0;
+            transitState(WAIT_TRIGGER, "stuck at final waypoint, forced replan");
+            return;
+          }
+        }
+      } else {
+        fd_->stuck_begin_time_ = -1.0;             // 有运动, 重置计时器
+        fd_->stuck_force_advance_triggered_ = false; // 运动表示脱离原卡死状态, 允许下次再触发
+      }
+    }
+
     // Close to aim, rotate yaw
     if ((fd_->path_inx_ >= fd_->path_res_.size() - 1 || fd_->path_res_.size() == 2) &&
         dis_2_aim_2d < expl_manager_->ep_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_){
@@ -2805,6 +2852,8 @@ void FastExplorationFSM::goTargetObject() {
         return ;
       }
       getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+      fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
+      fd_->stuck_force_advance_triggered_ = false;
       fd_->last_pub_time_ = ros::Time::now();
       // INFO_MSG_GREEN("[TARG Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     }
@@ -3065,6 +3114,34 @@ bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
               map_->isVisible(fd_->odom_pos_, repaired))
           {
             cand = repaired;
+            // 模式2: 修复点到toward不可直线可见时, 尝试球交会生成中间点
+            if (scene_graph_->topo_repair_vis_mode_ == 2 && !map_->isVisible(repaired, toward))
+            {
+              Eigen::Vector3d mid;
+              if (scene_graph_->findIntersectionMidpoint(repaired, toward,
+                      scene_graph_->topo_repair_vis_sphere_radius_, mid))
+              {
+                // 插入中间点到路径中 repaired 和 toward 之间
+                path_res.insert(path_res.begin() + i + 1, mid);
+                INFO_MSG_GREEN("[EXP-FSM] :[getAndPubNextAim] mode2 insert intersection mid pt");
+                { visualization_msgs::Marker mp;
+                  mp.header.frame_id = "world"; mp.header.stamp = ros::Time::now();
+                  mp.ns = "intersection_mid"; mp.id = 0;
+                  mp.type = visualization_msgs::Marker::SPHERE;
+                  mp.action = visualization_msgs::Marker::ADD;
+                  mp.scale.x = mp.scale.y = mp.scale.z = 0.4;
+                  mp.color.r = 0.0f; mp.color.g = 0.5f; mp.color.b = 1.0f; mp.color.a = 0.9f;
+                  mp.pose.position.x = mid(0); mp.pose.position.y = mid(1); mp.pose.position.z = mid(2);
+                  mp.pose.orientation.w = 1.0;
+                  vis_marker_pub_.publish(mp); }
+              }
+              else
+              {
+                // 球交会失败 → 标记不可达, 跳过此点
+                scene_graph_->markPolyhedronBlocked(path_res[i]);
+                continue;
+              }
+            }
             // 发布红色方块标记修复点
             { visualization_msgs::Marker rp;
               rp.header.frame_id = "world"; rp.header.stamp = ros::Time::now();
@@ -3319,6 +3396,8 @@ void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   fd_->odom_vel_(0) = msg->twist.twist.linear.x;
   fd_->odom_vel_(1) = msg->twist.twist.linear.y;
   fd_->odom_vel_(2) = msg->twist.twist.linear.z;
+
+  fd_->odom_yaw_rate_ = msg->twist.twist.angular.z;
 
   fd_->odom_orient_.w() = msg->pose.pose.orientation.w;
   fd_->odom_orient_.x() = msg->pose.pose.orientation.x;
@@ -3721,6 +3800,27 @@ void FastExplorationFSM::displayPath() {
   }
   marker_array.markers.push_back(marker);
   vis_path_pub_.publish(marker_array);
+}
+
+void FastExplorationFSM::displayLocalAim() {
+  // 橙色SPHERE标记当前local_aim导航点, 尺寸大于路径marker(0.5m > 0.3m)
+  visualization_msgs::Marker marker;
+  marker.header.frame_id = "world";
+  marker.header.stamp = ros::Time::now();
+  marker.ns = "local_aim";
+  marker.id = 0;
+  marker.type = visualization_msgs::Marker::SPHERE;
+  marker.action = visualization_msgs::Marker::ADD;
+  marker.scale.x = marker.scale.y = marker.scale.z = 0.5;
+  marker.color.r = 1.0f;   // 橙色
+  marker.color.g = 0.5f;
+  marker.color.b = 0.0f;
+  marker.color.a = 0.9f;
+  marker.pose.position.x = fd_->local_aim_pos_(0);
+  marker.pose.position.y = fd_->local_aim_pos_(1);
+  marker.pose.position.z = fd_->local_aim_pos_(2);
+  marker.pose.orientation.w = 1.0;
+  vis_marker_pub_.publish(marker);
 }
 
 void FastExplorationFSM::displayMissionState()
