@@ -3377,7 +3377,8 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_TRACKING ||
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_OBJECT_NAV ||
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION ||
-      msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SWARM;
+      msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SWARM ||
+      msg->instruction_type == quadrotor_msgs::Instruction::REQUEST_ALL_AREA_AND_OBJS;
   if (ic_first_recv_flag){
     ic_first_recv_flag = false;
     ic_last_recv_time = ros::Time::now();
