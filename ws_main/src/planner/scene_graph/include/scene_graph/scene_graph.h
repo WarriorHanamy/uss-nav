@@ -70,6 +70,8 @@ public:
     // current state interface
     void mountCurPoly(const Eigen::Vector3d pos, const double yaw);
     PolyHedronPtr getCurPoly() {return cur_poly_;};
+    int    getRepairVisMode()        const { return topo_repair_vis_mode_; }
+    double getRepairVisSphereRadius() const { return topo_repair_vis_sphere_radius_; }
 
     // scene graph operations //
     bool initSceneGraph(const Eigen::Vector3d &cur_pos, double yaw);

@@ -3115,11 +3115,11 @@ bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
           {
             cand = repaired;
             // 模式2: 修复点到toward不可直线可见时, 尝试球交会生成中间点
-            if (scene_graph_->topo_repair_vis_mode_ == 2 && !map_->isVisible(repaired, toward))
+            if (scene_graph_->getRepairVisMode() == 2 && !map_->isVisible(repaired, toward))
             {
               Eigen::Vector3d mid;
               if (scene_graph_->findIntersectionMidpoint(repaired, toward,
-                      scene_graph_->topo_repair_vis_sphere_radius_, mid))
+                      scene_graph_->getRepairVisSphereRadius(), mid))
               {
                 // 插入中间点到路径中 repaired 和 toward 之间
                 path_res.insert(path_res.begin() + i + 1, mid);
