@@ -356,7 +356,7 @@ sequenceDiagram
     EGO->>FSM: /planning/ego_plan_result [EgoPlannerResult]
     EGO->>FSM: /exec_finish_trigger [Bool]
     
-    FSM->>SG: updateSceneGraph(cur_pos, yaw)  -- next loop
+    FSM->>SG: updateSceneGraph(cur_pos, yaw)
 ```
 
 ### 集成点一览
