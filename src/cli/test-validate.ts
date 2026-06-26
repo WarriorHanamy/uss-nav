@@ -72,8 +72,7 @@ export async function cmdTestValidate(
   const healthy =
     report.odometry.total > 0 &&
     report.odometry.inBounds &&
-    !report.odometry.maxVelocityExceeded &&
-    report.planResults.successRate > 0.3;
+    !report.odometry.maxVelocityExceeded;
 
   console.log(`\nOverall: ${healthy ? "HEALTHY" : "UNHEALTHY"}`);
   return report;

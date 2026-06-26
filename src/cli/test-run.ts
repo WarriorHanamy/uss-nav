@@ -21,10 +21,10 @@ async function dockerRunTest(cfg: TestConfig): Promise<void> {
   const args = [
     "run", "-d", "--rm",
     "--name", containerName,
+    "--network", "host",
     "--gpus", "all",
     "--ipc=host",
     "--security-opt", "seccomp=unconfined",
-    "--add-host", "host.docker.internal:host-gateway",
     ...envArgs,
     CFG.dockerImage,
   ];

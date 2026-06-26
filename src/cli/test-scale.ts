@@ -15,11 +15,13 @@ async function launchContainer(
   testId: string,
   params: Record<string, number>,
   duration: number,
+  rosPort: number = 11311,
 ): Promise<boolean> {
   const containerName = `ego-test-${testId}`;
   const env = [
     "-e", `TEST_ID=${testId}`,
-    "-e", `MQTT_HOST=host.docker.internal`,
+    "-e", `ROS_PORT=${rosPort}`,
+    "-e", `MQTT_HOST=localhost`,
     "-e", `DURATION=${duration}`,
     "-e", `MAX_VEL=${params.max_vel ?? 0.6}`,
     "-e", `MAX_ACC=${params.max_acc ?? 1.0}`,
@@ -32,10 +34,10 @@ async function launchContainer(
   const args = [
     "run", "-d", "--rm",
     "--name", containerName,
+    "--network", "host",
     "--gpus", "all",
     "--ipc=host",
     "--security-opt", "seccomp=unconfined",
-    "--add-host", "host.docker.internal:host-gateway",
     ...env,
     CFG.dockerImage,
   ];
@@ -129,7 +131,8 @@ export async function cmdTestScale(
     for (let i = 0; i < batchSize; i++) {
       const idx = launched + i;
       const testId = `${config.containerPrefix}-${idx}`;
-      promises.push(launchContainer(testId, config.params, config.duration));
+      const rosPort = 11311 + idx;
+      promises.push(launchContainer(testId, config.params, config.duration, rosPort));
     }
 
     const results = await Promise.all(promises);

@@ -5,7 +5,9 @@ source /opt/ros/noetic/setup.bash
 source /catkin_ws/devel/setup.bash
 
 TEST_ID="${TEST_ID:-default}"
-MQTT_HOST="${MQTT_HOST:-host.docker.internal}"
+ROS_PORT="${ROS_PORT:-11311}"
+export ROS_MASTER_URI="http://localhost:${ROS_PORT}"
+MQTT_HOST="${MQTT_HOST:-localhost}"
 DURATION="${DURATION:-300}"
 FLIGHT_TYPE="${FLIGHT_TYPE:-2}"
 MAX_VEL="${MAX_VEL:-0.6}"
