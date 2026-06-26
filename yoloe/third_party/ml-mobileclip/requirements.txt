@@ -1,3 +1,0 @@
-open-clip-torch>=2.20.0
-timm==0.9.5
-torch>=2.1.0

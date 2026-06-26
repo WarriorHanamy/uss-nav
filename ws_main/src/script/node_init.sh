@@ -1,1 +1,0 @@
-roslaunch drone_node run_drone_node_gnf.launch
