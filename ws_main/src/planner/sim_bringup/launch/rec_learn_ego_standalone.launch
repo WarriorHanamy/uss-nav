@@ -12,11 +12,17 @@
   <arg name="flight_type" default="2"/>
   <arg name="max_vel" default="0.6"/>
   <arg name="max_acc" default="1.0"/>
+  <arg name="use_d455" default="false"/>
 
   <!-- Procedural random map (global_cloud publisher) -->
   <include file="$(find sim_bringup)/launch/sim_ego_map.launch">
     <arg name="drone_id" value="$(arg drone_id)"/>
   </include>
+
+  <!-- REC_LEARN: load D455-like config into pcl_render_node namespace -->
+  <group ns="drone_$(arg drone_id)_pcl_render_node" if="$(arg use_d455)">
+    <rosparam command="load" file="$(find sim_bringup)/params/rec_learn_realsense_d455.yaml"/>
+  </group>
 
   <!-- Quadrotor dynamics + SO3 controller + LiDAR sensor -->
   <include file="$(find sim_bringup)/launch/sim_ego_sim.launch">

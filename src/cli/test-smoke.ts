@@ -18,6 +18,10 @@ function warn(name: string, message: string): Assertion {
   return { name, status: "pass", message: `⚠ ${message}` };
 }
 
+function failAssert(name: string, message: string): Assertion {
+  return { name, status: "fail", message };
+}
+
 function runAssertions(
   data: Record<string, unknown[]>,
   maxX: number,
@@ -27,36 +31,39 @@ function runAssertions(
 ): Assertion[] {
   const all: Assertion[] = [];
 
-  all.push(...assertDataFlow(data, ["odom"]));
+  // REC_LEARN: HARD assertions — pipeline integrity
+  all.push(...assertDataFlow(data, ["odom", "plan_result"]));
 
   const odom = (data["odom"] || []) as import("../types/ego-test").OdometrySample[];
   const planResults = (data["plan_result"] || []) as import("../types/ego-test").PlanResultSample[];
   const stateTriggers = (data["state_trigger"] || []) as import("../types/ego-test").StateTriggerSample[];
   const execFinishes = (data["exec_finish"] || []) as import("../types/ego-test").ExecFinishSample[];
 
+  // HARD: odometry must be present and within bounds
   all.push(assertNonEmpty(odom, "odom.nonempty"));
+  all.push(...assertOdometryBounds(odom, maxX, maxY, maxZ));
+  all.push(...assertMaxVelocity(odom, maxVel));
+
+  // HARD: planner must have produced at least one trajectory
+  all.push(assertNonEmpty(planResults, "plan_result.nonempty"));
   if (planResults.length > 0) {
-    all.push(assertNonEmpty(planResults, "plan_result.nonempty"));
-    all.push(...assertPlanSuccessRate(planResults, 0.3));
-  } else {
-    all.push(warn("plan_result", "no plan data (no goal sent — drone hovering)"));
+    all.push(...assertPlanSuccessRate(planResults, 0.5));
   }
+
+  // SOFT: state_trigger and exec_finish are timing-dependent
   if (stateTriggers.length > 0) {
     all.push(...assertStateTrigger(stateTriggers));
   } else {
-    all.push(warn("state_trigger", "no state triggers (drone hovering, FSM idle)"));
+    all.push(warn("state_trigger", "no triggers yet (still executing or not stabilized)"));
   }
   if (execFinishes.length > 0) {
     all.push(...assertExecFinish(execFinishes));
   } else {
-    all.push(warn("exec_finish", "no exec_finish (no trajectory, drone hovering)"));
+    all.push(warn("exec_finish", "no finish events (still executing)"));
   }
   if (data["data_disp"] && data["data_disp"].length > 0) {
     all.push(assertNonEmpty(data["data_disp"], "data_disp.nonempty"));
   }
-
-  all.push(...assertOdometryBounds(odom, maxX, maxY, maxZ));
-  all.push(...assertMaxVelocity(odom, maxVel));
 
   return all;
 }

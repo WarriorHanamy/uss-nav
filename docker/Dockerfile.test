@@ -2,7 +2,7 @@ FROM ego-planner-sim
 
 # Install MQTT dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-pip mosquitto-clients \
+    python3-opencv python3-pip mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
 
 # Install paho-mqtt

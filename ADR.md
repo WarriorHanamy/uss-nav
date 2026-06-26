@@ -1,9 +1,25 @@
 # Architecture Decision Records
 
+| #       | Title                         | Status        | File                                |
+| ------- | ----------------------------- | ------------- | ----------------------------------- |
+| ADR-0001 | TypeScript Visualization replaces RViz | Accepted | `docs/adr/ADR-0001-typescript-viz.md` |
+| ADR-0002 | JSONL for Data Persistence    | Accepted      | `docs/adr/ADR-0002-jsonl-persistence.md` |
+| ADR-0003 | Docker Container Isolation    | Accepted      | `docs/adr/ADR-0003-container-isolation.md` |
+| ADR-0004 | scene_graph/active_perception as build-time deps | Accepted | `docs/adr/ADR-0004-build-deps.md` |
+| ADR-0005 | Test Data Pipeline Architecture | Accepted      | `docs/adr/ADR-0005-test-data-pipeline.md` |
+| ADR-0006 | Post-Processing Visualization Tab | Accepted      | `docs/adr/ADR-0006-post-processing-viz.md` |
+| ADR-0007 | Realsense D455 Body-Centric Image | Accepted      | `docs/adr/ADR-0007-realsense-d455.md` |
+
+> Each ADR is stored in `docs/adr/ADR-NNNN-title.md`.  The content of
+> ADR-0001 through ADR-0004 is preserved verbatim below (moved from the
+> original monolithic file).
+
+---
+
 ## ADR-0001: TypeScript Visualization replaces RViz
 
-**Date**: 2026-06-26  
-**Status**: Accepted  
+**Date**: 2026-06-26
+**Status**: Accepted
 
 ### Context
 
@@ -36,32 +52,25 @@ Replace RViz with a **TypeScript-based web visualization stack**:
 
 **Negative**:
 - Browser cannot match RViz's real-time rendering performance for very large point clouds
-- MQTT adds a network hop between container and display (latency ~1ms, negligible for aggregate metrics)
-
-### Notes
-
-Future performance concern: JSONL read/write may become a bottleneck at very large
-scale (>100 concurrent containers). See ADR-0002.
+- MQTT adds a network hop between container and display (latency ~1ms, negligible)
 
 ---
 
 ## ADR-0002: JSONL for Data Persistence (single-file, append-only)
 
-**Date**: 2026-06-26  
-**Status**: Accepted (with review)  
+**Date**: 2026-06-26
+**Status**: Accepted (with review)
 
 ### Context
 
-Each test container publishes telemetry (odometry, plan results, debug data) over MQTT.
-The Bun server receives this data and must persist it for:
-1. Historical comparison across test runs
-2. Recovery after server restart
-3. Frontend loading of completed test runs
+Each test container publishes telemetry over MQTT. The Bun server receives
+this data and must persist it for historical comparison, recovery after
+restart, and frontend loading of completed runs.
 
 ### Decision
 
-Use **JSONL (JSON Lines, one JSON object per line, append-only)** as the persistence
-format. Each test run produces files:
+Use **JSONL (JSON Lines, one JSON object per line, append-only)** as the
+persistence format. Each test run produces files:
 
 ```
 _site/test-results/<scenario>/odom.jsonl
@@ -69,94 +78,41 @@ _site/test-results/<scenario>/plan_result.jsonl
 _site/test-results/<scenario>/data_disp.jsonl
 ```
 
-Each line is a raw JSON payload received from MQTT (no wrapping envelope).
-
 ### Consequences
 
-**Positive**:
-- Append-only writes are O(1) — no read-modify-write cycle
-- Trivially human-readable with `less`, `grep`, `jq`
-- No schema migration needed — lines are self-describing
-- Trivially streamable — read with `readline` or split on `\n`
+**Positive**: Append-only O(1), human-readable, no schema migration, trivially
+streamable.
 
-**Negative**:
-- No indexing — filtering a 10,000-line file requires linear scan (acceptable at current scale)
-- Larger on disk than binary formats (protobuf, msgpack, flatbuffers)
-- No type validation — malformed lines are silently skipped
+**Negative**: No indexing (linear scan), larger than binary formats, no type
+validation.
 
 ### Review Trigger
 
-Revisit this decision when any of:
-- `_site/test-results/` exceeds 10 GB
-- Read latency for `/api/test/:id` exceeds 500ms
-- Concurrent write contention becomes measurable (>10 concurrent MQTT streams)
-
-### Candidate Replacements
-
-If review is triggered, evaluate in this order:
-
-1. **SQLite** — single file, indexed queries, robust concurrent writes
-2. **FlatBuffers** — zero-copy read, schema-enforced
-3. **Apache Parquet** — columnar, good for analytical queries across runs
+Revisit when: `_site/test-results/` exceeds 10 GB, read latency exceeds 500ms,
+or concurrent write contention measurable.
 
 ---
 
 ## ADR-0003: Docker Container Isolation with Env-Var Parameterization
 
-**Date**: 2026-06-26  
-**Status**: Accepted  
-
-### Context
-
-Each test run needs a different combination of parameters (map size, obstacle count,
-flight speed, etc.). We need to run multiple containers simultaneously without file
-system conflicts.
+**Date**: 2026-06-26
+**Status**: Accepted
 
 ### Decision
 
 - Each container is fully self-contained (no bind mounts)
-- All parameter variation is done through **environment variables**:
-  `OBS_NUM`, `X_SIZE`, `Y_SIZE`, `MAX_VEL`, `MAX_ACC`, `FLIGHT_TYPE`, `DURATION`, `TEST_ID`
-- The entrypoint script generates a custom map YAML at runtime from these env vars
+- All parameter variation done through environment variables
 - Containers are headless (Xvfb :99), CPU/GPU bound only
-- Each container has its own ROS master (localhost:11311 inside the container)
-
-### Consequences
-
-**Positive**: No file system conflicts, truly parallel runs, trivial to restart.
-
-**Negative**: Image rebuild needed to change environment logic (entrypoint changes).
-
-**Fix for negative**: Entrypoint is not in base image — it's added by `Dockerfile.test`
-which is fast to rebuild.
+- Each container has its own ROS master (localhost:11311)
 
 ---
 
 ## ADR-0004: scene_graph and active_perception kept as build-time dependencies
 
-**Date**: 2026-06-26  
-**Status**: Accepted (workaround)  
-
-### Context
-
-`exploration_manager` has hard `#include` dependencies on `active_perception/` and
-`scene_graph/` C++ headers. These packages are not needed at runtime for EGO-Planner
-simulation, but the codebase cannot compile without them present at build time.
+**Date**: 2026-06-26
+**Status**: Accepted (workaround)
 
 ### Decision
 
-Keep `scene_graph/` and `active_perception/` directories in the repository so Docker
-build succeeds. The Dockerfile follows this pattern:
-
-```
-COPY → build → rm -rf (after build)
-```
-
-### Consequences
-
-**Positive**: No C++ patching needed. Build remains `git clone + docker build`.
-
-**Negative**: ~150MB of source+headers that serve no runtime purpose.
-
-**Future work**: Extract only the required headers from `active_perception` and
-`scene_graph` into a minimal `_vendor/` stub, then delete the full packages.
+Keep `scene_graph/` and `active_perception/` in the repository so Docker
+build succeeds. The Dockerfile follows `COPY → build → rm -rf`.

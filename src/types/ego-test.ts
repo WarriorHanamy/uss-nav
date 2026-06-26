@@ -35,6 +35,39 @@ export interface OdometrySample {
   orient: [number, number, number, number];
 }
 
+export interface PosCmdSample {
+  ts: number;
+  pos: [number, number, number];
+  vel: [number, number, number];
+  acc: [number, number, number];
+  yaw: number;
+  yaw_dot: number;
+}
+
+export interface ImuSample {
+  ts: number;
+  orient: [number, number, number, number];
+  ang_vel: [number, number, number];
+  lin_acc: [number, number, number];
+}
+
+export interface BodyCloudSample {
+  ts: number;
+  pts: number[];
+}
+
+export interface BodyDepthSample {
+  ts: number;
+  width: number;
+  height: number;
+  jpeg_b64: string;
+}
+
+export interface ObstaclesSample {
+  ts: number;
+  pts: number[];
+}
+
 export interface PlanResultSample {
   ts: number;
   goal: [number, number, number];
@@ -69,6 +102,11 @@ export interface TestData {
   stateTriggers: StateTriggerSample[];
   execFinishes: ExecFinishSample[];
   dataDisps: DataDispSample[];
+  posCmds: PosCmdSample[];
+  imus: ImuSample[];
+  bodyClouds: BodyCloudSample[];
+  bodyDepths: BodyDepthSample[];
+  obstacles: ObstaclesSample[];
   startTime: number;
   endTime: number;
 }

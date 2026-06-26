@@ -1,0 +1,22 @@
+# REC_LEARN: Realsense D455-like depth camera config for pcl_render_node
+#
+# Approximates a forward-facing D455 depth camera using the pcl_render_node's
+# polar ray-marching renderer.  The D455 has:
+#   HFOV 86°, VFOV 57°, resolution 848×480, range 10 m, 30 fps
+#
+# Since pcl_render_node uses LiDAR polar projection (not pinhole), straight
+# lines appear curved (fish-eye).  This is acceptable for post-processing
+# visualization.
+
+sensing_rate: 30.0           # output frame rate [Hz]
+sensing_horizon: 10.0        # max sensor range [m]
+is_360lidar: 0               # not 360 — forward-facing sector
+yaw_fov: 86.0                # horizontal FOV [deg]
+vertical_fov: 57.0           # vertical FOV [deg]
+polar_resolution: 0.09       # angular step [deg] → ~960×630 rays
+livox_linestep: 0.0          # no Livox non-repeating pattern
+curvature_limit: 100.0       # keep all points (no curvature filter)
+use_avia_pattern: 0
+use_vlp32_pattern: 0
+use_minicf_pattern: 0        # uniform scan
+downsample_res: 0.01         # keep nearly all points
