@@ -2724,8 +2724,8 @@ void FastExplorationFSM::goTargetObject() {
       fd_->path_inx_        = 0;
       fd_->has_rotated_     = false;
       fd_->stuck_begin_time_ = -1.0;                  // 新路径生成时重置卡死计时
-      fd_->stuck_force_advance_count_ = 0;             // 新路径生成时重置强制推进计数
       fd_->stuck_force_advance_triggered_ = false;
+      // 不重置 stuck_force_advance_count_: 仅正常到达topo节点时清零, 避免全局超时重规划绕过分层计数
       fd_->last_pub_time_   = ros::Time::now();
       INFO_MSG("[Targ Obj] | PubNxtLocalAim, aim: " << fd_->local_aim_pos_ << ", global aim: " << fd_->aim_pos_);
 
@@ -2791,7 +2791,8 @@ void FastExplorationFSM::goTargetObject() {
       return;
     }
 
-    // 卡死强制推进: 速度/角速度均低于阈值且持续超时后, 强行推进一个topo节点(最后判定)
+    // 卡死强制推进: 速度/角速度均低于阈值且持续超时后触发(最后判定)
+    // 分层策略: tier1=强制重规划topo路径(清除blocked), tier2=逐点强制推进path_inx++
     if (fp_->stuck_force_advance_enable_) {
       double vel_norm = fd_->odom_vel_.norm();
       double yaw_rate = fabs(fd_->odom_yaw_rate_);
@@ -2804,21 +2805,46 @@ void FastExplorationFSM::goTargetObject() {
         if (stuck_duration > fp_->stuck_force_advance_duration_ &&
             !fd_->stuck_force_advance_triggered_ &&
             fd_->stuck_force_advance_count_ < fp_->stuck_force_advance_max_consecutive_) {
-          if (fd_->path_inx_ < (int)fd_->path_res_.size() - 1) {
-            fd_->path_inx_++;
-            fd_->stuck_force_advance_count_++;
-            fd_->stuck_force_advance_triggered_ = true;
-            fd_->stuck_begin_time_ = -1.0;
-            getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
-            fd_->last_pub_time_ = ros::Time::now();
-            ROS_WARN("[Targ Obj] Stuck force advance! path_inx=%d, count=%d",
-                     fd_->path_inx_, fd_->stuck_force_advance_count_);
+
+          // Tier1: 首次卡死 → 清除blocked标记后内联重规划topo路径(类似强制重启任务)
+          if (fd_->stuck_force_advance_count_ == 0) {
+            ROS_WARN("[Targ Obj] Stuck tier1: force topo replan (clear blocked + regenerate path)");
+            scene_graph_->clearAllBlocked();
+            scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
+            if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_,
+                    fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
+              INFO_MSG_GREEN("[Targ Obj] Stuck tier1: new path found, size: " << fd_->path_res_.size());
+              fd_->path_inx_ = 0;
+              getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+              displayPath();
+              fd_->stuck_force_advance_count_++;
+              fd_->stuck_force_advance_triggered_ = true;
+              fd_->stuck_begin_time_ = -1.0;
+              fd_->last_pub_time_ = ros::Time::now();
+            } else {
+              // tier1 重规划失败 → 跳过tier1直接进入tier2逻辑
+              ROS_WARN("[Targ Obj] Stuck tier1 failed (no path), fallback to tier2");
+              fd_->stuck_force_advance_count_ = 1;  // 直接标记为已消耗tier1配额
+              // 不设置triggered, 让下一轮立即进入tier2判定
+            }
           } else {
-            // 已是最后一个点无法再推进 → 走全局重规划
-            ROS_WARN("[Targ Obj] Stuck at final waypoint, forced replan");
-            fd_->go_object_process_phase = 0;
-            transitState(WAIT_TRIGGER, "stuck at final waypoint, forced replan");
-            return;
+            // Tier2: 二次卡死 → 逐点强制推进(当前逻辑)
+            if (fd_->path_inx_ < (int)fd_->path_res_.size() - 1) {
+              fd_->path_inx_++;
+              fd_->stuck_force_advance_count_++;
+              fd_->stuck_force_advance_triggered_ = true;
+              fd_->stuck_begin_time_ = -1.0;
+              getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+              fd_->last_pub_time_ = ros::Time::now();
+              ROS_WARN("[Targ Obj] Stuck tier2: force advance path_inx=%d, count=%d",
+                       fd_->path_inx_, fd_->stuck_force_advance_count_);
+            } else {
+              // 已是最后一个点无法再推进 → 走全局重规划
+              ROS_WARN("[Targ Obj] Stuck at final waypoint, forced replan");
+              fd_->go_object_process_phase = 0;
+              transitState(WAIT_TRIGGER, "stuck at final waypoint, forced replan");
+              return;
+            }
           }
         }
       } else {
