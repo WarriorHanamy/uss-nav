@@ -38,5 +38,15 @@ previous_version/
 ws_bridge_old/
 own_tools/
 
+# TypeScript / Bun / Node
+node_modules/
+frontend/dist/
+frontend/node_modules/
+_site/
+package.json
+bun.lock
+tsconfig.json
+vite.config.ts
+
 # Keep only the core workspace
 # ws_main/src/planner/ to copy selectively

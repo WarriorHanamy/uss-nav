@@ -1,0 +1,19 @@
+FROM ego-planner-sim
+
+# Install MQTT dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip mosquitto-clients \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install paho-mqtt
+RUN pip3 install paho-mqtt
+
+# Copy MQTT bridge script
+COPY docker/bridge/ego_mqtt_bridge.py /bridge/ego_mqtt_bridge.py
+RUN chmod +x /bridge/ego_mqtt_bridge.py
+
+# Override entrypoint with test entrypoint
+COPY docker/entrypoint-test.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

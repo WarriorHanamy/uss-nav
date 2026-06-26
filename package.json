@@ -1,6 +1,7 @@
 {
   "name": "uss-nav",
   "private": true,
+  "type": "module",
   "scripts": {
     "render:view": "cd tools/md2html && bun render.ts --multi ../../_site/VIEW.html EGO:../../EGO.md SCENEGRAPH:../../SCENEGRAPH.md NEXT_SCENEGRAPH:../../NEXT_SCENEGRAPH.md",
     "render:scenegraph": "cd tools/md2html && bun render.ts ../../SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
@@ -14,6 +15,31 @@
     "doxygen": "bun tools/doxygen/render.ts",
     "infra": "bun tools/infra.ts",
     "docker:build": "bun tools/infra.ts docker build",
-    "docker:run": "bun tools/infra.ts docker run"
+    "docker:run": "bun tools/infra.ts docker run",
+    "test:build": "bun src/cli/index.ts docker-build",
+    "test:run": "bun src/cli/index.ts test-run",
+    "test:status": "bun src/cli/index.ts test-status",
+    "test:stop": "bun src/cli/index.ts test-stop",
+    "test:report": "bun src/cli/index.ts test-report",
+    "server": "bun src/server/index.ts",
+    "dev": "bun src/cli/index.ts dev",
+    "dashboard": "bun src/cli/index.ts dashboard"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.0.0",
+    "@react-three/fiber": "^9.0.0",
+    "mqtt": "^5.15.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "@vitejs/plugin-react": "^4.3.0"
   }
 }
