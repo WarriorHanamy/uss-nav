@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    REC_LEARN: minimal simulation launch with standalone ego planner.
+    Strips FastExplorationFSM, scene_graph, active_perception, YOLOE.
+    position_cmd is remapped directly to SO3 controller (no cmd_mux).
+  -->
+  <arg name="drone_id" default="0"/>
+  <arg name="init_x" default="0.0"/>
+  <arg name="init_y" default="0.0"/>
+  <arg name="init_z" default="1.0"/>
+  <arg name="flight_type" default="2"/>
+  <arg name="max_vel" default="0.6"/>
+  <arg name="max_acc" default="1.0"/>
+
+  <!-- Procedural random map (global_cloud publisher) -->
+  <include file="$(find sim_bringup)/launch/sim_ego_map.launch">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+  </include>
+
+  <!-- Quadrotor dynamics + SO3 controller + LiDAR sensor -->
+  <include file="$(find sim_bringup)/launch/sim_ego_sim.launch">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+    <arg name="init_x" value="$(arg init_x)"/>
+    <arg name="init_y" value="$(arg init_y)"/>
+    <arg name="init_z" value="$(arg init_z)"/>
+  </include>
+
+  <!-- REC_LEARN: standalone ego planner (no FastExplorationFSM) -->
+  <node pkg="ego_planner" type="rec_learn_ego_standalone_node"
+        name="rec_learn_ego_planner_node" output="screen">
+    <rosparam command="load" file="$(find sim_bringup)/params/sim_ego_planner.yaml"/>
+    <param name="fsm/flight_type" value="$(arg flight_type)"/>
+    <param name="manager/max_vel" value="$(arg max_vel)"/>
+    <param name="manager/max_acc" value="$(arg max_acc)"/>
+    <param name="manager/drone_id" value="$(arg drone_id)"/>
+
+    <!-- Odom / emergency -->
+    <remap from="~odom_world" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~mandatory_stop" to="/mandatory_stop_to_planner"/>
+
+    <!-- REC_LEARN: position_cmd directly to SO3 controller, no cmd_mux -->
+    <remap from="/position_cmd" to="/drone_$(arg drone_id)_planning/pos_cmd"/>
+
+    <!-- Grid map: point cloud + depth + odom + camera pose -->
+    <remap from="~grid_map/cloud" to="/drone_$(arg drone_id)_pcl_render_node/cloud"/>
+    <remap from="~grid_map/depth" to="/drone_$(arg drone_id)_pcl_render_node/depth"/>
+    <remap from="~grid_map/pose" to="/drone_$(arg drone_id)_pcl_render_node/camera_pose"/>
+    <remap from="~grid_map/odom" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+
+    <!-- Camera intrinsics (for depth-based grid_map) -->
+    <param name="grid_map/cx" value="320.0"/>
+    <param name="grid_map/cy" value="240.0"/>
+    <param name="grid_map/fx" value="442.025"/>
+    <param name="grid_map/fy" value="442.025"/>
+  </node>
+</launch>

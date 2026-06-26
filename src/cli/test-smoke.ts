@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from "fs";
 import { join } from "path";
 import { CFG } from "../core/config";
-import type { SmokeTestReport, Assertion } from "../types/ego-test";
+import { TARGET_TYPE, type SmokeTestReport, type Assertion } from "../types/ego-test";
 import {
   assertNonEmpty,
   assertOdometryBounds,
@@ -128,7 +128,7 @@ export async function cmdTestSmoke(
     "-e", `MAX_VEL=${vel}`,
     "-e", `MAX_ACC=1.0`,
     "-e", `OBS_NUM=${obs}`,
-    "-e", `FLIGHT_TYPE=2`,
+    "-e", `FLIGHT_TYPE=${TARGET_TYPE.EXPLORE_TARGET}`,
     "-e", `X_SIZE=50`,
     "-e", `Y_SIZE=30`,
   ];

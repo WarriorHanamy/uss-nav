@@ -1,37 +1,37 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
-import type { TestScenario, TestConfig } from "../types/ego-test";
+import { TARGET_TYPE, type TestScenario, type TestConfig } from "../types/ego-test";
 import { parseYaml } from "./yaml";
 
 export const BUILTIN_SCENARIOS: TestScenario[] = [
   {
     id: "smoke",
     params: { max_vel: [0.6] },
-    fixed: { flight_type: 2, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
+    fixed: { flight_type: TARGET_TYPE.EXPLORE_TARGET, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
     duration: 60,
   },
   {
     id: "velocity_sweep",
     params: { max_vel: [0.3, 0.6, 1.0] },
-    fixed: { flight_type: 2, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
+    fixed: { flight_type: TARGET_TYPE.EXPLORE_TARGET, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
     duration: 300,
   },
   {
     id: "map_variation",
     params: { obs_num: [10, 30, 60] },
-    fixed: { flight_type: 2, max_vel: 0.6, max_acc: 1.0, x_size: 50, y_size: 30 },
+    fixed: { flight_type: TARGET_TYPE.EXPLORE_TARGET, max_vel: 0.6, max_acc: 1.0, x_size: 50, y_size: 30 },
     duration: 300,
   },
   {
     id: "aggressive_sweep",
     params: { max_vel: [0.5, 1.0, 1.5], max_acc: [0.5, 1.0, 2.0] },
-    fixed: { flight_type: 2, obs_num: 30, x_size: 50, y_size: 30 },
+    fixed: { flight_type: TARGET_TYPE.EXPLORE_TARGET, obs_num: 30, x_size: 50, y_size: 30 },
     duration: 300,
   },
   {
     id: "scale_4",
     params: { max_vel: [0.6] },
-    fixed: { flight_type: 2, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
+    fixed: { flight_type: TARGET_TYPE.EXPLORE_TARGET, max_acc: 1.0, obs_num: 30, x_size: 50, y_size: 30 },
     duration: 120,
   },
 ];

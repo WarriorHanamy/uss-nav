@@ -9,6 +9,7 @@ ROS_PORT="${ROS_PORT:-11311}"
 export ROS_MASTER_URI="http://localhost:${ROS_PORT}"
 MQTT_HOST="${MQTT_HOST:-localhost}"
 DURATION="${DURATION:-300}"
+# target_type: 1=manual, 2=explore(from FSM), 3=preset(YAML waypoints), 4=reference
 FLIGHT_TYPE="${FLIGHT_TYPE:-2}"
 MAX_VEL="${MAX_VEL:-0.6}"
 MAX_ACC="${MAX_ACC:-1.0}"
@@ -37,11 +38,19 @@ MAP_LAUNCH_FILE=/catkin_ws/src/sim_bringup/launch/sim_ego_map.launch
 cp "$MAP_LAUNCH_FILE" "${MAP_LAUNCH_FILE}.bak"
 sed -i 's|params/sim_ego_map.yaml|/tmp/sim_ego_map_'"${TEST_ID}"'.yaml|' "$MAP_LAUNCH_FILE"
 
+# Patch planner YAML — force flight_type and disable scene graph auto-init
+PLANNER_YAML=/catkin_ws/src/sim_bringup/params/sim_ego_planner.yaml
+cp "$PLANNER_YAML" "${PLANNER_YAML}.bak"
+sed -i "s|fsm/flight_type:.*|fsm/flight_type: ${FLIGHT_TYPE}|" "$PLANNER_YAML"
+# Set goal waypoints from env (used when flying_type=3) or fallback to local_goal pub
+GOAL_X="${GOAL_X:-8.0}"
+GOAL_Y="${GOAL_Y:-4.0}"
+GOAL_Z="${GOAL_Z:-1.5}"
+
 # Start ego planner
 echo "Starting ego planner (headless)..."
-roslaunch sim_bringup sim_ego_main.launch \
+roslaunch sim_bringup rec_learn_ego_standalone.launch \
   flight_type:=$FLIGHT_TYPE max_vel:=$MAX_VEL max_acc:=$MAX_ACC \
-  use_rviz:=false \
   &>/tmp/roslaunch.log &
 LAUNCH_PID=$!
 
@@ -58,6 +67,20 @@ for i in $(seq 1 30); do
     break
   fi
 done
+
+# Publish a local goal to trigger ego planner (bypasses FastExplorationFSM)
+echo "Publishing local goal → (${GOAL_X}, ${GOAL_Y}, ${GOAL_Z}) ..."
+rostopic pub /rec_learn_ego_planner_node/local_goal quadrotor_msgs/EgoGoalSet \
+  "drone_id: 0
+source_task_id: 2
+goal: [${GOAL_X}, ${GOAL_Y}, ${GOAL_Z}]
+yaw: 0.0
+look_forward: true
+goal_to_follower: false
+yaw_low_speed: false
+yaw_mode: 1
+yaw_path_mode: 0" \
+  --once
 
 # Start MQTT bridge
 echo "Starting MQTT bridge → ${MQTT_HOST}:1883 ..."

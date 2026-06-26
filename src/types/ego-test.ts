@@ -1,3 +1,10 @@
+export const enum TARGET_TYPE {
+  MANUAL_TARGET = 1,
+  EXPLORE_TARGET = 2,
+  PRESET_TARGET = 3,
+  REFERENCE_PATH = 4,
+}
+
 export interface TestScenario {
   id: string;
   params: Record<string, number[]>;

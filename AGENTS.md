@@ -45,3 +45,13 @@ cd tools/map-demo && bun render.ts && xdg-open ../_site/map-demo/index.html
 # 启动 Docker 仿真 RViz
 bun run tools/infra.ts docker:run
 ```
+
+## REC_LEARN 命名约定
+
+用于标记 bypass 场景图/exploration FSM 依赖的最小注入代码。
+
+- **新 C++ 文件**: 文件名 `rec_learn_` 前缀
+- **修改已有 C++ 文件**: 新增代码段用 `#define REC_LEARN` 或 `// REC_LEARN` 标记
+- **新 ROS node / launch / param**: 名称 `rec_learn_` 前缀
+- **Python / TypeScript**: 不受此约定限制
+```

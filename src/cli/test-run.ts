@@ -1,14 +1,14 @@
 import { CFG } from "../core/config";
 import { BUILTIN_SCENARIOS, expandScenario } from "./scenarios";
 import { cmdTestStop } from "./test-stop";
-import type { TestConfig } from "../types/ego-test";
+import { TARGET_TYPE, type TestConfig } from "../types/ego-test";
 
 async function dockerRunTest(cfg: TestConfig): Promise<void> {
   const containerName = `ego-test-${cfg.id}`;
   const env: Record<string, string> = {
     TEST_ID: cfg.id,
     MQTT_HOST: "localhost",
-    FLIGHT_TYPE: String(cfg.params.flight_type ?? 2),
+    FLIGHT_TYPE: String(cfg.params.flight_type ?? TARGET_TYPE.EXPLORE_TARGET),
     MAX_VEL: String(cfg.params.max_vel ?? 0.6),
     MAX_ACC: String(cfg.params.max_acc ?? 1.0),
     OBS_NUM: String(cfg.params.obs_num ?? 30),

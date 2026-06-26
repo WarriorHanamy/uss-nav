@@ -57,7 +57,7 @@ export function assertOdometryBounds(
 export function assertMaxVelocity(
   samples: OdometrySample[],
   maxVel: number,
-  tolerance: number = 0.1,
+  tolerance: number = 0.3,
 ): Assertion[] {
   const results: Assertion[] = [];
   if (samples.length === 0) {

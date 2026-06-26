@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join } from "path";
 import { CFG } from "../core/config";
-import type { ScaleTestConfig, ScaleTestReport } from "../types/ego-test";
+import { TARGET_TYPE, type ScaleTestConfig, type ScaleTestReport } from "../types/ego-test";
 
 const RESULT_DIR = join(import.meta.dir, "../..", CFG.testResultDir);
 
@@ -26,7 +26,7 @@ async function launchContainer(
     "-e", `MAX_VEL=${params.max_vel ?? 0.6}`,
     "-e", `MAX_ACC=${params.max_acc ?? 1.0}`,
     "-e", `OBS_NUM=${params.obs_num ?? 30}`,
-    "-e", `FLIGHT_TYPE=${params.flight_type ?? 2}`,
+    "-e", `FLIGHT_TYPE=${params.flight_type ?? TARGET_TYPE.EXPLORE_TARGET}`,
     "-e", `X_SIZE=${params.x_size ?? 50}`,
     "-e", `Y_SIZE=${params.y_size ?? 30}`,
   ];
@@ -98,7 +98,7 @@ export async function cmdTestScale(
 ): Promise<ScaleTestReport> {
   const config: ScaleTestConfig = {
     count,
-    params: { max_vel: 0.6, max_acc: 1.0, obs_num: 30, flight_type: 2, x_size: 50, y_size: 30 },
+    params: { max_vel: 0.6, max_acc: 1.0, obs_num: 30, flight_type: TARGET_TYPE.EXPLORE_TARGET, x_size: 50, y_size: 30 },
     duration,
     batchSize,
     containerPrefix: `scale-${Date.now()}`,

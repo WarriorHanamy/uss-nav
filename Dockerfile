@@ -42,9 +42,8 @@ COPY ws_main/src/planner/uav_simulator/so3_quadrotor_simulator ./uav_simulator/s
 COPY ws_main/src/planner/uav_simulator/so3_control          ./uav_simulator/so3_control
 COPY ws_main/src/planner/uav_simulator/local_sensing        ./uav_simulator/local_sensing
 COPY ws_main/src/planner/uav_simulator/map_generator        ./uav_simulator/map_generator
-COPY ws_main/src/utils/pose_utils                ./utils/pose_utils
-COPY ws_main/src/utils/odom_visualization        ./utils/odom_visualization
-COPY ws_main/src/planner/uav_simulator/fake_drone           ./uav_simulator/fake_drone
+    COPY ws_main/src/utils/pose_utils                ./utils/pose_utils
+    COPY ws_main/src/planner/uav_simulator/fake_drone           ./uav_simulator/fake_drone
 COPY ws_main/src/planner/uav_simulator/fake_so3_quadrotor   ./uav_simulator/fake_so3_quadrotor
 COPY ws_main/src/planner/uav_simulator/fake_so3_controller  ./uav_simulator/fake_so3_controller
 

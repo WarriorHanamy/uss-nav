@@ -67,4 +67,8 @@ target_link_libraries(ego_planner
 # target_link_libraries(traj_server ${catkin_LIBRARIES})
 # add_dependencies(traj_server ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
+# REC_LEARN: minimal ego node without exploration FSM dependencies
+add_executable(rec_learn_ego_standalone_node src/rec_learn_ego_standalone_node.cpp)
+target_link_libraries(rec_learn_ego_standalone_node ego_planner ${catkin_LIBRARIES})
+
 
