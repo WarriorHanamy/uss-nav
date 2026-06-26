@@ -1,0 +1,63 @@
+# Test scenarios for EGO Planner
+# Used by bun test:run and bun test:smoke
+
+scenarios:
+  - id: smoke
+    description: Minimal smoke test — 60s run, verify data pipeline
+    params:
+      max_vel: [0.6]
+    fixed:
+      max_acc: 1.0
+      obs_num: 30
+      flight_type: 2
+      x_size: 50
+      y_size: 30
+    duration: 60
+
+  - id: velocity_sweep
+    description: Sweep max velocity at 3 levels
+    params:
+      max_vel: [0.3, 0.6, 1.0]
+    fixed:
+      max_acc: 1.0
+      obs_num: 30
+      flight_type: 2
+      x_size: 50
+      y_size: 30
+    duration: 300
+
+  - id: map_variation
+    description: Vary obstacle density
+    params:
+      obs_num: [10, 30, 60]
+    fixed:
+      max_vel: 0.6
+      max_acc: 1.0
+      flight_type: 2
+      x_size: 50
+      y_size: 30
+    duration: 300
+
+  - id: aggressive_sweep
+    description: Sweep both velocity and acceleration
+    params:
+      max_vel: [0.5, 1.0, 1.5]
+      max_acc: [0.5, 1.0, 2.0]
+    fixed:
+      obs_num: 30
+      flight_type: 2
+      x_size: 50
+      y_size: 30
+    duration: 300
+
+  - id: scale_4
+    description: 4 concurrent containers, moderate duration
+    params:
+      max_vel: [0.6]
+    fixed:
+      max_acc: 1.0
+      obs_num: 30
+      flight_type: 2
+      x_size: 50
+      y_size: 30
+    duration: 120

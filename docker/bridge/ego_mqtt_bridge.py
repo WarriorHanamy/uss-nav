@@ -14,9 +14,9 @@ import time
 
 import paho.mqtt.client as mqtt
 import rospy
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Bool
 from nav_msgs.msg import Odometry
-from quadrotor_msgs.msg import EgoPlannerResult
+from quadrotor_msgs.msg import EgoPlannerResult, EgoStateTrigger
 from traj_utils.msg import DataDisp
 
 
@@ -93,6 +93,24 @@ class EgoMqttBridge:
             },
         )
 
+    def _state_trigger_cb(self, msg: EgoStateTrigger):
+        self.publish(
+            "state_trigger",
+            {
+                "ts": msg.header.stamp.to_sec(),
+                "triggered": msg.data,
+            },
+        )
+
+    def _exec_finish_cb(self, msg: Bool):
+        self.publish(
+            "exec_finish",
+            {
+                "ts": rospy.Time.now().to_sec(),
+                "finished": msg.data,
+            },
+        )
+
     def run(self):
         rospy.init_node(f"ego_mqtt_bridge_{self.test_id}", anonymous=True)
 
@@ -101,6 +119,10 @@ class EgoMqttBridge:
             "/planning/ego_plan_result", EgoPlannerResult, self._plan_result_cb
         )
         rospy.Subscriber("/planning/data_display", DataDisp, self._data_disp_cb)
+        rospy.Subscriber(
+            "/planning/ego_state_trigger", EgoStateTrigger, self._state_trigger_cb
+        )
+        rospy.Subscriber("/exec_finish_trigger", Bool, self._exec_finish_cb)
 
         rospy.loginfo(
             f"ego_mqtt_bridge [{self.test_id}] started → {self.topic_prefix}/{self.test_id}/*"

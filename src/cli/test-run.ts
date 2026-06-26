@@ -7,7 +7,7 @@ async function dockerRunTest(cfg: TestConfig): Promise<void> {
   const containerName = `ego-test-${cfg.id}`;
   const env: Record<string, string> = {
     TEST_ID: cfg.id,
-    MQTT_HOST: "host.docker.internal",
+    MQTT_HOST: "localhost",
     FLIGHT_TYPE: String(cfg.params.flight_type ?? 2),
     MAX_VEL: String(cfg.params.max_vel ?? 0.6),
     MAX_ACC: String(cfg.params.max_acc ?? 1.0),

@@ -20,7 +20,9 @@
     "test:run": "bun src/cli/index.ts test-run",
     "test:status": "bun src/cli/index.ts test-status",
     "test:stop": "bun src/cli/index.ts test-stop",
-    "test:report": "bun src/cli/index.ts test-report",
+    "test:smoke": "bun src/cli/index.ts test-smoke",
+    "test:validate": "bun src/cli/index.ts test-validate",
+    "test:scale": "bun src/cli/index.ts test-scale",
     "server": "bun src/server/index.ts",
     "dev": "bun src/cli/index.ts dev",
     "dashboard": "bun src/cli/index.ts dashboard"
