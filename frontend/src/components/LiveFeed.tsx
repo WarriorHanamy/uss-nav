@@ -5,7 +5,7 @@ interface Props {
 }
 
 export function LiveFeed({ tests }: Props) {
-  const active = tests.filter((t) => Date.now() - t.lastUpdate < 30000);
+  const active = tests.filter((t) => t.active);
 
   return (
     <div style={{ padding: 12, borderTop: "1px solid #222" }}>
