@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <quadrotor_msgs/PerceptionMsg.h>
+#include <quadrotor_msgs/Instruction.h>
 #include <scene_graph/scene_graph.h>
 // #include "poly_traj_utils.hpp"
 
