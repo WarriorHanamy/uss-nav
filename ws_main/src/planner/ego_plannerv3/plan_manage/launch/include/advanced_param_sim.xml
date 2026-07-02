@@ -398,4 +398,8 @@
         <param name="optimization/max_jer" value="$(arg max_jer)" type="double"/>
         <param name="optimization/max_sna" value="$(arg max_sna)" type="double"/>
     </node>
+
+    <!-- RC replan trigger: ch8+ch9 同时 >1500 时触发 /object_id_nav_replan -->
+    <node pkg="exploration_manager" name="rc_replan_trigger" type="rc_replan_trigger" output="screen"/>
+
 </launch>

@@ -64,3 +64,12 @@ add_dependencies(planner_cmd_mux ${catkin_EXPORTED_TARGETS})
 target_link_libraries(planner_cmd_mux
   ${catkin_LIBRARIES}
 )
+
+add_executable(rc_replan_trigger
+  src/rc_replan_trigger.cpp
+)
+add_dependencies(rc_replan_trigger ${catkin_EXPORTED_TARGETS})
+
+target_link_libraries(rc_replan_trigger
+  ${catkin_LIBRARIES}
+)
