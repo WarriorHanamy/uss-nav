@@ -412,7 +412,7 @@
 
     <!-- RC replan trigger -->
     <node pkg="exploration_manager" name="rc_replan_trigger" type="rc_replan_trigger" output="screen">
-        <rosparam param="rc_replan_trigger/channels">[7, 8]</rosparam>
-        <param name="rc_replan_trigger/hold_duration" value="1.5"/>
+        <rosparam param="rc_replan_trigger/channels">[7]</rosparam>
+        <param name="rc_replan_trigger/hold_duration" value="0.5"/>
     </node>
 </launch>

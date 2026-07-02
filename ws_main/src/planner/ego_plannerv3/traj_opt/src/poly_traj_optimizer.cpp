@@ -236,17 +236,17 @@ namespace ego_planner
           rebound_times++;
           if (force_stop_type_ == STOP_FOR_REBOUND && rebound_times <= MAX_REBOUND_TIMES)
           {
-            PRINTF_COND("iter=%d/%d, time(ms)=%f, action=%s->ROUGH_REBOUND, rebound\n", iter_num_, total_iter_num_, time_ms, state.show().c_str());
+            // PRINTF_COND("iter=%d/%d, time(ms)=%f, action=%s->ROUGH_REBOUND, rebound\n", iter_num_, total_iter_num_, time_ms, state.show().c_str());
             state.act = OptFsm::ROUGH_REBOUND;
           }
           else if (rebound_times > MAX_REBOUND_TIMES)
           {
-            PRINTF_COND("iter=%d, time(ms)=%f, rebound to MAX_REBOUND_TIMES\n", iter_num_, time_ms);
+            // PRINTF_COND("iter=%d, time(ms)=%f, rebound to MAX_REBOUND_TIMES\n", iter_num_, time_ms);
             state.act = OptFsm::FAILED_RET;
           }
           else // force_stop_type_ == STOP_FOR_ERROR
           {
-            PRINTF_COND("iter=%d, time(ms)=%f, force_stop_type_ == STOP_FOR_ERROR\n", iter_num_, time_ms);
+            // PRINTF_COND("iter=%d, time(ms)=%f, force_stop_type_ == STOP_FOR_ERROR\n", iter_num_, time_ms);
             state.act = OptFsm::FAILED_RET;
           }
         }

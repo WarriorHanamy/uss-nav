@@ -2730,14 +2730,14 @@ void FastExplorationFSM::goTargetObject() {
     scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
     if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_, fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
       INFO_MSG_GREEN("[Targ Obj] | find path to object success, size: " << fd_->path_res_.size());
-
+    
       fd_->has_rotated_     = false;
       fd_->stuck_begin_time_ = -1.0;                  // 新路径生成时重置卡死计时
+      fd_->stuck_force_advance_count_ = 0;             // 新路径生成时重置强制推进计数
       fd_->stuck_force_advance_triggered_ = false;
-      getAndPublishNextAim(fd_->path_res_, true, 0.0f);
-      // 不重置 stuck_force_advance_count_: 仅正常到达topo节点时清零, 避免全局超时重规划绕过分层计数
       fd_->last_pub_time_   = ros::Time::now();
-      INFO_MSG("[Targ Obj] | PubNxtLocalAim, aim: " << fd_->local_aim_pos_ << ", global aim: " << fd_->aim_pos_);
+      INFO_MSG_CYAN("[Targ Obj] | PubNxtLocalAim, aim: " << fd_->local_aim_pos_ << ", global aim: " << fd_->aim_pos_);
+      getAndPublishNextAim(fd_->path_res_, true, 0.0f);
 
       displayPath();
       fd_->go_object_process_phase ++;
