@@ -5,6 +5,8 @@
 #include <mavros_msgs/RCIn.h>
 #include <std_msgs/Bool.h>
 
+#include <vector>
+
 namespace ego_planner {
 
 class RcReplanTrigger {
@@ -19,9 +21,11 @@ private:
   ros::Subscriber rc_sub_;
   ros::Publisher  replan_pub_;
 
-  bool locked_{false};  // 已触发等待释放, 防止重复触发
-  int  ch8_idx_{7};     // ch8 在 channels 数组中的下标(0-based)
-  int  ch9_idx_{8};     // ch9 在 channels 数组中的下标(0-based)
+  std::vector<int> channel_indices_;  // 参与触发的通道下标列表(0-based), 从 launch 参数可配
+  double           hold_duration_{0.0}; // 长按持续时间阈值(s), 0=即时触发
+
+  bool      locked_{false};           // 已触发等待释放, 防止重复触发
+  ros::Time hold_begin_time_;         // 长按计时起点, isZero()=未在计时
 };
 
 }  // namespace ego_planner
