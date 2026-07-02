@@ -88,6 +88,7 @@ private:
   ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
   ros::Subscriber vla_swarm_target_sub_, vla_swarm_camera_sub_;
   ros::Subscriber vla_swarm_ego_state_trigger_sub_;
+  ros::Subscriber object_id_nav_replan_sub_;    // 订阅 /object_id_nav_replan
   ros::Publisher ego_goal_pub_, goal_from_station_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
   ros::Publisher fsm_state_pub_;
@@ -244,6 +245,7 @@ private:
   
   void transitState(MISSION_FSM_STATE new_state, string pos_call);
   void stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called);
+  void triggerObjectIdNavReplan(const std::string& reason);  // object-id-nav replan
   bool getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* reason = nullptr) const;
 
   /* ROS functions */
@@ -262,6 +264,7 @@ private:
       const sensor_msgs::CompressedImageConstPtr& msg);
   void vlaSwarmEgoStateTriggerCallback(
       const quadrotor_msgs::EgoStateTrigger::ConstPtr& msg);
+  void objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg);
   void handleGoalInstruction(const std::vector<geometry_msgs::Point>& goals, const std::vector<float>& yaws,
                              bool look_forward, const std::string& source);
   void handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,

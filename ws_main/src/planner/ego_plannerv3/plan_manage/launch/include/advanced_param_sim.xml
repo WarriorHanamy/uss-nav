@@ -37,8 +37,8 @@
         <!-- <remap from="/goal" to = "/move_base_simple/goal"/> -->
         <remap from ="/trigger" to="/move_base_simple/goal"/>
         <remap from="~grid_map/odom" to="/drone_$(arg drone_id)_$(arg odometry_topic)"/>
-<!--        <remap from="~grid_map/cloud" to="/drone_$(arg drone_id)_$(arg cloud_topic)"/>-->
-        <remap from="~grid_map/cloud" to="/livox/lidar_world"/>
+        <remap from="~grid_map/cloud" to="/drone_0_cloud_merger/cloud_merged"/>
+        <!-- <remap from="~grid_map/cloud" to="/livox/lidar_world"/> -->
         <remap from="~grid_map/pose"   to = "/drone_$(arg drone_id)_$(arg camera_pose_topic)"/>
         <remap from="~grid_map/depth" to = "/drone_$(arg drone_id)_$(arg depth_topic)"/>
         <remap from="/position_cmd" to="$(arg planner_cmd_mux_ego_topic)"/>
@@ -131,7 +131,7 @@
         <param name="grid_map/local_update_range_y" value="8.0" />
         <param name="grid_map/local_update_range_z" value="4.0" />
         <!-- <param name="grid_map/obstacles_inflation" value="0.5" /> -->
-        <param name="grid_map/obstacles_inflation" value="0.3" />
+        <param name="grid_map/obstacles_inflation" value="0.2" />
 
         <param name="grid_map/local_map_margin" value="10"/>
         <param name="grid_map/enable_virtual_wall" value="false"/>
@@ -164,7 +164,7 @@
         <!-- <param name="grid_map/max_ray_length" value="10.0"/> -->
         <param name="grid_map/max_ray_length" value="4.0"/>
         <param name="grid_map/show_occ_time" value="false"/>
-        <param name="grid_map/pose_type" value="1"/>
+        <param name="grid_map/pose_type" value="2"/>
         <param name="grid_map/frame_id" value="world"/>
         <param name="grid_map/hit_accum_max" value="40" /> 
         <param name="grid_map/hit_accum_threshold" value="10" />
@@ -266,14 +266,22 @@
         <param name="tracking/finish_yaw_thresh" value="0.2" type="double"/>
 
         <!-- topo 导航不可达: 检测/修复/标记/恢复 -->
-        <param name="topo_block/enable"                  type="bool"   value="true"/>
+        <param name="topo_block/enable"                  type="bool"   value="false"/>
         <param name="topo_block/repair_radius"           type="double" value="0.3"/>
-        <param name="topo_block/repair_use_visibility"   type="bool"   value="true"/>
+        <param name="topo_block/repair_use_visibility"   type="bool"   value="false"/>
         <param name="topo_block/hits_thresh"             type="int"    value="2"/>
         <param name="topo_block/ttl"                     type="double" value="8.0"/>
-        <param name="topo_block/revalidate_on_fail"      type="bool"   value="true"/>
+        <param name="topo_block/revalidate_on_fail"      type="bool"   value="false"/>
         <param name="topo_block/max_iter"                type="int"    value="4"/>
         <param name="topo_block/repair_insert_node"     type="bool"   value="false"/>
+
+        <!-- object-id-nav replan: 任务重执行replan -->
+        <param name="object_id_nav_replan/enable"                  type="bool"   value="false"/>
+        <param name="object_id_nav_replan/mode"                    type="int"    value="0"/>
+        <param name="object_id_nav_replan/stuck_vel_thresh"        type="double" value="0.1"/>
+        <param name="object_id_nav_replan/stuck_yaw_rate_thresh"   type="double" value="0.1"/>
+        <param name="object_id_nav_replan/stuck_duration"          type="double" value="3.0"/>
+        <param name="object_id_nav_replan/stuck_max_consecutive"   type="int"    value="0"/>
 
         <!-- skeleton -->
         <param name="skeleton/local_x_max" value="4"/>

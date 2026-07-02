@@ -115,6 +115,13 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("topo_block/stuck_force_advance_yaw_rate_thresh", fp_->stuck_force_advance_yaw_rate_thresh_, 0.1);
   nh.param("topo_block/stuck_force_advance_duration",        fp_->stuck_force_advance_duration_, 3.0);
   nh.param("topo_block/stuck_force_advance_max_consecutive", fp_->stuck_force_advance_max_consecutive_, 2);
+  // object-id-nav replan 参数
+  nh.param("object_id_nav_replan/enable",               fp_->object_id_nav_replan_enable_, false);
+  nh.param("object_id_nav_replan/mode",                 fp_->object_id_nav_replan_mode_, 0);
+  nh.param("object_id_nav_replan/stuck_vel_thresh",     fp_->object_id_nav_replan_stuck_vel_thresh_, 0.1);
+  nh.param("object_id_nav_replan/stuck_yaw_rate_thresh",fp_->object_id_nav_replan_stuck_yaw_rate_thresh_, 0.1);
+  nh.param("object_id_nav_replan/stuck_duration",       fp_->object_id_nav_replan_stuck_duration_, 3.0);
+  nh.param("object_id_nav_replan/stuck_max_consecutive", fp_->object_id_nav_replan_stuck_max_consecutive_, 0);
   nh.param("vla_swarm/enable",                  vla_swarm_enabled_, false);
   nh.param("vla_swarm/result_topic",            vla_swarm_result_topic_, std::string("/planning/vla_swarm_result"));
   nh.param("vla_swarm/bbox_topic",              vla_swarm_bbox_topic_, std::string("/vla_swarm/bbox"));
@@ -284,6 +291,9 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   vla_swarm_ego_state_trigger_sub_ = nh.subscribe(
       "/planning/ego_state_trigger", 10,
       &FastExplorationFSM::vlaSwarmEgoStateTriggerCallback, this,
+      ros::TransportHints().tcpNoDelay());
+  object_id_nav_replan_sub_ = nh.subscribe("/object_id_nav_replan", 10,
+      &FastExplorationFSM::objectIdNavReplanCallback, this,
       ros::TransportHints().tcpNoDelay());
 
   ego_goal_pub_         = nh.advertise<quadrotor_msgs::EgoGoalSet>("local_goal", 10);
@@ -2720,11 +2730,11 @@ void FastExplorationFSM::goTargetObject() {
     scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
     if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_, fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
       INFO_MSG_GREEN("[Targ Obj] | find path to object success, size: " << fd_->path_res_.size());
-      getAndPublishNextAim(fd_->path_res_, true, 0.0f);
-      fd_->path_inx_        = 0;
+
       fd_->has_rotated_     = false;
       fd_->stuck_begin_time_ = -1.0;                  // 新路径生成时重置卡死计时
       fd_->stuck_force_advance_triggered_ = false;
+      getAndPublishNextAim(fd_->path_res_, true, 0.0f);
       // 不重置 stuck_force_advance_count_: 仅正常到达topo节点时清零, 避免全局超时重规划绕过分层计数
       fd_->last_pub_time_   = ros::Time::now();
       INFO_MSG("[Targ Obj] | PubNxtLocalAim, aim: " << fd_->local_aim_pos_ << ", global aim: " << fd_->aim_pos_);
@@ -2791,65 +2801,107 @@ void FastExplorationFSM::goTargetObject() {
       return;
     }
 
-    // 卡死强制推进: 速度/角速度均低于阈值且持续超时后触发(最后判定)
-    // 分层策略: tier1=强制重规划topo路径(清除blocked), tier2=逐点强制推进path_inx++
-    if (fp_->stuck_force_advance_enable_) {
-      double vel_norm = fd_->odom_vel_.norm();
-      double yaw_rate = fabs(fd_->odom_yaw_rate_);
-      if (vel_norm < fp_->stuck_force_advance_vel_thresh_ &&
-          yaw_rate < fp_->stuck_force_advance_yaw_rate_thresh_) {
-        if (fd_->stuck_begin_time_ < 0.0) {
-          fd_->stuck_begin_time_ = ros::Time::now().toSec();
-        }
-        double stuck_duration = ros::Time::now().toSec() - fd_->stuck_begin_time_;
-        if (stuck_duration > fp_->stuck_force_advance_duration_ &&
-            !fd_->stuck_force_advance_triggered_ &&
-            fd_->stuck_force_advance_count_ < fp_->stuck_force_advance_max_consecutive_) {
+    // ========== 优先级控制: 新 replan > topo-block stuck_force_advance ==========
+    if (fp_->object_id_nav_replan_enable_) {
+      // ---- 新 replan 激活 → 屏蔽 topo-block stuck_force_advance ----
 
-          // Tier1: 首次卡死 → 清除blocked标记后内联重规划topo路径(类似强制重启任务)
-          if (fd_->stuck_force_advance_count_ == 0) {
-            ROS_WARN("[Targ Obj] Stuck tier1: force topo replan (clear blocked + regenerate path)");
-            scene_graph_->clearAllBlocked();
-            scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
-            if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_,
-                    fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
-              INFO_MSG_GREEN("[Targ Obj] Stuck tier1: new path found, size: " << fd_->path_res_.size());
-              fd_->path_inx_ = 0;
-              getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
-              displayPath();
-              fd_->stuck_force_advance_count_++;
-              fd_->stuck_force_advance_triggered_ = true;
-              fd_->stuck_begin_time_ = -1.0;
-              fd_->last_pub_time_ = ros::Time::now();
-            } else {
-              // tier1 重规划失败 → 跳过tier1直接进入tier2逻辑
-              ROS_WARN("[Targ Obj] Stuck tier1 failed (no path), fallback to tier2");
-              fd_->stuck_force_advance_count_ = 1;  // 直接标记为已消耗tier1配额
-              // 不设置triggered, 让下一轮立即进入tier2判定
-            }
-          } else {
-            // Tier2: 二次卡死 → 逐点强制推进(当前逻辑)
-            if (fd_->path_inx_ < (int)fd_->path_res_.size() - 1) {
-              fd_->path_inx_++;
-              fd_->stuck_force_advance_count_++;
-              fd_->stuck_force_advance_triggered_ = true;
-              fd_->stuck_begin_time_ = -1.0;
-              getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
-              fd_->last_pub_time_ = ros::Time::now();
-              ROS_WARN("[Targ Obj] Stuck tier2: force advance path_inx=%d, count=%d",
-                       fd_->path_inx_, fd_->stuck_force_advance_count_);
-            } else {
-              // 已是最后一个点无法再推进 → 走全局重规划
-              ROS_WARN("[Targ Obj] Stuck at final waypoint, forced replan");
-              fd_->go_object_process_phase = 0;
-              transitState(WAIT_TRIGGER, "stuck at final waypoint, forced replan");
+      // 模式 0 或 1: 卡死检测
+      if (fp_->object_id_nav_replan_mode_ == 0 || fp_->object_id_nav_replan_mode_ == 1) {
+        double vel_norm = fd_->odom_vel_.norm();
+        double yaw_rate = fabs(fd_->odom_yaw_rate_);
+        if (vel_norm < fp_->object_id_nav_replan_stuck_vel_thresh_ &&
+            yaw_rate < fp_->object_id_nav_replan_stuck_yaw_rate_thresh_) {
+          if (fd_->object_id_nav_replan_stuck_begin_time_ < 0.0) {
+            fd_->object_id_nav_replan_stuck_begin_time_ = ros::Time::now().toSec();
+          }
+          double stuck_duration = ros::Time::now().toSec() - fd_->object_id_nav_replan_stuck_begin_time_;
+          if (stuck_duration > fp_->object_id_nav_replan_stuck_duration_) {
+            int max_cnt = fp_->object_id_nav_replan_stuck_max_consecutive_;
+            if (max_cnt > 0 && fd_->object_id_nav_replan_stuck_count_ >= max_cnt) {
+              ROS_WARN("[ObjIdNavReplan] Stuck detected but max consecutive reached (count=%d, max=%d), giving up",
+                       fd_->object_id_nav_replan_stuck_count_, max_cnt);
+              transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "stuck_replan_max_exceeded");
               return;
             }
+            ROS_WARN("[ObjIdNavReplan] Stuck detected (%.1fs), triggering replan", stuck_duration);
+            triggerObjectIdNavReplan("stuck_detected");
+            return;
           }
+        } else {
+          fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 有运动, 重置
         }
-      } else {
-        fd_->stuck_begin_time_ = -1.0;             // 有运动, 重置计时器
-        fd_->stuck_force_advance_triggered_ = false; // 运动表示脱离原卡死状态, 允许下次再触发
+      }
+
+      // 模式 0 或 2: 话题触发
+      if ((fp_->object_id_nav_replan_mode_ == 0 || fp_->object_id_nav_replan_mode_ == 2) &&
+          fd_->object_id_nav_replan_topic_triggered_) {
+        ROS_WARN("[ObjIdNavReplan] Topic trigger received, triggering replan");
+        triggerObjectIdNavReplan("topic_triggered");
+        return;
+      }
+
+    } else {
+      // ---- 新 replan 未激活 → topo-block 卡死强制推进逻辑照旧 ----
+      // 卡死强制推进: 速度/角速度均低于阈值且持续超时后触发(最后判定)
+      // 分层策略: tier1=强制重规划topo路径(清除blocked), tier2=逐点强制推进path_inx++
+      if (fp_->stuck_force_advance_enable_) {
+        double vel_norm = fd_->odom_vel_.norm();
+        double yaw_rate = fabs(fd_->odom_yaw_rate_);
+        if (vel_norm < fp_->stuck_force_advance_vel_thresh_ &&
+            yaw_rate < fp_->stuck_force_advance_yaw_rate_thresh_) {
+          if (fd_->stuck_begin_time_ < 0.0) {
+            fd_->stuck_begin_time_ = ros::Time::now().toSec();
+          }
+          double stuck_duration = ros::Time::now().toSec() - fd_->stuck_begin_time_;
+          if (stuck_duration > fp_->stuck_force_advance_duration_ &&
+              !fd_->stuck_force_advance_triggered_ &&
+              fd_->stuck_force_advance_count_ < fp_->stuck_force_advance_max_consecutive_) {
+
+            // Tier1: 首次卡死 → 清除blocked标记后内联重规划topo路径(类似强制重启任务)
+            if (fd_->stuck_force_advance_count_ == 0) {
+              ROS_WARN("[Targ Obj] Stuck tier1: force topo replan (clear blocked + regenerate path)");
+              scene_graph_->clearAllBlocked();
+              scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
+              if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_,
+                      fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
+                INFO_MSG_GREEN("[Targ Obj] Stuck tier1: new path found, size: " << fd_->path_res_.size());
+                fd_->path_inx_ = 0;
+                getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+                displayPath();
+                fd_->stuck_force_advance_count_++;
+                fd_->stuck_force_advance_triggered_ = true;
+                fd_->stuck_begin_time_ = -1.0;
+                fd_->last_pub_time_ = ros::Time::now();
+              } else {
+                // tier1 重规划失败 → 跳过tier1直接进入tier2逻辑
+                ROS_WARN("[Targ Obj] Stuck tier1 failed (no path), fallback to tier2");
+                fd_->stuck_force_advance_count_ = 1;  // 直接标记为已消耗tier1配额
+                // 不设置triggered, 让下一轮立即进入tier2判定
+              }
+            } else {
+              // Tier2: 二次卡死 → 逐点强制推进(当前逻辑)
+              if (fd_->path_inx_ < (int)fd_->path_res_.size() - 1) {
+                fd_->path_inx_++;
+                fd_->stuck_force_advance_count_++;
+                fd_->stuck_force_advance_triggered_ = true;
+                fd_->stuck_begin_time_ = -1.0;
+                getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+                fd_->last_pub_time_ = ros::Time::now();
+                ROS_WARN("[Targ Obj] Stuck tier2: force advance path_inx=%d, count=%d",
+                         fd_->path_inx_, fd_->stuck_force_advance_count_);
+              } else {
+                // 已是最后一个点无法再推进 → 走全局重规划
+                ROS_WARN("[Targ Obj] Stuck at final waypoint, forced replan");
+                fd_->go_object_process_phase = 0;
+                transitState(WAIT_TRIGGER, "stuck at final waypoint, forced replan");
+                return;
+              }
+            }
+          }
+        } else {
+          fd_->stuck_begin_time_ = -1.0;             // 有运动, 重置计时器
+          fd_->stuck_force_advance_triggered_ = false; // 运动表示脱离原卡死状态, 允许下次再触发
+        }
       }
     }
 
@@ -2869,7 +2921,7 @@ void FastExplorationFSM::goTargetObject() {
     }
 
     // Local goal
-    if (fd_->path_res_.size() > 2 && dis_2_local_aim < 2.0){
+    if (fd_->path_res_.size() > 2 && dis_2_local_aim < 1.5){
       if (fd_->path_inx_ == fd_->path_res_.size() - 1 && dis_2_local_aim < 1.0 
           && fd_->ego_exec_finished_ && fd_->ego_modify_status_) {  
         INFO_MSG_YELLOW("[TARG Obj] Force Replan, because local goal can't reach!");
@@ -2880,6 +2932,8 @@ void FastExplorationFSM::goTargetObject() {
       getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
       fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
       fd_->stuck_force_advance_triggered_ = false;
+      fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 正常推进时重置新replan卡死计时
+      fd_->object_id_nav_replan_stuck_count_ = 0;           // 正常推进时重置replan计数
       fd_->last_pub_time_ = ros::Time::now();
       // INFO_MSG_GREEN("[TARG Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     }
@@ -3602,8 +3656,16 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       break;
 
     case quadrotor_msgs::Instruction::TURN_OBJECT_ID_NAV:
+      // 存储最新消息（先清空, 再存储）
+      fd_->stored_object_id_nav_instruction_ = *msg;
+      fd_->has_stored_object_id_nav_instruction_ = true;
+      fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 新任务重置卡死计时
+      fd_->object_id_nav_replan_topic_triggered_ = false;
+      fd_->object_id_nav_replan_stuck_count_ = 0;           // 新任务重置replan计数
+
       expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       fd_->object_target_id_ = msg->target_obj_id;
+      fd_->path_inx_        = 0;
       fd_->go_object_process_phase = 0;
       fd_->find_terminate_target_mode_ = false;
       scene_graph_->clearAllBlocked();     // 新导航任务: 清除上次遗留的不可达标记, 不跨任务持久
@@ -3773,6 +3835,42 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback");
       INFO_MSG_RED("[InstructionCallback]: No Valid Instruction! please check, switch to WAIT_TRIGGER"); 
       break;
+  }
+}
+
+void FastExplorationFSM::triggerObjectIdNavReplan(const std::string& reason) {
+  if (!fd_->has_stored_object_id_nav_instruction_) {
+    ROS_WARN("[ObjIdNavReplan] No stored instruction, cannot replan");
+    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "replan_no_stored_instruction");
+    return;
+  }
+
+  const auto& msg = fd_->stored_object_id_nav_instruction_;
+  fd_->object_id_nav_replan_stuck_count_++;
+  ROS_WARN("[ObjIdNavReplan] Replanning (target_obj_id=%d, reason=%s, count=%d)",
+           msg.target_obj_id, reason.c_str(), fd_->object_id_nav_replan_stuck_count_);
+
+  // 重置卡死状态
+  fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;
+  fd_->object_id_nav_replan_topic_triggered_ = false;
+
+  // 直接执行重初始化逻辑（与 instructionCallback 中 TURN_OBJECT_ID_NAV 一致）
+  expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
+  fd_->object_target_id_ = msg.target_obj_id;
+  fd_->path_inx_ = 0;
+  fd_->go_object_process_phase = 0;
+  fd_->find_terminate_target_mode_ = false;
+  scene_graph_->clearAllBlocked();
+  transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "object_id_nav_replan:" + reason);
+}
+
+void FastExplorationFSM::objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg) {
+  if (!fp_->object_id_nav_replan_enable_) {
+    return;  // 功能未启用, 忽略
+  }
+  if (msg->data) {
+    ROS_INFO("[ObjIdNavReplan] Received /object_id_nav_replan = true");
+    fd_->object_id_nav_replan_topic_triggered_ = true;
   }
 }
 
