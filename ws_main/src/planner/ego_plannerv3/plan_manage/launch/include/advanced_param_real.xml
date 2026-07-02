@@ -285,7 +285,7 @@
         <param name="topo_block/stuck_force_advance_max_consecutive" type="int"    value="2"/>
 
         <!-- object-id-nav replan: 任务重执行replan -->
-        <param name="object_id_nav_replan/enable"                  type="bool"   value="false"/>
+        <param name="object_id_nav_replan/enable"                  type="bool"   value="true"/>
 
         <!-- 0 模式全启动, 1 模式只启动stucking-replan, 2 模式只启动topic-replan -->
         <param name="object_id_nav_replan/mode"                    type="int"    value="0"/>
