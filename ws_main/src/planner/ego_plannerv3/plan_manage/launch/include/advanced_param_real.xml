@@ -155,7 +155,7 @@
         <!-- <param name="grid_map/p_hit" value="0.90"/>
         <param name="grid_map/p_miss" value="0.45"/> -->
         <param name="grid_map/p_hit" value="0.90"/>
-        <param name="grid_map/p_miss" value="0.45"/>
+        <param name="grid_map/p_miss" value="0.15"/>
         <param name="grid_map/p_min" value="0.12"/>
         <param name="grid_map/p_max" value="0.90"/>
         <param name="grid_map/p_occ" value="0.80"/>
@@ -309,11 +309,11 @@
         <param name="skeleton/frontier_split_threshold" value="2.0"/>
         <param name="skeleton/min_loop_creation_threshold" value="1"/>
         <param name="skeleton/min_flowback_creation_radius_threshold" value="0.5"/>
-        <param name="skeleton/min_node_radius" value="0.6"/>
+        <param name="skeleton/min_node_radius" value="0.5"/>
         <param name="skeleton/min_node_dense_radius" value="1.0"/>
         <param name="skeleton/search_margin" value="0.2"/>
-        <param name="skeleton/max_ray_length" value="1.4"/>
-        <param name="skeleton/max_expansion_ray_length" value="2.0"/>
+        <param name="skeleton/max_ray_length" value="0.8"/>
+        <param name="skeleton/max_expansion_ray_length" value="1.5"/>
         <param name="skeleton/max_height_diff" value="1.5"/>
 
         <param name="skeleton/sampling_density" value="50"/>    <!-- Fibonicci-sphere sampling -->
