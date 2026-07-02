@@ -2835,9 +2835,14 @@ void FastExplorationFSM::goTargetObject() {
       // 模式 0 或 2: 话题触发
       if ((fp_->object_id_nav_replan_mode_ == 0 || fp_->object_id_nav_replan_mode_ == 2) &&
           fd_->object_id_nav_replan_topic_triggered_) {
-        ROS_WARN("[ObjIdNavReplan] Topic trigger received, triggering replan");
-        triggerObjectIdNavReplan("topic_triggered");
-        return;
+        if (!fd_->has_stored_object_id_nav_instruction_) {
+          ROS_WARN("[ObjIdNavReplan] Topic trigger ignored: no stored instruction");
+          fd_->object_id_nav_replan_topic_triggered_ = false;
+        } else {
+          ROS_WARN("[ObjIdNavReplan] Topic trigger received, triggering replan");
+          triggerObjectIdNavReplan("topic_triggered");
+          return;
+        }
       }
 
     } else {
