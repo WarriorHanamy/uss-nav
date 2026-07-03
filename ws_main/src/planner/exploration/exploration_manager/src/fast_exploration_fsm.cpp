@@ -2808,8 +2808,8 @@ void FastExplorationFSM::goTargetObject() {
     }
 
     // ========== 先replan后topo-block: replan耗尽或mode2超时后fallthrough到topo-block ==========
+    bool fallthrough_to_topo = false;
     if (fp_->object_id_nav_replan_enable_) {
-      bool fallthrough_to_topo = false;
 
       // 统一卡死检测(所有mode共用)
       double vel_norm = fd_->odom_vel_.norm();
@@ -2864,15 +2864,13 @@ void FastExplorationFSM::goTargetObject() {
         fallthrough_to_topo = true;
       }
 
-      if (!fallthrough_to_topo) {
-        return;  // replan 阶段尚未耗尽, 拦截 topo-block
-      }
-      // fallthrough_to_topo == true: 不return, 继续执行下方topo-block逻辑
     }
 
     // ---- topo-block 卡死强制推进(兜底逻辑) ----
+    // 仅当 replan 未启用 或 replan 已耗尽(fallthrough) 时执行
     // 分层策略: tier1=强制重规划topo路径(清除blocked), tier2=逐点强制推进path_inx++
-    if (fp_->stuck_force_advance_enable_) {
+    bool run_topo = !fp_->object_id_nav_replan_enable_ || fallthrough_to_topo;
+    if (run_topo && fp_->stuck_force_advance_enable_) {
       double vel_norm = fd_->odom_vel_.norm();
       double yaw_rate = fabs(fd_->odom_yaw_rate_);
       if (vel_norm < fp_->stuck_force_advance_vel_thresh_ &&
