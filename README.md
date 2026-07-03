@@ -1,5 +1,15 @@
 # uss-nav
 
+## Web 图表入口
+
+默认入口将所有项目文档渲染为一个多标签 Web 页面：
+
+```bash
+bun run view
+```
+
+页面包含 Overview、Mission/EGO 分支审计、EGO、SceneGraph、Next SceneGraph、CODEBASE、消息字段说明和 README。需要可编辑的“系统架构”、“模块架构”和“Mission-EGO分支管理”draw.io 图时，使用 `bun run drawio:view`。详细命令见 `AGENTS.md`。
+
 `uss-nav` 是一个面向无人机自主探索、目标感知、语义场景理解和多机通信的混合工作区。当前目录下主要包含两部分：
 
 - `ws_main`：ROS1 catkin 工作区，负责规划、建图/仿真接口、任务状态机、场景图、多机桥接和常用脚本。

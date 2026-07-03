@@ -1,0 +1,4 @@
+interface:
+  display_name: "Draw.io Web Render"
+  short_description: "Build and verify multi-page Draw.io web views"
+  default_prompt: "Use $drawio-web-render to add or update a verified multi-page Draw.io view."

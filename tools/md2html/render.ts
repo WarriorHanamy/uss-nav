@@ -171,8 +171,8 @@ function renderMulti(outputPath: string, tabs: { label: string; path: string }[]
   const title = "USS-NAV Architecture Overview";
   const desc = "Architecture documentation: EGO Planner, SceneGraph, and decision systems";
   const result = template
-    .replace("{{TITLE}}", title)
-    .replace("{{DESCRIPTION}}", desc)
+    .replaceAll("{{TITLE}}", title)
+    .replaceAll("{{DESCRIPTION}}", desc)
     .replace("{{TABS}}", tabsJson)
     .replace("{{TOCS}}", tocsJson)
     .replace("{{TAB_PANES}}", tabPanesHtml);
@@ -215,11 +215,12 @@ function main() {
   const templatePath = resolve(__dirname, "template.html");
   let template = readFileSync(templatePath, "utf-8");
 
-  const title = cfg.title || "CODEBASE Documentation";
+  const markdownTitle = readFileSync(inputPath, "utf-8").match(/^#\s+(.+)$/m)?.[1]?.trim();
+  const title = markdownTitle || cfg.title || "CODEBASE Documentation";
   const desc = cfg.description || "Auto-generated repository documentation";
   const result = template
-    .replace("{{TITLE}}", title)
-    .replace("{{DESCRIPTION}}", desc)
+    .replaceAll("{{TITLE}}", title)
+    .replaceAll("{{DESCRIPTION}}", desc)
     .replace("{{TOC}}", tocJson)
     .replace("{{BODY}}", body);
 
