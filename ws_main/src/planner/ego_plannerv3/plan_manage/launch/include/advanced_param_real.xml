@@ -292,7 +292,7 @@
         <param name="object_id_nav_replan/stuck_yaw_rate_thresh"   type="double" value="0.1"/>
         <param name="object_id_nav_replan/stuck_duration"          type="double" value="3.0"/>
         <param name="object_id_nav_replan/stuck_max_consecutive"   type="int"    value="0"/>
-        <param name="object_id_nav_replan/topo_fallback_delay"    type="double" value="3.0"/>
+        <param name="object_id_nav_replan/mode2_stuck_fallback_delay" type="double" value="3.0"/>
         <!-- object-id-nav 导航语义参数 -->
         <param name="object_id_nav/require_final_yaw"              type="bool"   value="true"/>
 

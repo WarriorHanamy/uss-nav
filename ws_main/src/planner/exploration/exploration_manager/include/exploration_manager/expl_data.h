@@ -152,7 +152,7 @@ struct FSMParam
   double object_id_nav_replan_stuck_yaw_rate_thresh_{0.1};
   double object_id_nav_replan_stuck_duration_{3.0};
   int    object_id_nav_replan_stuck_max_consecutive_{0}; // 最大连续触发次数, 0=不限制
-  double object_id_nav_replan_topo_fallback_delay_{3.0}; // mode2卡死后等待进入topo-block的延迟(s)
+  double object_id_nav_replan_mode2_stuck_fallback_delay_{10.0}; // mode2卡死后等待进入topo-block的延迟(s)
   // object-id-nav 导航语义参数
   bool   object_id_nav_require_final_yaw_{true};          // 导航到物体后是否需要旋转面向它
 };

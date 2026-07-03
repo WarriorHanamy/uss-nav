@@ -122,7 +122,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("object_id_nav_replan/stuck_yaw_rate_thresh",fp_->object_id_nav_replan_stuck_yaw_rate_thresh_, 0.1);
   nh.param("object_id_nav_replan/stuck_duration",       fp_->object_id_nav_replan_stuck_duration_, 3.0);
   nh.param("object_id_nav_replan/stuck_max_consecutive", fp_->object_id_nav_replan_stuck_max_consecutive_, 0);
-  nh.param("object_id_nav_replan/topo_fallback_delay",   fp_->object_id_nav_replan_topo_fallback_delay_, 3.0);
+  nh.param("object_id_nav_replan/mode2_stuck_fallback_delay", fp_->object_id_nav_replan_mode2_stuck_fallback_delay_, 10.0);
   nh.param("object_id_nav/require_final_yaw",             fp_->object_id_nav_require_final_yaw_, true);
   nh.param("vla_swarm/enable",                  vla_swarm_enabled_, false);
   nh.param("vla_swarm/result_topic",            vla_swarm_result_topic_, std::string("/planning/vla_swarm_result"));
@@ -2858,9 +2858,9 @@ void FastExplorationFSM::goTargetObject() {
 
       // ---- Mode 2: 卡死超时fallback到topo-block ----
       if (fp_->object_id_nav_replan_mode_ == 2 &&
-          stuck_sec > fp_->object_id_nav_replan_topo_fallback_delay_) {
+          stuck_sec > fp_->object_id_nav_replan_mode2_stuck_fallback_delay_) {
         ROS_WARN("[ObjIdNavReplan] Mode2 stuck %.1fs > fallback delay %.1fs, fallback to topo-block",
-                 stuck_sec, fp_->object_id_nav_replan_topo_fallback_delay_);
+                 stuck_sec, fp_->object_id_nav_replan_mode2_stuck_fallback_delay_);
         fallthrough_to_topo = true;
       }
 
