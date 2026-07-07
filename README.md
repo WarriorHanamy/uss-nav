@@ -27,7 +27,6 @@ uss-nav/
 │   │   ├── planner/
 │   │   │   ├── ego_plannerv3/   # 局部规划、探索主流程、轨迹生成
 │   │   │   ├── exploration/     # 探索管理、主动感知、感知工具
-│   │   │   ├── mission_fsm/     # 任务状态机、RViz/Unity 辅助、多机启动入口
 │   │   │   ├── scene_graph/     # 语义目标融合、场景图、骨架生成、LLM 接口
 │   │   │   └── uav_simulator/   # 仿真器、地图生成、深度/点云模拟
 │   │   ├── network/
@@ -48,7 +47,6 @@ uss-nav/
 | `plan_env` / `path_searching` / `traj_opt` | `ws_main/src/planner/ego_plannerv3/*` | 栅格地图、搜索、轨迹优化等基础能力 |
 | `exploration_manager` | `ws_main/src/planner/exploration/exploration_manager` | 探索逻辑、前沿点选择、目标/探索模式切换 |
 | `scene_graph` | `ws_main/src/planner/scene_graph` | 目标检测结果融合、对象点云、场景图、骨架/区域结构、LLM 交互 |
-| `mission_fsm` | `ws_main/src/planner/mission_fsm` | 任务状态、Unity/点云同步、桥接启动入口、RViz 配置 |
 | `uav_simulator` | `ws_main/src/planner/uav_simulator` | 仿真无人机、地图和深度/点云渲染 |
 | `swarm_ros_bridge` | `ws_main/src/network/NetBridgeForSwarm/swarm_ros_bridge` | 多机 ROS Topic/Service/Image 转发 |
 | `quadrotor_msgs` / `traj_utils` | `ws_main/src/utils/*` | 自定义消息、轨迹/命令类型定义 |
@@ -70,12 +68,12 @@ uss-nav/
 | 模式 | 推荐入口 | 是否只依赖本仓库 | 说明 |
 | --- | --- | --- | --- |
 | 仿真最小闭环 | `roslaunch ego_planner obj_nav.launch` | 是 | 使用仓库内仿真器和规划器，最适合首次验证 |
-| 仿真 RViz | `roslaunch mission_fsm rviz.launch` | 是 | 配合仿真启动，使用仓库内现成 RViz 配置和 `2D Nav Goal` 下发目标 |
+| 仿真 RViz | `roslaunch sim_bringup sim_ego_main.launch use_rviz:=true` | 是 | 一体化启动：仿真 + 规划器 + RViz |
 | 实机未知地图一键启动 | `bash ws_main/src/script/run_with_unknown_map.sh` | 否 | 依赖 `mavros`、`fast_lio`、`ekf_quat`、`px4ctrl` 等外部包 |
 | 实机已知地图一键启动 | `bash ws_main/src/script/run_with_known_map.sh` | 否 | 在未知地图链路基础上额外依赖已有地图和检测链路 |
 | 追加巡逻节点 | `bash ws_main/src/script/run_patrol_node.sh` | 否 | 启动真实机目标巡逻入口 |
 | YOLOE 检测服务 | `yoloe_predict_server_realworld.py` / `yoloe_server.py` | 代码在仓库内，模型文件不在仓库内 | 需要 CUDA、PyTorch、YOLOE 权重、MobileCLIP 权重 |
-| 多机桥接 | `roslaunch mission_fsm bridge_drone.launch` | 是 | 运行前需要先改桥接 YAML 和 hostname |
+| 多机桥接 | `roslaunch NetBridgeForSwarm bridge_drone.launch` | 否 | launch 文件缺失，需自行编写或从外部工作区引入 |
 
 ## 5. 环境准备
 
@@ -210,10 +208,10 @@ source devel/setup.bash
 ```bash
 cd /home/zhywwyzh/workspace/VLA_Diff/ros_ws/uss-nav/ws_main
 source devel/setup.bash
-roslaunch mission_fsm rviz.launch
+roslaunch sim_bringup sim_ego_main.launch use_rviz:=true
 ```
 
-终端 2：
+终端 2（可选，单独启动 YOLOE）：
 
 ```bash
 cd /home/zhywwyzh/workspace/VLA_Diff/ros_ws/uss-nav/ws_main
@@ -235,11 +233,6 @@ roslaunch ego_planner obj_nav.launch
 - `simulator.xml`
 
 这意味着它会同时拉起规划主节点、仿真传感器和相关参数。
-
-说明：
-
-- `ego_planner` 目录下虽然也有 `rviz.launch`，但它当前指向的 `launch/include/default.rviz` 在仓库里缺失
-- 因此这里推荐使用 `mission_fsm rviz.launch`
 
 ### 7.2 仓库内启动真实机规划入口
 
@@ -364,20 +357,13 @@ python3 src/planner/scene_graph/scripts/LLM_interface_thread.py
 
 # 9 完整仿真启动流程
 
-## 终端1：启动rviz
+## 终端1：启动rviz + 主程序
 ```bash
 source ws_main/devel/setup.bash
-roslaunch mission_fsm rviz.launch
+roslaunch sim_bringup sim_ego_main.launch use_rviz:=true
 ```
 
-## 终端2：启动主程序
-```bash
-# 在使用程序之前，请注意调整odom, cloud, rgb, depth等话题的名称，不同仿真器、不同设置下这些话题名会存在差异
-source ws_main/devel/setup.bash
-roslaunch ego_planner obj_nav.launch
-```
-
-## 终端3：启动yoloe
+## 终端2：启动yoloe
 ```bash
 source ws_main/devel/setup.bash
 source .venv/bin/activate
@@ -385,13 +371,13 @@ cd yoloe
 python predict_realtime_cam_sim.py
 ```
 
-## 终端4：启动scene-graph
+## 终端3：启动scene-graph
 ```bash
 source ws_main/devel/setup.bash
 python ws_main/src/planner/scene_graph/scripts/LLM_interface_thread.py
 ```
 
-## 终端5：功能发布
+## 终端4：功能发布
 ```bash
 source ws_main/devel/setup.bash
 按照

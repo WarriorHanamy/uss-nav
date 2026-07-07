@@ -29,7 +29,6 @@ uss-nav/
 │   │   │   ├── ego_plannerv3/     # EGO-planner: trajectory optimization, A*, grid map, path search
 │   │   │   ├── exploration/       # Exploration FSM, frontier management, active perception
 │   │   │   ├── scene_graph/       # Semantic scene graph: skeleton, objects, areas, LLM interface
-│   │   │   ├── mission_fsm/       # Mission state machine, launch configs
 │   │   │   └── uav_simulator/     # UAV simulator (so3_quadrotor, local_sensing, mockamap)
 │   │   ├── network/
 │   │   │   └── NetBridgeForSwarm/ # Multi-drone ROS bridge over ZMQ/UDP
@@ -77,8 +76,7 @@ uss-nav/
 | `bash ws_main/src/script/run_with_known_map.sh`   | Real   | Startup with pre-saved map                 |
 | `python yoloe/predict_realtime_cam_sim.py`   | Vision        | Real-time YOLOE detection (sim)            |
 | `python yoloe/predict_realtime_cam_real.py`  | Vision        | Real-time YOLOE detection (real UAV)       |
-| `roslaunch mission_fsm bridge_drone.launch`  | Multi-drone   | Bridge node for swarm communication        |
-| `roslaunch mission_fsm rviz.launch`          | Visualization | RViz setup (recommended)                   |
+| `roslaunch sim_bringup sim_ego_main.launch use_rviz:=true` | Simulation + RViz | All-in-one sim launch (planner + simulator + RViz)  |
 
 ---
 
@@ -110,11 +108,8 @@ pip install -r requirements.txt
 
 ### Quick Start (Simulation)
 ```bash
-# Terminal 1: RViz
-roslaunch mission_fsm rviz.launch
-
-# Terminal 2: Planner + Simulator
-roslaunch ego_planner obj_nav.launch
+# All-in-one: planner + simulator + RViz
+roslaunch sim_bringup sim_ego_main.launch use_rviz:=true
 
 # Set 2D Nav Goal in RViz to trigger exploration
 ```
@@ -333,7 +328,7 @@ This is a **research codebase** with no production deployment infrastructure.
 - **Real UAV**: Shell scripts in `ws_main/src/script/`
   - `run_with_unknown_map.sh` — full startup (odom, LiDAR, detection, planner, bridge)
   - `run_with_known_map.sh` — startup with pre-saved environment map
-- **Multi-drone**: `mission_fsm/bridge_drone.launch` + `bridge_station.launch`
+- **Multi-drone**: No launch file in repo — see `NetBridgeForSwarm/swarm_ros_bridge` for bridge node
 
 ### Operational Scripts (42+ in `ws_main/src/script/`)
 | Category      | Scripts                                              |

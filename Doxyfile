@@ -5,7 +5,6 @@ PROJECT_BRIEF          = "Full-stack autonomous UAV navigation — EGO Planner v
 OUTPUT_DIRECTORY       = docs/api
 INPUT                  = ws_main/src/planner/ego_plannerv3 \
                          ws_main/src/utils/traj_utils \
-                         ws_main/src/planner/mission_fsm \
                          ws_main/src/planner/scene_graph
 RECURSIVE              = YES
 EXTRACT_ALL            = YES
