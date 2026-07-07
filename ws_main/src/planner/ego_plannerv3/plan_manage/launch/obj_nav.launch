@@ -61,9 +61,9 @@
     </node> -->
     <!--    <arg name="map_name" value="$(find map_generator)/pcd/7_9_scans.pcd"/>-->
 
-    <arg name="map_name" value="$(find map_generator)/pcd/2026-06-29-all-newmap.pcd"/>
+    <arg name="map_name" value="$(find map_generator)/pcd/2026-06-29-all-newmap-d0.05_ds.pcd"/>
     <!-- 支撑地图: 模拟 FAST_LIO prior_local, 以当前位置截球补充点云辅助建图 -->
-    <arg name="support_map_name" value="$(find map_generator)/pcd/20260629-magic1.pcd"/>
+    <arg name="support_map_name" value="$(find map_generator)/pcd/20260704-magic2-d0.05.pcd"/>
     <node pkg="map_generator" name="map_pub" type="map_pub" output="screen" args="$(arg map_name)">
         <param name="add_boundary" value="0"/>
         <param name="add_boundary2" value="0"/>
