@@ -87,6 +87,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
     fp_->frontier_update_dt_ = 0.05;
   }
   nh.param("fsm/enable_yaw_scan", enable_yaw_scan_, false);
+  nh.param("fsm/enable_scene_graph_update_after_load", enable_scene_graph_update_after_load_, true);
   double panorama_max_step_deg = 120.0;
   double panorama_extend_angle_deg = 40.0;
   nh.param("fsm/panorama_max_step", panorama_max_step_deg, 120.0);
@@ -3636,6 +3637,11 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
       hardResetExploreArea(false, false);
       scene_graph_->object_factory_->runThisModule();
       scene_graph_->refreshLoadedMapVisualization();
+      // 根据配置决定是否冻结场景图增量更新
+      if (!enable_scene_graph_update_after_load_) {
+        scene_graph_->freezeUpdate();
+        INFO_MSG_GREEN("[InstructionCallback] Scene graph update FROZEN after load.");
+      }
       transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback(load scene graph)");
       INFO_MSG_GREEN("[InstructionCallback] Load scene graph snapshot succeeded.");
     } else {

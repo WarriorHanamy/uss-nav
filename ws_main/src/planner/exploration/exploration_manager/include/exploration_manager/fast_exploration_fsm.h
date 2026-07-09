@@ -107,6 +107,7 @@ private:
   unsigned int cur_prompt_id_{0};
   bool has_made_area_decision_{false}, need_rotate_yaw_{false};    // only used for llm plan
   bool enable_yaw_scan_{false};                                   // 是否执行+45°/-45°/回正扫描
+  bool enable_scene_graph_update_after_load_{true};               // 载入预存地图后是否继续增量更新场景图
   // 仅由source_task_id=EXPLORATION/COUNTING开启的360度全景旋转状态
   bool need_panorama_{false};
   bool panorama_command_active_{false};

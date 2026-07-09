@@ -34,6 +34,10 @@ bool SceneGraph::initSceneGraph(const Eigen::Vector3d &cur_pos, double yaw) {
 }
 
 void SceneGraph::updateSceneGraph(const Eigen::Vector3d &cur_pos, const double &yaw, bool &new_topo) {
+    if (scene_graph_update_frozen_) {
+        new_topo = false;
+        return;
+    }
 
     if (skeleton_gen_->doDenseCheckAndExpand(cur_pos, yaw)) {
         new_topo = true;

@@ -77,6 +77,10 @@ public:
     bool initSceneGraph(const Eigen::Vector3d &cur_pos, double yaw);
     void updateSceneGraph(const Eigen::Vector3d &cur_pos, const double &yaw, bool &new_topo);
     void updateObjectToSceneGraph();
+    // 场景图更新冻结控制：冻结后 updateSceneGraph 不再增量更新拓扑，但 loadMap 全量加载不受影响
+    void freezeUpdate()   { scene_graph_update_frozen_ = true; }
+    void unfreezeUpdate() { scene_graph_update_frozen_ = false; }
+    bool isUpdateFrozen() const { return scene_graph_update_frozen_; }
     bool getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3d> &path, Eigen::Vector3d & aim_pos, double &aim_yaw);
 
     // 拓扑点不可达: 检测 / 修复 / 标记 / 恢复 //
@@ -168,6 +172,7 @@ private:
     ros::Subscriber        llm_ans_sub_;
     unsigned int           cur_prompt_id_ = 0;
     bool                   need_area_prediction_ = false;
+    bool                   scene_graph_update_frozen_ = false;
 
     std::map<unsigned int, std::promise<std::string>> llm_ans_promises_;
     void llmAnsCallback(const scene_graph::PromptMsg::ConstPtr& msg);
