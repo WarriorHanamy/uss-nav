@@ -148,6 +148,11 @@ class SkeletonGenerator {
      */
     double astarSearch(const PolyHedronPtr start_polyhedron, const PolyHedronPtr end_polyhedron,
                        std::vector<Eigen::Vector3d>& path);
+    void getLastAstarPolyPath(std::vector<PolyHedronPtr>& poly_path){ skeleton_astar_->getPolyPath(poly_path); } // 上次 A*路径多面体序列
+    ego_planner::MapInterface::Ptr getMapInterface(){ return map_interface_; }                                   // 暴露地图接口供占据查询
+    // topo 导航不可达: 将修复点插入拓扑图(创建节点、注册kdtree、连接可见邻居)
+    PolyHedronPtr insertPolyhedronAt(const Eigen::Vector3d& center);
+    void connectToVisibleNeighbors(const PolyHedronPtr& poly, double radius);
     void resetForMapLoad();
     bool registerLoadedPolyhedron(const PolyHedronPtr& polyhedron);
     void finishMapLoad();

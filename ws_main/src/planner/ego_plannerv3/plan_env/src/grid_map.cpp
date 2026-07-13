@@ -57,7 +57,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
   //   ROS_WARN("Inflation is too big, which will cause siginificant computation! Resolution enalrged to %f automatically.", mp_.resolution_);
   // }
   const int DefaultInfGrid = 3;
-  mp_.resolution_ = max(mp_.obstacles_inflation_ / DefaultInfGrid, 0.13);
+  mp_.resolution_ = max(mp_.obstacles_inflation_ / DefaultInfGrid, 0.11);
   mp_.inf_grid_ = ceil((mp_.obstacles_inflation_ - 1e-5) / mp_.resolution_);
 
   std::cout << "inflation inf grid : " << mp_.inf_grid_ << ", resolution : " << mp_.resolution_ << std::endl;

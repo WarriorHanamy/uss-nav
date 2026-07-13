@@ -37,8 +37,8 @@
         <!-- <remap from="/goal" to = "/move_base_simple/goal"/> -->
         <remap from ="/trigger" to="/move_base_simple/goal"/>
         <remap from="~grid_map/odom" to="/drone_$(arg drone_id)_$(arg odometry_topic)"/>
-<!--        <remap from="~grid_map/cloud" to="/drone_$(arg drone_id)_$(arg cloud_topic)"/>-->
-        <remap from="~grid_map/cloud" to="/livox/lidar_world"/>
+        <remap from="~grid_map/cloud" to="/drone_0_cloud_merger/cloud_merged"/>
+        <!-- <remap from="~grid_map/cloud" to="/livox/lidar_world"/> -->
         <remap from="~grid_map/pose"   to = "/drone_$(arg drone_id)_$(arg camera_pose_topic)"/>
         <remap from="~grid_map/depth" to = "/drone_$(arg drone_id)_$(arg depth_topic)"/>
         <remap from="/position_cmd" to="$(arg planner_cmd_mux_ego_topic)"/>
@@ -73,6 +73,7 @@
         <param name="fsm/fail_safe" value="true"/>
         <param name="fsm/battery_thr" value="14.0" type="double"/>
         <param name="fsm/enable_area_prediction" value="true" type="bool"/>
+        <param name="fsm/enable_scene_graph_update_after_load" value="true" type="bool"/>
         <param name="fsm/auto_init_scene_graph" value="true" type="bool"/>
         <param name="fsm/auto_init_delay_sec" value="2.0" type="double"/>
         <param name="fsm/scene_graph_init_forward_dist" value="1.8" type="double"/>
@@ -81,14 +82,42 @@
         <!-- VLA_Swarm 独立任务状态机 -->
         <param name="vla_swarm/enable" value="true" type="bool"/>
         <param name="vla_swarm/result_topic" value="/planning/vla_swarm_result" type="string"/>
+        <param name="vla_swarm/bbox_topic" value="/vla_swarm/bbox" type="string"/>
+        <param name="vla_swarm/bbox_fallback_topic" value="/vla_swarm/bbox/fallback" type="string"/>
+        <param name="vla_swarm/target_topic" value="/vla_swarm/target" type="string"/>
+        <param name="vla_swarm/camera_topic" value="/camera1/color_sync/image/compressed" type="string"/>
+        <param name="vla_swarm/observation_topic" value="/vla_swarm/observation" type="string"/>
         <param name="vla_swarm/prompt_timeout" value="20.0" type="double"/>
         <param name="vla_swarm/target_timeout" value="10.0" type="double"/>
         <param name="vla_swarm/ego_plan_timeout" value="5.0" type="double"/>
         <param name="vla_swarm/ego_exec_timeout" value="30.0" type="double"/>
         <param name="vla_swarm/max_plan_retries" value="2" type="int"/>
         <param name="vla_swarm/max_target_retries" value="2" type="int"/>
+        <param name="vla_swarm/max_exploration_rounds" value="6" type="int"/>
+        <param name="vla_swarm/enable_room_description" value="false" type="bool"/>
         <param name="vla_swarm/waypoint_distance" value="2.0" type="double"/>
         <param name="vla_swarm/goal_tolerance" value="0.5" type="double"/>
+        <param name="vla_swarm/flight_height" value="1.0" type="double"/>
+        <!-- 扫描偏航步长(度)，自动生成方向序列: [0, ±step, ±2*step, ..., 180] -->
+        <param name="vla_swarm/scan_yaw_step_deg" value="60.0" type="double"/>
+        <param name="vla_swarm/scan_yaw_tolerance" value="0.08" type="double"/>
+        <param name="vla_swarm/scan_settle_time" value="0.4" type="double"/>
+        <param name="vla_swarm/scan_timeout" value="8.0" type="double"/>
+        <!-- SmallMap：黑色障碍、粉色自由空间、白色未知区域、绿色门候选 -->
+        <param name="vla_swarm/small_map_topic" value="/vla_swarm/small_map" type="string"/>
+        <param name="vla_swarm/small_map_frame" value="world" type="string"/>
+        <param name="vla_swarm/small_map_width" value="320" type="int"/>
+        <param name="vla_swarm/small_map_height" value="240" type="int"/>
+        <param name="vla_swarm/map_update_period" value="1.0" type="double"/>
+        <param name="vla_swarm/map_height_min" value="0.6" type="double"/>
+        <param name="vla_swarm/map_height_max" value="1.6" type="double"/>
+        <param name="vla_swarm/map_height_step" value="0.4" type="double"/>
+        <param name="vla_swarm/min_room_area_px" value="300" type="int"/>
+        <param name="vla_swarm/room_erode_iterations" value="4" type="int"/>
+        <param name="vla_swarm/door_min_width_px" value="4" type="int"/>
+        <param name="vla_swarm/door_max_width_px" value="30" type="int"/>
+        <param name="vla_swarm/door_merge_distance_px" value="12" type="int"/>
+        <param name="vla_swarm/astar_clearance_px" value="2" type="int"/>
 
         <!-- ego state trigger -->
         <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>
@@ -103,7 +132,7 @@
         <param name="grid_map/local_update_range_y" value="8.0" />
         <param name="grid_map/local_update_range_z" value="4.0" />
         <!-- <param name="grid_map/obstacles_inflation" value="0.5" /> -->
-        <param name="grid_map/obstacles_inflation" value="0.3" />
+        <param name="grid_map/obstacles_inflation" value="0.2" />
 
         <param name="grid_map/local_map_margin" value="10"/>
         <param name="grid_map/enable_virtual_wall" value="false"/>
@@ -136,7 +165,7 @@
         <!-- <param name="grid_map/max_ray_length" value="10.0"/> -->
         <param name="grid_map/max_ray_length" value="4.0"/>
         <param name="grid_map/show_occ_time" value="false"/>
-        <param name="grid_map/pose_type" value="1"/>
+        <param name="grid_map/pose_type" value="2"/>
         <param name="grid_map/frame_id" value="world"/>
         <param name="grid_map/hit_accum_max" value="40" /> 
         <param name="grid_map/hit_accum_threshold" value="10" />
@@ -236,6 +265,28 @@
         <param name="tracking/finish_hold_time" value="3.0" type="double"/>
         <param name="tracking/finish_move_thresh" value="0.2" type="double"/>
         <param name="tracking/finish_yaw_thresh" value="0.2" type="double"/>
+
+        <!-- topo 导航不可达: 检测/修复/标记/恢复 -->
+        <param name="topo_block/enable"                  type="bool"   value="false"/>
+        <param name="topo_block/repair_radius"           type="double" value="0.3"/>
+        <param name="topo_block/repair_use_visibility"   type="bool"   value="false"/>
+        <param name="topo_block/hits_thresh"             type="int"    value="2"/>
+        <param name="topo_block/ttl"                     type="double" value="8.0"/>
+        <param name="topo_block/revalidate_on_fail"      type="bool"   value="false"/>
+        <param name="topo_block/max_iter"                type="int"    value="4"/>
+        <param name="topo_block/repair_insert_node"     type="bool"   value="false"/>
+
+        <!-- object-id-nav replan: 任务重执行replan -->
+        <param name="object_id_nav_replan/enable"                  type="bool"   value="true"/>
+        <!-- 0 模式全启动, 1 模式只启动stucking-replan, 2 模式只启动topic-replan -->
+        <param name="object_id_nav_replan/mode"                    type="int"    value="0"/>
+        <param name="object_id_nav_replan/stuck_vel_thresh"        type="double" value="0.1"/>
+        <param name="object_id_nav_replan/stuck_yaw_rate_thresh"   type="double" value="0.1"/>
+        <param name="object_id_nav_replan/stuck_duration"          type="double" value="3.0"/>
+        <param name="object_id_nav_replan/stuck_max_consecutive"   type="int"    value="0"/>
+        <param name="object_id_nav_replan/mode2_stuck_fallback_delay" type="double" value="3.0"/>
+        <!-- object-id-nav 导航语义参数 -->
+        <param name="object_id_nav/require_final_yaw"              type="bool"   value="false"/>
 
         <!-- skeleton -->
         <param name="skeleton/local_x_max" value="4"/>
@@ -352,4 +403,8 @@
         <param name="optimization/max_jer" value="$(arg max_jer)" type="double"/>
         <param name="optimization/max_sna" value="$(arg max_sna)" type="double"/>
     </node>
+
+    <!-- RC replan trigger: ch8+ch9 同时 >1500 时触发 /object_id_nav_replan -->
+    <node pkg="exploration_manager" name="rc_replan_trigger" type="rc_replan_trigger" output="screen"/>
+
 </launch>

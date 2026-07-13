@@ -440,8 +440,8 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             }
         }
         if (areas_to_update.empty()) {
-            ROS_ERROR("!!!!!!!!!! Area Found No Connection with OLD Areas !!!!!!!!!!");
-            exit(1);
+            ROS_WARN("!!!!!!!!!! Area Found No Connection with OLD Areas, skip this batch !!!!!!!!!!");
+            return;
         }
 
         // [Log统一] 打印需要更新的区域信息

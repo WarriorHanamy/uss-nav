@@ -105,6 +105,7 @@ namespace skeleton_astar{
      * @param[out] path  Path waypoints [m]
      */
     void getPath(std::vector<Eigen::Vector3d>& path);
+    void getPolyPath(std::vector<PolyHedronPtr>& poly_path);   // 返回上次搜索路径对应的多面体序列
     void getNeighborPolyhedronsNotInCloseList(AstarNode::Ptr cur_node, std::vector<AstarNode::Ptr>& neighbor_nodes);
     void visualizePath();
 
@@ -114,6 +115,7 @@ namespace skeleton_astar{
     ros::Publisher  vis_pub_;
     Eigen::Vector3d end_pos_;
     std::vector<Eigen::Vector3d> path_;
+    std::vector<PolyHedronPtr>   poly_path_;   // 与 path_ 对应的多面体序列
     std::priority_queue<AstarNode::Ptr, std::vector<AstarNode::Ptr>, AstarNodeCompare> open_list_;
     std::unordered_map<Eigen::Vector3d, AstarNode::Ptr, Vector3dHash> open_list_map_;
     std::unordered_map<Eigen::Vector3d, AstarNode::Ptr, Vector3dHash> closed_list;

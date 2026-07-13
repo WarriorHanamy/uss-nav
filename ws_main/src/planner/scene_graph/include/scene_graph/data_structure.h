@@ -219,6 +219,7 @@ public:
   bool                   is_critical_;           ///< Whether this vertex is critical for structure [--]
   VertexType             type_;                  ///< Vertex type (BLACK/WHITE/GRAY/RUBBISH)
   Eigen::Vector3d        position_;               ///< Vertex position [m]
+  Eigen::Vector3d        collision_polyhedron_index_; ///< Blocking polyhedron index for collision samples [m]
   Eigen::Vector3d        direction_in_unit_sphere_; ///< Direction from center on unit sphere [--]
   int                    dir_sample_buffer_index_; ///< Index in sphere sample buffer [--]
   std::vector<VertexPtr> connected_vertices_;    ///< Connected vertices via edges [--]
@@ -324,6 +325,12 @@ public:
   int area_id_{-1};                    ///< ID of the area (cluster) this polyhedron belongs to [--]
 
   double temp_distance_to_nxt_poly_;   ///< A* distance to next polyhedron [m]
+
+  // Runtime navigation-block status. This is not serialized into saved map
+  // topology state; old maps load with the default unblocked values.
+  bool       nav_blocked_   = false;  ///< Whether inflation occupancy currently blocks navigation [--]
+  ros::Time  blocked_stamp_;          ///< Time when the block was marked [s]
+  int        blocked_hits_  = 0;      ///< Consecutive block detections used for debounce [--]
 
   /**
    * Construct a polyhedron at a given centroid.

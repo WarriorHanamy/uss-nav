@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <quadrotor_msgs/PerceptionMsg.h>
+#include <quadrotor_msgs/Instruction.h>
 #include <scene_graph/scene_graph.h>
 // #include "poly_traj_utils.hpp"
 
@@ -37,6 +38,7 @@ struct FSMData
   Eigen::Vector3d         odom_pos_, odom_vel_;
   Eigen::Quaterniond      odom_orient_;
   double                  odom_yaw_;
+  double                  odom_yaw_rate_;            // 角速度 rad/s(里程计回调填充)
 
   // start state
   Eigen::Vector3d         start_pt_, start_vel_, start_acc_, start_yaw_;
@@ -90,6 +92,16 @@ struct FSMData
   int object_target_id_;
   u_int8_t go_object_process_phase{0};
   u_int8_t go_waypoint_process_phase{0};
+  // 卡死强制推进
+  double  stuck_begin_time_{-1.0};       // 进入卡死计时起点(秒), -1表示未进入
+  int     stuck_force_advance_count_{0}; // 连续强制推进计数
+  bool    stuck_force_advance_triggered_{false}; // 本轮是否已触发(防重复)
+  // object-id-nav replan 运行时状态
+  quadrotor_msgs::Instruction stored_object_id_nav_instruction_; // 缓存的最新 TURN_OBJECT_ID_NAV 消息
+  bool has_stored_object_id_nav_instruction_{false};             // 是否有缓存消息
+  double object_id_nav_replan_stuck_begin_time_{-1.0};           // 卡死计时起点(秒), -1=未卡死
+  bool object_id_nav_replan_topic_triggered_{false};             // 话题触发标记
+  int  object_id_nav_replan_stuck_count_{0};                    // 连续replan触发计数
   bool new_topo_need_predict_immediately_{false};
   bool regular_explore_{false};
   bool find_terminate_target_mode_{false};
@@ -127,6 +139,22 @@ struct FSMParam
   std::string             elastic_tracker_trigger_topic_{"/triger"};
   std::string             elastic_tracker_finish_topic_{"/elastic_tracker/tracking_finish"};
   std::string             elastic_tracker_stop_topic_{"/elastic_tracker/stop"};
+  // 卡死强制推进参数
+  bool   stuck_force_advance_enable_{true};
+  double stuck_force_advance_vel_thresh_{0.1};
+  double stuck_force_advance_yaw_rate_thresh_{0.1};
+  double stuck_force_advance_duration_{3.0};
+  int    stuck_force_advance_max_consecutive_{2};
+  // object-id-nav replan 参数
+  bool   object_id_nav_replan_enable_{false};
+  int    object_id_nav_replan_mode_{0};        // 0=both, 1=stuck only, 2=topic only
+  double object_id_nav_replan_stuck_vel_thresh_{0.1};
+  double object_id_nav_replan_stuck_yaw_rate_thresh_{0.1};
+  double object_id_nav_replan_stuck_duration_{3.0};
+  int    object_id_nav_replan_stuck_max_consecutive_{0}; // 最大连续触发次数, 0=不限制
+  double object_id_nav_replan_mode2_stuck_fallback_delay_{10.0}; // mode2卡死后等待进入topo-block的延迟(s)
+  // object-id-nav 导航语义参数
+  bool   object_id_nav_require_final_yaw_{true};          // 导航到物体后是否需要旋转面向它
 };
 
 struct ExplorationData {

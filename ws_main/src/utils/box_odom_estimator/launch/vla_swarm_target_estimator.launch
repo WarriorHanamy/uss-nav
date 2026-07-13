@@ -1,0 +1,35 @@
+<launch>
+  <arg name="bbox_topic" default="/vla_swarm/bbox"/>
+  <arg name="fallback_topic" default="/vla_swarm/bbox/fallback"/>
+  <arg name="target_topic" default="/vla_swarm/target"/>
+  <arg name="camera_info_topic" default="/camera/color/camera_info"/>
+  <arg name="observation_topic" default="/vla_swarm/observation"/>
+  <arg name="odom_topic" default="/odom_world"/>
+  <arg name="cloud_topic" default="/livox/lidar_sync"/>
+  <arg name="moge_root" default=""/>
+  <arg name="moge_model_path" default=""/>
+  <arg name="moge_device" default="cuda"/>
+
+  <node pkg="box_odom_estimator" type="bbox_lidar_target_estimator"
+        name="vla_swarm_lidar_target_estimator" output="screen">
+    <param name="bbox_topic" value="$(arg bbox_topic)"/>
+    <param name="fallback_topic" value="$(arg fallback_topic)"/>
+    <param name="target_topic" value="$(arg target_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="observation_topic" value="$(arg observation_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="cloud_topic" value="$(arg cloud_topic)"/>
+  </node>
+
+  <node pkg="box_odom_estimator" type="moge_target_estimator.py"
+        name="vla_swarm_moge_target_estimator" output="screen">
+    <param name="bbox_topic" value="$(arg fallback_topic)"/>
+    <param name="target_topic" value="$(arg target_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="observation_topic" value="$(arg observation_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="moge_root" value="$(arg moge_root)"/>
+    <param name="model_path" value="$(arg moge_model_path)"/>
+    <param name="device" value="$(arg moge_device)"/>
+  </node>
+</launch>

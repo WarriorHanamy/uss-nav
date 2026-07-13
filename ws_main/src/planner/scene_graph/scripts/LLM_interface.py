@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# 已废弃：该脚本使用旧消息导入和旧 Prompt 分发，不支持 VLA_Swarm。
+# 当前入口为 LLM_interface_thread.py 或 LLM_interface_deepseek_thread.py。
+
 import rospy
 from std_msgs.msg import PromptMsg
 from rospkg import RosPack

@@ -133,6 +133,48 @@ bool SkeletonGenerator::registerLoadedPolyhedron(const PolyHedronPtr& polyhedron
   return true;
 }
 
+PolyHedronPtr SkeletonGenerator::insertPolyhedronAt(const Eigen::Vector3d &center) {
+    auto new_poly = std::make_shared<Polyhedron>(center, nullptr, false);
+    new_poly->origin_center_ = center;
+
+    polyhedron_map_[center] = new_poly;
+    PolyHedronKDTreeVector add_temp;
+    add_temp.emplace_back(new_poly);
+    PolyHedronKDTree_FixedCenterVector add_temp_fixed;
+    add_temp_fixed.emplace_back(new_poly);
+
+    if (has_init_polyhedron_kdtree_) {
+        polyhedron_kd_tree_->Add_Points(add_temp, false);
+        polyhedron_kd_tree_fixed_center_->Add_Points(add_temp_fixed, false);
+    } else {
+        polyhedron_kd_tree_->Build(add_temp);
+        polyhedron_kd_tree_fixed_center_->Build(add_temp_fixed);
+        has_init_polyhedron_kdtree_ = true;
+    }
+    return new_poly;
+}
+
+void SkeletonGenerator::connectToVisibleNeighbors(const PolyHedronPtr &poly, double radius) {
+    if (map_interface_ == nullptr || poly == nullptr) return;
+    skeleton_gen::ikdTree_PolyhedronType_FixedCenter search_pt(poly);
+    PolyHedronKDTree_FixedCenterVector nearby;
+    polyhedron_kd_tree_fixed_center_->Radius_Search(search_pt, static_cast<double>(radius), nearby);
+
+    for (auto &pt : nearby) {
+        auto &neighbor = pt.polyhedron_;
+        if (neighbor == poly || neighbor == nullptr) continue;
+        if (neighbor->nav_blocked_) continue;
+        // 严格可见性: 两节点中心之间不能有障碍物(避免生成穿墙边)
+        if (!map_interface_->isVisible(poly->center_, neighbor->center_)) continue;
+
+        double len = (poly->center_ - neighbor->center_).norm();
+        Edge e1(neighbor, len);
+        poly->edges_.push_back(e1);
+        Edge e2(poly, len);
+        neighbor->edges_.push_back(e2);
+    }
+}
+
 void SkeletonGenerator::finishMapLoad() {
   cur_iter_polys_.clear();
   cur_iter_first_poly_ = nullptr;

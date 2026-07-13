@@ -37,3 +37,8 @@ add_executable (map_pub src/map_publisher.cpp )
 target_link_libraries(map_pub
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES})
+
+add_executable (support_cloud_pub src/support_cloud_pub.cpp )
+target_link_libraries(support_cloud_pub
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES})

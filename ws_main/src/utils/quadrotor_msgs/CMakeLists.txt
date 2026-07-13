@@ -69,6 +69,8 @@ add_message_files(
   DistanceMeas.msg
   AnonymousBearingMeas.msg
   DetectOut.msg
+  VLASwarmBBox.msg
+  VLASwarmTarget.msg
 )
 
 generate_messages(

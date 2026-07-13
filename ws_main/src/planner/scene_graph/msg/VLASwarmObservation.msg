@@ -1,0 +1,7 @@
+std_msgs/Header header
+uint32 task_session_id
+uint32 observation_batch_id
+uint8 observation_index
+float64 body_yaw
+geometry_msgs/Pose odom_pose
+sensor_msgs/CompressedImage image

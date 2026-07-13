@@ -124,7 +124,7 @@ def structured_error(error, detail):
 
 
 def resolve_text_request(prompt_in, routes):
-    """解析纯文本请求；依赖图像的类型由后续 Observation 阶段提供输入。"""
+    """解析文本节点请求，并拒绝需要视觉输入的 Prompt。"""
     route = routes.get(prompt_in.prompt_type)
     if route is None:
         return None, structured_error(
@@ -136,10 +136,21 @@ def resolve_text_request(prompt_in, routes):
     if visual_input:
         return None, structured_error(
             "observation_not_ready",
-            "{} requires {} from the VLA_Swarm observation pipeline".format(
+            "{} requires {} from an independent VLA_Swarm visual node".format(
                 route["mode"],
                 visual_input,
             ),
+        )
+    return route, None
+
+
+def resolve_prompt_request(prompt_in, routes):
+    """解析 Prompt 路由，视觉能力由具体模型节点决定。"""
+    route = routes.get(prompt_in.prompt_type)
+    if route is None:
+        return None, structured_error(
+            "invalid_prompt_type",
+            "Unsupported prompt_type: {}".format(prompt_in.prompt_type),
         )
     return route, None
 
