@@ -3,7 +3,10 @@ FROM ros:noetic-perception
 SHELL ["/bin/bash", "-c"]
 
 # ── system dependencies ────────────────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Unset proxy env inherited from Docker daemon — apt repos are
+# directly accessible and the local proxy may 502 on some ROS deb URLs.
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
+    apt-get update && apt-get install -y --no-install-recommends \
     # Build tools
     python3-catkin-tools python3-osrf-pycommon \
     # OpenGL / GLFW / GLEW (for pcl_render_node)

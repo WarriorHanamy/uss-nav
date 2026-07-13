@@ -4,6 +4,30 @@ set -e
 source /opt/ros/noetic/setup.bash
 source /catkin_ws/devel/setup.bash
 
+# Bind mount preserves source tree (ws_main/src/planner/...), but the
+# catkin devel space was built with flattened paths (e.g. /sim_bringup).
+# Override ROS_PACKAGE_PATH to point to the actual source locations.
+export ROS_PACKAGE_PATH="/catkin_ws/src/planner/sim_bringup:\
+/catkin_ws/src/planner/ego_plannerv3/plan_env:\
+/catkin_ws/src/planner/ego_plannerv3/path_searching:\
+/catkin_ws/src/planner/ego_plannerv3/traj_opt:\
+/catkin_ws/src/planner/ego_plannerv3/map_interface:\
+/catkin_ws/src/planner/ego_plannerv3/plan_manage:\
+/catkin_ws/src/planner/uav_simulator/so3_quadrotor_simulator:\
+/catkin_ws/src/planner/uav_simulator/so3_control:\
+/catkin_ws/src/planner/uav_simulator/local_sensing:\
+/catkin_ws/src/planner/uav_simulator/map_generator:\
+/catkin_ws/src/planner/exploration/exploration_manager:\
+/catkin_ws/src/planner/exploration/perception_utils:\
+/catkin_ws/src/planner/exploration/lkh_tsp_solver:\
+/catkin_ws/src/planner/scene_graph:\
+/catkin_ws/src/utils/quadrotor_msgs:\
+/catkin_ws/src/utils/traj_utils:\
+/catkin_ws/src/utils/uav_utils:\
+/catkin_ws/src/utils/catkin_simple:\
+/catkin_ws/src/utils/pose_utils:\
+/opt/ros/noetic/share"
+
 TEST_ID="${TEST_ID:-default}"
 MQTT_HOST="${MQTT_HOST:-host.docker.internal}"
 DURATION="${DURATION:-300}"
@@ -27,17 +51,22 @@ sleep 1
 sed -e "s/obs_num:.*/obs_num: ${OBS_NUM}/" \
     -e "s/x_size:.*/x_size: ${X_SIZE}/" \
     -e "s/y_size:.*/y_size: ${Y_SIZE}/" \
-    /catkin_ws/src/sim_bringup/params/sim_ego_map.yaml \
+    /catkin_ws/src/planner/sim_bringup/params/sim_ego_map.yaml \
     > /tmp/sim_ego_map_${TEST_ID}.yaml
 
-# Patch the launch to use custom map
-MAP_LAUNCH_FILE=/catkin_ws/src/sim_bringup/launch/sim_ego_map.launch
-cp "$MAP_LAUNCH_FILE" "${MAP_LAUNCH_FILE}.bak"
-sed -i 's|params/sim_ego_map.yaml|/tmp/sim_ego_map_'"${TEST_ID}"'.yaml|' "$MAP_LAUNCH_FILE"
+# Patch the launch to use custom map (copy to /tmp since source is read-only)
+cp /catkin_ws/src/planner/sim_bringup/launch/sim_ego_map.launch \
+   /tmp/sim_ego_map_${TEST_ID}.launch
+cp /catkin_ws/src/planner/sim_bringup/launch/sim_ego_main.launch \
+   /tmp/sim_ego_main_${TEST_ID}.launch
+sed -i 's|params/sim_ego_map.yaml|/tmp/sim_ego_map_'"${TEST_ID}"'.yaml|' \
+   /tmp/sim_ego_map_${TEST_ID}.launch
+sed -i 's|\$(find sim_bringup)/launch/sim_ego_map.launch|/tmp/sim_ego_map_'"${TEST_ID}"'.launch|' \
+   /tmp/sim_ego_main_${TEST_ID}.launch
 
 # Start ego planner
 echo "Starting ego planner (headless)..."
-roslaunch sim_bringup sim_ego_main.launch \
+roslaunch /tmp/sim_ego_main_${TEST_ID}.launch \
   flight_type:=$FLIGHT_TYPE max_vel:=$MAX_VEL max_acc:=$MAX_ACC \
   use_rviz:=false \
   &>/tmp/roslaunch.log &
@@ -75,6 +104,6 @@ echo "Test complete, stopping..."
 kill $BRIDGE_PID 2>/dev/null || true
 kill $LAUNCH_PID 2>/dev/null || true
 
-# Restore launch file
-mv "${MAP_LAUNCH_FILE}.bak" "$MAP_LAUNCH_FILE" 2>/dev/null || true
+# Clean up temp files
+rm -f /tmp/sim_ego_map_${TEST_ID}.launch /tmp/sim_ego_main_${TEST_ID}.launch
 echo "=== Test [$TEST_ID] done ==="
