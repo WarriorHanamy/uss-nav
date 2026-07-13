@@ -7,6 +7,6 @@
 |----------         |-----|
 | `quadrotor_msgs`  | All the msg definitions.  |
 | `waypoints`       | Viewpoint generation for patrol  |
-| `perception_utils`| Define perceptive FOV  |
+| `camera_fov` (perception/) | Define perceptive FOV  |
 
 

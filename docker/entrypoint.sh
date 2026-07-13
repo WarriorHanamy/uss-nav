@@ -2,7 +2,7 @@
 set -e
 
 source /opt/ros/noetic/setup.bash
-source /catkin_ws/devel/setup.bash
+source /workspace/devel/setup.bash
 
 echo "=== EGO Planner Simulation ==="
 
@@ -22,7 +22,7 @@ fi
 echo "Starting map_generator + quadrotor sim + EGO planner..."
 echo "use_rviz=$USE_RVIZ"
 
-roslaunch sim_bringup sim_ego_main.launch \
+roslaunch bringup_test sim_ego_main.launch \
   flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
   use_rviz:="$USE_RVIZ" \
   &>/tmp/roslaunch.log &

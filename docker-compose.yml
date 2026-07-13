@@ -1,18 +1,11 @@
 # USS-NAV Docker Compose — devel / build / test lifecycle
-# Usage:
-#   docker compose build devel        # build the devel image (ego-planner-sim)
-#   docker compose run --rm build     # hot-reload compile (source-only changes)
-#   docker compose run --rm test      # run headless test with MQTT telemetry
-#
 # Container naming: uss-nav-{phase}-{GIT_SHA:-local}
-#   e.g. uss-nav-devel-abc1234, uss-nav-build-local, uss-nav-test-local
 
 services:
-  # ── Devel image (simulation) ──────────────────────────────────────
   devel:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.devel
     image: ego-planner-sim
     container_name: uss-nav-devel-${GIT_SHA:-local}
     stdin_open: true
@@ -24,16 +17,20 @@ services:
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - QT_X11_NO_MITSHM=1
     volumes:
-      # Source mounts (read-only for hot-reload safety)
       - type: bind
         source: ./ws_main/src
-        target: /catkin_ws/src
+        target: /workspace/src
         read_only: true
-      # X11 display
+      - type: bind
+        source: ./bringup_test
+        target: /workspace/src/bringup_test
+        read_only: true
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
       - /tmp/.X11-unix:/tmp/.X11-unix
     entrypoint: ["/entrypoint.sh"]
 
-  # ── Build (inner compile, hot-reload) ────────────────────────────
   build:
     image: ego-planner-sim
     container_name: uss-nav-build-${GIT_SHA:-local}
@@ -42,15 +39,18 @@ services:
     volumes:
       - type: bind
         source: ./ws_main/src
-        target: /catkin_ws/src
+        target: /workspace/src
         read_only: true
+      - type: bind
+        source: ./bringup_test
+        target: /workspace/src/bringup_test
+        read_only: true
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
     entrypoint:
-      [
-        "bash", "-c",
-        "source /opt/ros/noetic/setup.bash && source /catkin_ws/devel/setup.bash && catkin build --no-status -j4"
-      ]
+      ["bash", "-c", "source /opt/ros/noetic/setup.bash && source /workspace/devel/setup.bash && catkin build --no-status --continue-on-failure -j4"]
 
-  # ── Test (headless, MQTT telemetry) ──────────────────────────────
   test:
     image: ego-planner-sim
     container_name: uss-nav-test-${GIT_SHA:-local}
@@ -69,6 +69,13 @@ services:
     volumes:
       - type: bind
         source: ./ws_main/src
-        target: /catkin_ws/src
+        target: /workspace/src
         read_only: true
+      - type: bind
+        source: ./bringup_test
+        target: /workspace/src/bringup_test
+        read_only: true
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
     entrypoint: ["/entrypoint-test.sh"]

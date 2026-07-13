@@ -2,15 +2,15 @@
   "name": "md2codebase-html",
   "version": "1.0.0",
   "type": "module",
-  "description": "Render CODEBASE.md into a single-file HTML with TOC, search, dark mode",
+  "description": "Render docs/CODEBASE.md into a single-file HTML with TOC, search, dark mode",
   "main": "render.ts",
   "scripts": {
     "render": "bun render.ts",
     "render:watch": "bun --watch render.ts",
-    "render:ego": "bun render.ts ../../EGO.md ../../_site/EGO.html",
-    "render:scenegraph": "bun render.ts ../../SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
-    "render:next_scenegraph": "bun render.ts ../../NEXT_SCENEGRAPH.md ../../_site/NEXT_SCENEGRAPH.html",
-    "render:view": "bun render.ts --multi ../../_site/VIEW.html EGO:../../EGO.md SCENEGRAPH:../../SCENEGRAPH.md NEXT_SCENEGRAPH:../../NEXT_SCENEGRAPH.md",
+    "render:ego": "bun render.ts ../../docs/EGO.md ../../_site/EGO.html",
+    "render:scenegraph": "bun render.ts ../../docs/SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
+    "render:next_scenegraph": "bun render.ts ../../docs/NEXT_SCENEGRAPH.md ../../_site/NEXT_SCENEGRAPH.html",
+    "render:view": "bun render.ts --multi ../../_site/VIEW.html EGO:../../docs/EGO.md SCENEGRAPH:../../docs/SCENEGRAPH.md NEXT_SCENEGRAPH:../../docs/NEXT_SCENEGRAPH.md",
 
     "view": "bun run render:view && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/VIEW.html'),{stdio:'inherit'})\"",
     "view:ego": "bun run render:ego && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/EGO.html'),{stdio:'inherit'})\"",
@@ -25,7 +25,7 @@
     "mermaid": "^11.15.0"
   },
   "md2html": {
-    "input": "CODEBASE.md",
+    "input": "docs/CODEBASE.md",
     "output": "_site/CODEBASE.html",
     "autoOpen": true,
     "title": "CODEBASE Documentation",

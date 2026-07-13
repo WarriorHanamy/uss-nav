@@ -24,7 +24,7 @@ public:
     ROS_ERROR_ONCE("===========For view point file, hard_z is %f ===============", hard_z);
   }
   ~PathRecorder() {
-    std::string filepath = ros::package::getPath("exploration_manager") + "/config/viewpoint.txt";
+    std::string filepath = ros::package::getPath("mission_executive") + "/config/viewpoint.txt";
     // assert(path_.size() >= 2 * drone_num && "path size is less than 2*drone number");  // 不允许重复
     writePathToFile(filepath, drone_num);
   }

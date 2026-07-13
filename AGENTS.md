@@ -7,20 +7,20 @@
 | 文件 | 说明 |
 |------|------|
 | `README.md` | 项目概述、工作区结构、核心模块说明、构建与部署指南 |
-| `VIEW.md` | 架构总览入口，包含 SceneGraph 和 EGO Planner 章节概要，多文档导航 |
-| `EGO.md` | EGO-Planner 实时轨迹优化文档：12 状态 FSM、算法管道、ROS 话题接口、消息契约、代码组织 |
-| `SCENEGRAPH.md` | SceneGraph 上层环境表征：骨架生成、物体管线、区域聚类、LLM 交互、API 参考 |
-| `NEXT_SCENEGRAPH.md` | SceneGraph 重构提案：问题分析、目标架构、迁移计划 |
-| `CODEBASE.md` | 全量代码库参考：仓库结构、三层架构、62 个 ROS 消息定义、算法与数据流 |
+| `docs/VIEW.md` | 架构总览入口，包含 SceneGraph 和 EGO Planner 章节概要，多文档导航 |
+| `docs/EGO.md` | EGO-Planner 实时轨迹优化文档：12 状态 FSM、算法管道、ROS 话题接口、消息契约、代码组织 |
+| `docs/SCENEGRAPH.md` | SceneGraph 上层环境表征：骨架生成、物体管线、区域聚类、LLM 交互、API 参考 |
+| `docs/NEXT_SCENEGRAPH.md` | SceneGraph 重构提案：问题分析、目标架构、迁移计划 |
+| `docs/CODEBASE.md` | 全量代码库参考：仓库结构、三层架构、62 个 ROS 消息定义、算法与数据流 |
 | `instruction_description.md` | Instruction.msg 字段映射参考：12 种 Instruction 类型及各字段含义 |
 
 ### 文档渲染
 
 `/tools/md2html/` — 将 Markdown 文档渲染为单页 HTML（语法高亮、Katex 公式、Mermaid 图表、TOC 侧边栏、暗色模式）。
-使用 Bun 运行，支持单文档和多标签渲染（`VIEW.md` 使用多标签模板 `template_tabs.html`）。
+使用 Bun 运行，支持单文档和多标签渲染（`docs/VIEW.md` 使用多标签模板 `template_tabs.html`）。
 
 ```bash
-cd tools/md2html && bun render.ts ../EGO.md     # 渲染单文档
+cd tools/md2html && bun render.ts ../docs/EGO.md     # 渲染单文档
 cd tools/md2html && bun render.ts --tabs         # 多标签渲染 VIEW
 ```
 
@@ -28,14 +28,14 @@ cd tools/md2html && bun render.ts --tabs         # 多标签渲染 VIEW
 
 ### 外层构建 (outer build)
 
-规范 devel 镜像由根目录 `Dockerfile` 构建。不存在规范的 build 镜像或 test 镜像——所有阶段均运行 devel 镜像。
+规范 devel 镜像由 `docker/Dockerfile.devel` 构建。不存在规范的 build 镜像或 test 镜像——所有阶段均运行 devel 镜像。
 
 ```bash
-# 构建 devel 镜像 (ego-planner-sim, 根目录 Dockerfile)
+# 构建 devel 镜像 (ego-planner-sim, docker/Dockerfile.devel)
 docker compose build devel
 
 # 或直接 docker build
-docker build -t ego-planner-sim .
+docker build -t ego-planner-sim -f docker/Dockerfile.devel .
 ```
 
 ### Docker 生命周期
@@ -80,18 +80,19 @@ uss-nav-{phase}-{GIT_SHA:-local}
 
 ### 挂载隔离规则
 
-| 挂载路径 | 类型 | 目标 | 权限 |
-|---------|------|------|------|
-| `ws_main/src/` | bind | `/catkin_ws/src` | 只读（热重载） |
-| `/tmp/.X11-unix/` | bind | `/tmp/.X11-unix` | 读写（显示） |
-| GPU 设备 | `--gpus all` | — | 读写 |
+| 主机路径 | 容器路径 | 类型 | 权限 | 说明 |
+|---------|---------|------|------|------|
+| `ws_main/src/` | `/workspace/src/` | bind | 只读 | 源码热重载 |
+| `bringup_test/` | `/workspace/src/bringup_test/` | bind | 只读 | 启动测试配置 |
+| `.artifacts/` | `/workspace/.artifacts/` | bind | 读写 | 测试产物、PCD/CSV 输出 |
+| `/tmp/.X11-unix/` | `/tmp/.X11-unix` | bind | 读写 | X11 显示 |
 
 **容器内可写路径（非主机挂载）** — build 阶段在容器内生成，生命周期随容器：
 
 | 路径 | 说明 | 权限 |
 |------|------|------|
-| `/catkin_ws/build/` | CMake 构建产物 | 可写（仅容器内） |
-| `/catkin_ws/devel/` | ROS workspace devel 空间 | 可写（仅容器内） |
+| `/workspace/build/` | CMake 构建产物 | 可写（仅容器内） |
+| `/workspace/devel/` | ROS workspace devel 空间 | 可写（仅容器内） |
 
 test/release 容器不得共享可变主机路径（只读源码挂载除外）。
 
@@ -105,8 +106,8 @@ docker rm -f $(docker ps -aq --filter name=uss-nav)
 docker compose down --remove-orphans
 
 # 清理 build/test 产生的构建产物（在构建容器内）
-docker run --rm -v ws_main/src:/catkin_ws/src:ro ego-planner-sim \
-  bash -c "rm -rf /catkin_ws/build/* /catkin_ws/devel/*"
+docker run --rm -v ws_main/src:/workspace/src:ro -v bringup_test:/workspace/src/bringup_test:ro ego-planner-sim \
+  bash -c "rm -rf /workspace/build/* /workspace/devel/*"
 
 # 清理 Docker 构建缓存
 docker builder prune --filter until=24h
@@ -124,7 +125,7 @@ docker compose run --rm build
 在 devel 容器内手动执行：
 
 ```bash
-docker compose exec devel bash -c "source /opt/ros/noetic/setup.bash && source /catkin_ws/devel/setup.bash && catkin build --no-status -j4"
+docker compose exec devel bash -c "source /opt/ros/noetic/setup.bash && source /workspace/devel/setup.bash && catkin build --no-status -j4"
 ```
 
 ### 遗留说明
@@ -146,7 +147,7 @@ docker compose exec devel bash -c "source /opt/ros/noetic/setup.bash && source /
 
 ```bash
 # 渲染文档为 HTML，用浏览器打开
-cd tools/md2html && bun render.ts ../EGO.md && xdg-open ../EGO.html
+cd tools/md2html && bun render.ts ../docs/EGO.md && xdg-open ../docs/EGO.html
 
 # 启动 3D 地图可视化
 cd tools/map-demo && bun render.ts && xdg-open ../_site/map-demo/index.html

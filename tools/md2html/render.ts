@@ -202,7 +202,7 @@ function main() {
   // ── single-doc mode ──
   const inputPath = args[0]
     ? resolve(process.cwd(), args[0])
-    : resolve(PROJECT_ROOT, cfg.input || "CODEBASE.md");
+    : resolve(PROJECT_ROOT, cfg.input || "docs/CODEBASE.md");
   const outputPath = args[1]
     ? resolve(process.cwd(), args[1])
     : resolve(PROJECT_ROOT, cfg.output || "_site/CODEBASE.html");
