@@ -1,6 +1,6 @@
 ---
 name: docker-artifact-migration
-description: Migrate a ROS package from in-Dockerfile catkin_make to pre-built artifacts. Four-phase loop: experiment in container → extract + write MANIFEST → integrate into Dockerfile → build + verify. Use when eliminating catkin_make from the Dockerfile or adding a pre-built ROS package.
+description: "Migrate a ROS package from in-Dockerfile catkin_make to pre-built artifacts. Four-phase loop: experiment in container → extract + write MANIFEST → integrate into Dockerfile → build + verify. Use when eliminating catkin_make from the Dockerfile or adding a pre-built ROS package."
 ---
 
 # Docker Artifact Migration

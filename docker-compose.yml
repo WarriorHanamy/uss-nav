@@ -1,0 +1,74 @@
+# USS-NAV Docker Compose — devel / build / test lifecycle
+# Usage:
+#   docker compose build devel        # build the devel image (ego-planner-sim)
+#   docker compose run --rm build     # hot-reload compile (source-only changes)
+#   docker compose run --rm test      # run headless test with MQTT telemetry
+#
+# Container naming: uss-nav-{phase}-{GIT_SHA:-local}
+#   e.g. uss-nav-devel-abc1234, uss-nav-build-local, uss-nav-test-local
+
+services:
+  # ── Devel image (simulation) ──────────────────────────────────────
+  devel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ego-planner-sim
+    container_name: uss-nav-devel-${GIT_SHA:-local}
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY:-:99}
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # Source mounts (read-only for hot-reload safety)
+      - type: bind
+        source: ./ws_main/src
+        target: /catkin_ws/src
+        read_only: true
+      # X11 display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    entrypoint: ["/entrypoint.sh"]
+
+  # ── Build (inner compile, hot-reload) ────────────────────────────
+  build:
+    image: ego-planner-sim
+    container_name: uss-nav-build-${GIT_SHA:-local}
+    network_mode: host
+    ipc: host
+    volumes:
+      - type: bind
+        source: ./ws_main/src
+        target: /catkin_ws/src
+        read_only: true
+    entrypoint:
+      [
+        "bash", "-c",
+        "source /opt/ros/noetic/setup.bash && source /catkin_ws/devel/setup.bash && catkin build --no-status -j4"
+      ]
+
+  # ── Test (headless, MQTT telemetry) ──────────────────────────────
+  test:
+    image: ego-planner-sim
+    container_name: uss-nav-test-${GIT_SHA:-local}
+    network_mode: host
+    ipc: host
+    environment:
+      - TEST_ID=${TEST_ID:-default}
+      - MQTT_HOST=${MQTT_HOST:-host.docker.internal}
+      - DURATION=${DURATION:-300}
+      - FLIGHT_TYPE=${FLIGHT_TYPE:-2}
+      - MAX_VEL=${MAX_VEL:-0.6}
+      - MAX_ACC=${MAX_ACC:-1.0}
+      - OBS_NUM=${OBS_NUM:-30}
+      - X_SIZE=${X_SIZE:-50}
+      - Y_SIZE=${Y_SIZE:-30}
+    volumes:
+      - type: bind
+        source: ./ws_main/src
+        target: /catkin_ws/src
+        read_only: true
+    entrypoint: ["/entrypoint-test.sh"]

@@ -17,7 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libarmadillo-dev libigraph-dev libjpeg-dev \
     # Headless display
     xvfb \
+    # MQTT test bridge
+    python3-pip mosquitto-clients \
     && rm -rf /var/lib/apt/lists/*
+
+# ── MQTT Python deps ─────────────────────────────────────────────────
+RUN pip3 install paho-mqtt
 
 # ── create catkin workspace ────────────────────────────────────────
 RUN mkdir -p /catkin_ws/src
@@ -94,7 +99,13 @@ RUN source /opt/ros/noetic/setup.bash && \
     source /catkin_ws/devel/setup.bash && \
     catkin build sim_bringup
 
-# ── entrypoint ────────────────────────────────────────────────────
+# ── MQTT bridge (test telemetry) ─────────────────────────────────
+COPY docker/bridge /bridge
+RUN chmod +x /bridge/ego_mqtt_bridge.py
+
+# ── entrypoints ─────────────────────────────────────────────────
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+COPY docker/entrypoint-test.sh /entrypoint-test.sh
+RUN chmod +x /entrypoint-test.sh
 ENTRYPOINT ["/entrypoint.sh"]
