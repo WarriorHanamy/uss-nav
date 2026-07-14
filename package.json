@@ -13,7 +13,7 @@
     "view:next_scenegraph": "cd tools/md2html && bun run view:next_scenegraph",
 
     "doxygen": "bun tools/doxygen/render.ts",
-    "test:explore": "bun src/cli/index.ts explore",
+    "test:llm-mode": "bun src/cli/index.ts explore",
     "server": "bun src/server/index.ts",
     "dashboard": "bun src/cli/index.ts dashboard"
   },
