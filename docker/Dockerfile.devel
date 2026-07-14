@@ -53,58 +53,14 @@ COPY docker/assets/libleidenalg/liblibleidenalg.a /usr/lib/x86_64-linux-gnu/libl
 COPY docker/assets/libleidenalg/include/ /usr/include/libleidenalg/
 COPY docker/assets/libleidenalg/cmake/ /usr/lib/x86_64-linux-gnu/cmake/libleidenalg/
 
-# ── create workspace ───────────────────────────────────────────────
+# ── workspace skeleton ─────────────────────────────────────────────
 RUN mkdir -p /workspace/src
-WORKDIR /workspace/src
+RUN source /opt/ros/noetic/setup.bash && \
+    cd /workspace && \
+    catkin init && \
+    mkdir -p /workspace/.artifacts/{pcd,csv}
 
-# ── copy packages ──────────────────────────────────────────────────
-# utils
-COPY ws_main/src/utils/quadrotor_msgs ./utils/quadrotor_msgs
-COPY ws_main/src/utils/traj_utils     ./utils/traj_utils
-
-# EGO planner core
-COPY ws_main/src/planners/ego_planner/plan_env       ./planners/ego_planner/plan_env
-COPY ws_main/src/planners/ego_planner/path_searching ./planners/ego_planner/path_searching
-COPY ws_main/src/planners/ego_planner/traj_opt       ./planners/ego_planner/traj_opt
-COPY ws_main/src/planners/ego_planner/map_interface  ./planners/ego_planner/map_interface
-COPY ws_main/src/planners/ego_planner/plan_manage    ./planners/ego_planner/plan_manage
-
-# UAV simulator
-COPY ws_main/src/uav_simulator /workspace/src/uav_simulator
-
-# Camera FOV
-COPY ws_main/src/perception/camera_fov ./perception/camera_fov
-
-# LKH TSP solver
-COPY ws_main/src/utils/lkh_tsp_solver ./utils/lkh_tsp_solver
-
-# Scene graph + exploration + mission executive
-COPY ws_main/src/perception/scene_graph     ./perception/scene_graph
-COPY ws_main/src/planners/exploration       ./planners/exploration
-COPY ws_main/src/mission_executive          ./mission_executive
-COPY ws_main/src/planners/tracker           ./planners/tracker
-
-# ── artifacts directory ───────────────────────────────────────────
-RUN mkdir -p /workspace/.artifacts/{pcd,csv}
-
-# ── Layer 1: C++ build (slow, cached) ─────────────────────────────
 WORKDIR /workspace
-RUN source /opt/ros/noetic/setup.bash && \
-  catkin init && \
-  catkin build \
-  quadrotor_msgs traj_utils \
-  plan_env path_searching traj_opt map_interface \
-  so3_quadrotor_simulator so3_control local_sensing_node map_generator \
-  camera_fov lkh_tsp_solver \
-  scene_graph exploration mission_executive \
-  ego_planner \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-w" -DCMAKE_POLICY_DEFAULT_CMP0148=OLD -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-
-# ── Layer 2: bringup (fast, rebuilt on launch/config change) ──────
-COPY bringup_test /workspace/src/bringup_test
-RUN source /opt/ros/noetic/setup.bash && \
-  source /workspace/devel/setup.bash && \
-  catkin build bringup_test
 
 # ── MQTT bridge ──────────────────────────────────────────────────
 COPY docker/bridge /bridge

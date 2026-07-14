@@ -17,7 +17,6 @@ import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 from quadrotor_msgs.msg import EgoPlannerResult
-from traj_utils.msg import DataDisp
 
 
 class EgoMqttBridge:
@@ -80,19 +79,6 @@ class EgoMqttBridge:
             },
         )
 
-    def _data_disp_cb(self, msg: DataDisp):
-        self.publish(
-            "data_disp",
-            {
-                "ts": msg.header.stamp.to_sec(),
-                "a": msg.a,
-                "b": msg.b,
-                "c": msg.c,
-                "d": msg.d,
-                "e": msg.e,
-            },
-        )
-
     def run(self):
         rospy.init_node(f"ego_mqtt_bridge_{self.test_id}", anonymous=True)
 
@@ -100,7 +86,6 @@ class EgoMqttBridge:
         rospy.Subscriber(
             "/planning/ego_plan_result", EgoPlannerResult, self._plan_result_cb
         )
-        rospy.Subscriber("/planning/data_display", DataDisp, self._data_disp_cb)
 
         rospy.loginfo(
             f"ego_mqtt_bridge [{self.test_id}] started → {self.topic_prefix}/{self.test_id}/*"

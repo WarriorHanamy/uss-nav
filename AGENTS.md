@@ -26,38 +26,35 @@ cd tools/md2html && bun render.ts --tabs         # 多标签渲染 VIEW
 
 ## 构建系统 (Docker)
 
-### 外层构建 (outer build)
+Dockerfile.devel **只包含系统依赖**（apt、ROS、静态库、pip），不包含源码编译。
+源码编译在 runtime 通过 `build` 服务完成，产物持久化到 `.artifacts/devel/` 和 `.artifacts/build/`。
 
-规范 devel 镜像由 `docker/Dockerfile.devel` 构建。不存在规范的 build 镜像或 test 镜像——所有阶段均运行 devel 镜像。
+### 工作流
 
 ```bash
-# 构建 devel 镜像 (ego-planner-sim, docker/Dockerfile.devel)
+# 1. 构建 devel 镜像（仅系统依赖，无需 rebuild，apt/ROS 变更时才需）
 docker compose build devel
 
-# 或直接 docker build
-docker build -t ego-planner-sim -f docker/Dockerfile.devel .
-```
-
-### Docker 生命周期
-
-| 阶段 | Compose 服务 | 镜像 | 说明 |
-|------|-------------|------|------|
-| devel | `devel` | `ego-planner-sim` | 模拟运行镜像，含 ROS 仿真（**不含 rviz**） |
-| build | `build` | `ego-planner-sim` | 热重载编译（源码变更后重新 catkin build） |
-| test | `test` | `ego-planner-sim` | 无头测试，含 MQTT 遥测桥接 |
-
-**无 canonical build 镜像，无 canonical test 镜像。** build 和 test 阶段复用 devel 镜像。MQTT 测试依赖已注入 devel 镜像。
-
-```bash
-# 启动仿真（带 X11 显示）
-docker compose run --rm devel
-
-# 热重载编译（源码只读挂载）
+# 2. 编译源码（runtime 挂载编译，源码变更后只需重新执行此步）
 docker compose run --rm build
 
-# 运行测试
+# 3. 启动仿真（使用 .artifacts/devel/ 中的编译产物）
+docker compose run --rm devel
+
+# 4. 无头测试
 TEST_ID=my-test DURATION=60 docker compose run --rm test
 ```
+
+### 服务说明
+
+| 服务 | 镜像 | 角色 | 说明 |
+|------|------|------|------|
+| `devel` | `ego-planner-sim` | 运行仿真 | 源码 + 编译产物由 bind mount 注入 |
+| `build` | `ego-planner-sim` | 编译 | 挂载源码 + 写入编译产物到 `.artifacts/` |
+| `test` | `ego-planner-sim` | 无头测试 | 复用源码 + 编译产物 |
+
+**源码和编译产物都不在镜像内。** `ws_main/src/` 和 `bringup_test/` 通过 bind mount 注入，
+`.artifacts/devel/` 保存 runtime 编译的 ROS workspace devel 空间。无需 rebuild 镜像即可迭代代码。
 
 ### 容器命名约定
 
@@ -188,12 +185,10 @@ devel 镜像基于 `ros:noetic-ros-base`，**不含 rviz**。仿真启动后所�
 可视化由 `~/rviz_ws` 提供。该工作区基于 `osrf/ros:noetic-desktop-full`（含完整 ROS 桌面 + rviz），
 包含自定义 RViz 插件（PolyhedronArray / EllipsoidArray / ProbMap 等）和 EGO Planner 场景的配置。
 
-启动流程：
+`start_uss_nav_sim_rviz.sh` 一键启动仿真 + RViz：
 
 ```bash
-# 终端 1：启动 uss-nav 仿真
-cd ~/uss-nav && docker compose run --rm devel
-
-# 终端 2：启动 RViz（共享 ROS master，network_mode: host）
-cd ~/rviz_ws && ./start_uss_nav.sh
+cd ~/uss-nav && ./start_uss_nav_sim_rviz.sh
 ```
+
+退出时自动停仿真容器。

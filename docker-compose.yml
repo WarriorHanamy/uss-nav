@@ -26,6 +26,12 @@ services:
         target: /workspace/src/bringup_test
         read_only: true
       - type: bind
+        source: ./.artifacts/devel
+        target: /workspace/devel
+      - type: bind
+        source: ./.artifacts/build
+        target: /workspace/build
+      - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts
       - /tmp/.X11-unix:/tmp/.X11-unix
@@ -46,10 +52,16 @@ services:
         target: /workspace/src/bringup_test
         read_only: true
       - type: bind
+        source: ./.artifacts/devel
+        target: /workspace/devel
+      - type: bind
+        source: ./.artifacts/build
+        target: /workspace/build
+      - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts
     entrypoint:
-      ["bash", "-c", "source /opt/ros/noetic/setup.bash && source /workspace/devel/setup.bash && catkin build --no-status --continue-on-failure -j4"]
+      ["bash", "-c", "source /opt/ros/noetic/setup.bash && catkin build --no-status --continue-on-failure -j4 --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS='-w' -DCMAKE_POLICY_DEFAULT_CMP0148=OLD -DCMAKE_POLICY_VERSION_MINIMUM=3.5"]
 
   test:
     image: ego-planner-sim
@@ -75,6 +87,12 @@ services:
         source: ./bringup_test
         target: /workspace/src/bringup_test
         read_only: true
+      - type: bind
+        source: ./.artifacts/devel
+        target: /workspace/devel
+      - type: bind
+        source: ./.artifacts/build
+        target: /workspace/build
       - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts
@@ -103,6 +121,12 @@ services:
         source: ./bringup_test
         target: /workspace/src/bringup_test
         read_only: true
+      - type: bind
+        source: ./.artifacts/devel
+        target: /workspace/devel
+      - type: bind
+        source: ./.artifacts/build
+        target: /workspace/build
       - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts

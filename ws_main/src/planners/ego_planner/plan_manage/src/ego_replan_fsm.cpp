@@ -70,7 +70,6 @@ namespace ego_planner
                                                                   this,
                                                                   ros::TransportHints().tcpNoDelay());
 
-    data_disp_pub_      = nh.advertise<traj_utils::DataDisp>("planning/data_display", 100);
     ground_height_pub_  = nh.advertise<std_msgs::Float64>("/ground_height_measurement", 10);
     state_pub_          = nh.advertise<std_msgs::Int8>("state", 10);
     exec_finish_trigger_pub_ = nh.advertise<std_msgs::Bool>("exec_finish_trigger", 10);
@@ -403,9 +402,6 @@ namespace ego_planner
       break;
     }
     }
-
-    data_disp_.header.stamp = ros::Time::now();
-    data_disp_pub_.publish(data_disp_);
 
   force_return:;
     exec_timer_.start();

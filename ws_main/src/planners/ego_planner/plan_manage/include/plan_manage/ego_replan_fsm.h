@@ -22,7 +22,6 @@
 #include <quadrotor_msgs/EgoGoalSet.h>
 #include <quadrotor_msgs/EgoPlannerResult.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
-#include <traj_utils/DataDisp.h>
 #include <plan_manage/planner_manager.h>
 #include <traj_utils/PolyTraj.h>
 #include <traj_utils/MINCOTraj.h>
@@ -100,7 +99,6 @@ namespace ego_planner
 
     /* planning utils */
     EGOPlannerManager::Ptr planner_manager_;
-    traj_utils::DataDisp data_disp_;
     TrajServer traj_server_;
 
     /* parameters */
@@ -157,7 +155,7 @@ namespace ego_planner
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber waypoint_sub_, waypoint_sub_yaw_preset_sub_, odom_sub_, if_handle_yaw_sub_,
                     trigger_sub_, broadcast_ploytraj_sub_, mandatory_stop_sub_;
-    ros::Publisher data_disp_pub_, broadcast_ploytraj_pub_, ground_height_pub_, state_pub_, exec_finish_trigger_pub_, ego_state_trigger_pub_;
+    ros::Publisher broadcast_ploytraj_pub_, ground_height_pub_, state_pub_, exec_finish_trigger_pub_, ego_state_trigger_pub_;
     ros::Publisher ego_plan_state_pub_;
 
     /* state machine functions */

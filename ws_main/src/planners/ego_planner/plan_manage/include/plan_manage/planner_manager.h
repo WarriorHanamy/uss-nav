@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include <optimizer/poly_traj_optimizer.h>
-#include <traj_utils/DataDisp.h>
 #include <plan_env/grid_map.h>
 #include <traj_utils/plan_container.hpp>
 #include <ros/ros.h>

@@ -28,7 +28,7 @@ devel-host (x86_64 Arch Linux)
             ├── build ego-planner-test     (base-image + MQTT bridge)
             └── run ego-test-<config>      (headless test containers)
                     │
-                    └── MQTT → test/<id>/{odom,plan_result,data_disp}
+                    └── MQTT → test/<id>/{odom,plan_result}
 ```
 
 ### Host → Container Comparison
@@ -89,7 +89,6 @@ MQTT bridge (inside container) ──→ Mosquitto (:1883) ──→ Bun Server 
 test-container → ROS topics
     ├── /drone_0_visual_slam/odom      → MQTT test/<id>/odom
     ├── /planning/ego_plan_result      → MQTT test/<id>/plan_result
-    ├── /planning/data_display         → MQTT test/<id>/data_disp
 ```
 
 ## 4. Container Runtime Configuration

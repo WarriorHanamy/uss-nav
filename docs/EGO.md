@@ -179,7 +179,6 @@ else
 | 发布：`/planning/ego_plan_result` | `quadrotor_msgs/EgoPlannerResult` | 反馈 | 每周期 | 规划结果状态 |
 | 发布：`exec_finish_trigger` | `std_msgs/Bool` | 反馈 | 到达时 | 轨迹执行完成通知 |
 | 发布：`/planning/ego_state_trigger` | `quadrotor_msgs/EgoStateTrigger` | 反馈 | 稳定时 | 目标到达稳定触发 |
-| 发布：`planning/data_display` | `traj_utils/DataDisp` | 调试 | ~1Hz | 规划数据可视化 |
 | 发布：`/ground_height_measurement` | `std_msgs/Float64` | 调试 | ~1Hz | 地面高度估计 |
 
 ### PositionCommand（核心输出消息）

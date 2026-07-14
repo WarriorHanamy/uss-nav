@@ -7,24 +7,21 @@ source /workspace/devel/setup.bash
 echo "=== EGO Planner Simulation ==="
 
 # ── display setup ──────────────────────────────────────────────────
-USE_RVIZ=false
-if [ -n "$DISPLAY" ] && [ -d "/tmp/.X11-unix" ]; then
-  echo "✅ X11 display: ${DISPLAY}"
-  USE_RVIZ=true
-else
+if [ -z "$DISPLAY" ] || [ ! -d "/tmp/.X11-unix" ]; then
   echo "No DISPLAY, starting Xvfb..."
   export DISPLAY=:99
   Xvfb :99 -screen 0 1280x1024x24 &
   sleep 1
 fi
+echo "X11 display: ${DISPLAY}"
 
 # ── launch ────────────────────────────────────────────────────────
 echo "Starting map_generator + quadrotor sim + EGO planner..."
-echo "use_rviz=$USE_RVIZ"
+echo "use_rviz=false (RViz launched externally from ~/rviz_ws)"
 
 roslaunch bringup_test sim_ego_main.launch \
   flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
-  use_rviz:="$USE_RVIZ" \
+  use_rviz:=false \
   &>/tmp/roslaunch.log &
 LAUNCH_PID=$!
 
@@ -48,8 +45,8 @@ for i in $(seq 1 30); do
     echo ""
     echo "=== EGO planner running ==="
     echo ""
-    echo "=== rviz log ==="
-    grep -i 'rviz\|error\|warn\|fatal\|xcb\|display' /tmp/roslaunch.log | tail -10 || echo "(no relevant lines)"
+    echo "=== startup log (errors) ==="
+    grep -i 'error\|fatal' /tmp/roslaunch.log | tail -10 || echo "(no errors)"
     echo "--------------------------------------------------------------"
     break
   fi

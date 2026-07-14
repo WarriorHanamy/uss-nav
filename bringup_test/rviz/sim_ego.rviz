@@ -27,10 +27,7 @@ Visualization Manager:
       Name: Trajectory
       Topic: /drone_0_planning/trajectory
       Enabled: true
-    - Class: rviz/Marker
-      Name: FSM_Status
-      Topic: /drone_0_planning/data_display
-      Enabled: true
+
     - Class: rviz/Pose
       Name: Goal
       Topic: /move_base_simple/goal
