@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
     sensor_msgs
     cv_bridge
     map_interface
+    quadrotor_msgs
     tf
     message_generation 
     message_runtime
@@ -36,7 +37,7 @@ include_directories(
     ${PCL_INCLUDE_DIRS}
     ${IGRAPH_INCLUDE_DIRS}
     include/nlohmann
-    libs/libleidenalg/include
+    /usr/include/libleidenalg
 )
 
 add_message_files(
@@ -67,6 +68,7 @@ catkin_package(
     sensor_msgs
     cv_bridge
     map_interface
+    quadrotor_msgs
     tf
     message_runtime
 )
@@ -98,8 +100,8 @@ set(skeleton_hs
         include/scene_graph/traj_visualizer.h
 )
 
-add_subdirectory(libs/libleidenalg/src)
-add_subdirectory(libs/libleidenalg/include)
+find_package(libleidenalg REQUIRED)
+include_directories(${LIBLEIDENALG_INCLUDEDIR})
 
 message(STATUS "===================================================")
 message(STATUS "↑↑↑↑↑↑↑ Add Subdirectory: libs/libleidenalg ↑↑↑↑↑↑↑")
@@ -108,10 +110,10 @@ message(STATUS "===================================================")
 add_library(scene_graph
     ${skeleton_hs}
     ${skelton_cpps}
-    ${LEIDENALG_SRC}
     include/nlohmann/json.hpp
 )
 add_dependencies(scene_graph libleidenalg)
+add_dependencies(scene_graph ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(scene_graph
     ${catkin_LIBRARIES}
     ${PCL_LIBRARIES}
@@ -137,6 +139,7 @@ add_executable(yolo_recv_test
         test/obj_test.cpp
 )
 add_dependencies(yolo_recv_test libleidenalg)
+add_dependencies(yolo_recv_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(yolo_recv_test
         ${catkin_LIBRARIES}
         ${PCL_LIBRARIES}

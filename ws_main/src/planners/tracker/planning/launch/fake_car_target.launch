@@ -38,12 +38,6 @@
       <param name="inflate_size" value="2"/>
       <param name="use_global_map" value="true"/>
     </node>
-    <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization_car" output="screen">
-      <remap from="~odom" to="odom" />
-      <param name="mesh_resource" value="package://odom_visualization/meshes/car.dae"/>
-      <param name="robot_scale" value="0.1"/>
-    </node>
-
     <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
       <remap from="~odom" to="odom"/>
       <remap from="~gridmap_inflate" to="gridmap_inflate"/>

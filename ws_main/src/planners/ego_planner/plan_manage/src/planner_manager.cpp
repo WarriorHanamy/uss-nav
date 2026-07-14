@@ -11,7 +11,7 @@ namespace ego_planner
 
   EGOPlannerManager::~EGOPlannerManager() { std::cout << "des manager" << std::endl; }
 
-  void EGOPlannerManager::initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis)
+  void EGOPlannerManager::initPlanModules(ros::NodeHandle &nh)
   {
     /* read algorithm parameters */
 
@@ -33,8 +33,6 @@ namespace ego_planner
     poly_traj_opt_.reset(new PolyTrajOptimizer);
     poly_traj_opt_->setParam(nh);
     poly_traj_opt_->setEnvironment(map_);
-
-    visualization_ = vis;
 
     poly_traj_opt_->setSwarmTrajs(&traj_.swarm_traj);
     poly_traj_opt_->setDroneId(pp_.drone_id);
@@ -102,7 +100,6 @@ namespace ego_planner
     std::vector<Eigen::Vector3d> point_set;
     for (int i = 0; i < cstr_pts.cols(); ++i)
       point_set.push_back(cstr_pts.col(i));
-    visualization_->displayInitPathList(point_set, 0.2, 0);
 
     t_start = ros::Time::now();
 
@@ -164,7 +161,6 @@ namespace ego_planner
              << " selected:" << selected_id << endl;
       }
 
-      visualization_->displayMultiOptimalPathList(vis_trajs, 0.1); // This visuallization will take up several milliseconds.
     }
     else
     {
@@ -204,7 +200,6 @@ namespace ego_planner
 
       setLocalTrajFromOpt(best_MJO, touch_goal, true);
       cstr_pts = best_MJO.getInitConstraintPoints(poly_traj_opt_->get_cps_num_prePiece_());
-      visualization_->displayOptimalList(cstr_pts, 0);
 
       // auto traj = best_MJO.getTraj();
       // cout << "================= vaj ==================" << endl;
@@ -233,7 +228,6 @@ namespace ego_planner
       printf("Success(%.2f%%)=No. Time:\033[41m%.3fms\033[0m\n",
              (double)success_cnt_ / (success_cnt_ + failure_cnt_) * 100, (t_init + t_opt).toSec() * 1000);
       cstr_pts = poly_traj_opt_->getMinJerkOpt().getInitConstraintPoints(poly_traj_opt_->get_cps_num_prePiece_());
-      visualization_->displayFailedList(cstr_pts, 0);
     }
 
     if (flag_success)
@@ -931,7 +925,6 @@ namespace ego_planner
       // init_of_init.push_back(best_ray->start_p);
       // init_of_init.push_back(best_ray->mid_p);
       // init_of_init.push_back(best_ray->end_p);
-      visualization_->displayInitOfInitPathList(init_of_init, 0.1, 0);
 
       // cout << "l=" << l << " phase1_l=" << phase1_l << " phase2_l=" << phase2_l << " sample_pts.size()=" << sample_pts.size() << endl;
 

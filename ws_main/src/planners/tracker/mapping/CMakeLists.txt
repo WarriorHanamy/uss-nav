@@ -14,7 +14,6 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   pcl_ros
   pcl_conversions
-  pose_utils
 )
 
 catkin_package(

@@ -41,9 +41,8 @@ namespace ego_planner
     }
 
     /* initialize main modules */
-    visualization_.reset(new PlanningVisualization(nh));
     planner_manager_.reset(new EGOPlannerManager);
-    planner_manager_->initPlanModules(nh, visualization_);
+    planner_manager_->initPlanModules(nh);
     traj_server_.initTrajServer(nh);
 
     have_trigger_ = !flag_realworld_experiment_;
@@ -941,7 +940,6 @@ namespace ego_planner
     vector<Eigen::Vector3d> gloabl_traj(2);
     gloabl_traj[0] = odom_pos_;
     gloabl_traj[1] = final_goal_;
-    visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
 
     return true;
   }
@@ -1259,7 +1257,6 @@ namespace ego_planner
 
     for (size_t i = 0; i < (size_t)waypoint_num_; i++)
     {
-      visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
       ros::Duration(0.001).sleep();
     }
 

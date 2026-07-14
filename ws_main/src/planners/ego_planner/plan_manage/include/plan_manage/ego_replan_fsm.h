@@ -24,7 +24,6 @@
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <traj_utils/DataDisp.h>
 #include <plan_manage/planner_manager.h>
-#include <traj_utils/planning_visualization.h>
 #include <traj_utils/PolyTraj.h>
 #include <traj_utils/MINCOTraj.h>
 #include <traj_utils/YawCmd.h>
@@ -101,7 +100,6 @@ namespace ego_planner
 
     /* planning utils */
     EGOPlannerManager::Ptr planner_manager_;
-    PlanningVisualization::Ptr visualization_;
     traj_utils::DataDisp data_disp_;
     TrajServer traj_server_;
 

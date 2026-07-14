@@ -14,7 +14,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <zmqpp/message.hpp>
 
 bool SceneGraph::initSceneGraph(const Eigen::Vector3d &cur_pos, double yaw) {
     if (skeleton_gen_->expandSkeleton(cur_pos, yaw)) {

@@ -18,7 +18,6 @@
 #include <scene_graph/skeleton_generation.h>
 #include <std_msgs/Bool.h>
 #include <string>
-#include <traj_utils/planning_visualization.h>
 #include <mission_executive/fast_exploration_fsm.h>
 #include <mission_executive/expl_data.h>
 #include <plan_env/grid_map.h>
@@ -203,7 +202,6 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
 
   /* Initialize main modules */
   map_ = map;
-  visualization_      = std::make_shared<PlanningVisualization>(nh);
   scene_graph_        = std::make_shared<SceneGraph>(nh, map_);
   vla_swarm_map_      = std::make_shared<VLASwarmMap>(nh, map_);
   counting_scene_graph_ = std::make_shared<CountingSceneGraph>(nh);

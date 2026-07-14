@@ -493,7 +493,7 @@ public:
   int             last_obj_num_{0};           ///< Last object count for tracking changes [--]
   std::map<int, bool> nbr_area_;              ///< Neighboring area IDs and connectivity
 
-  void addPoly(PolyHedronPtr& poly, bool change_poly_mount){
+  void addPoly(const PolyHedronPtr& poly, bool change_poly_mount){
     polys_ .push_back(poly);
     box_max_ = Eigen::Vector3d(std::max(box_max_.x(), poly->box_max_.x()), std::max(box_max_.y(), poly->box_max_.y()), std::max(box_max_.z(), poly->box_max_.z()));
     box_min_ = Eigen::Vector3d(std::min(box_min_.x(), poly->box_min_.x()), std::min(box_min_.y(), poly->box_min_.y()), std::min(box_min_.z(), poly->box_min_.z()));

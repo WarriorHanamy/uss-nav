@@ -32,7 +32,6 @@ FrontierManager::FrontierManager(ros::NodeHandle& nh, const MapInterface::Ptr& m
   // ViewNode::posegraph_m_  = ed_->posegraph_m_;
   ViewNode::sensor_range_ = frontier_finder_->percep_utils_->getSensorMaxDist();
 
-  visualization_ = std::make_shared<PlanningVisualization>(nh);
   vis_ptr_       = std::make_shared<visualization::Visualization>(nh);
 
   nh.param("exploration/refine_local", ep_->refine_local_, true);
@@ -841,7 +840,6 @@ void FrontierManager::findGlobalTour_SomeFtrs(std::vector<Frontier>& ftr_select,
         global_tour.push_back(ftr_select[indices[i + 1]].viewpoints_.front().pos_);
       }
     }
-    visualization_->drawVPGlobalPath(global_tour, 0.03, Eigen::Vector4d(0.0, 1.0, 0.5, 1.0), "global_tour", 0);
 
     // INFO_MSG("\n\n   * [Solve TSP] spend time :" << (ros::Time::now() - t1).toSec()* 1e3 << "ms");
     // INFO_MSG("   * [Solve TSP] cost matrix:");
@@ -868,7 +866,6 @@ void FrontierManager::findVPGlobalTour(std::vector<Viewpoint::Ptr> &vps, const E
     global_tour_line.push_back(global_tour[i]->pos_);
     global_tour_line.push_back(global_tour[i + 1]->pos_);
   }
-  visualization_->drawVPGlobalPath(global_tour_line, 0.05, Eigen::Vector4d(0.0, 1.0, 0.5, 1.0), "global_tour", 0);
 }
 
 void FrontierManager::findGlobalTour(
@@ -1115,16 +1112,15 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
   visualization_msgs::MarkerArray mk_array;
   visualization_msgs::Marker      mk_frontier_cell;
   for (int i = 0; i < ed_->frontiers_.size(); ++i) {
-    visualization_->addFrontierCubesMarkerToArray(mk_array, mk_frontier_cell, ed_->frontiers_[i], 0.2,
-                                                  visualization_->getColor(double(i) / double(ed_->frontiers_.size()), 0.8),
-                                                  "frontier_cell", i, visualization_msgs::Marker::ADD);
+    mk_frontier_cell.id = i;
+    mk_frontier_cell.action = visualization_msgs::Marker::ADD;
+    mk_array.markers.push_back(mk_frontier_cell);
   }
   for (int i = ed_->frontiers_.size(); i < 20 + ed_->frontiers_.size(); ++i) {
     mk_frontier_cell.id = i; mk_frontier_cell.color.a = 0.0;
     mk_frontier_cell.action = visualization_msgs::Marker::DELETE;
     mk_array.markers.push_back(mk_frontier_cell);
   }
-  visualization_->drawFrontierCubesByMarkerArray(mk_array); mk_array.markers.clear();
 
   visFrontierInx();
 
@@ -1166,12 +1162,11 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
   frontier_finder_->getDormantFrontiers(dfrontiers);
   for (size_t i = 0; i < dfrontiers.size(); ++i)
   {
-    visualization_->drawCubes(dfrontiers[i], 0.1, Eigen::Vector4d(0, 0, 0, 0.5), "dead_frontier", i, 4);
   }
 
-  for (size_t i = dfrontiers.size(); i < 5; ++i)
-    visualization_->drawCubes({}, 0.1, Eigen::Vector4d(0, 0, 0, 0.5), "dead_frontier", i, 4);
-  // frontier update range visualize
+  for (size_t i = dfrontiers.size(); i < 5; ++i) {
+    // frontier update range visualize
+  }
 //  for (size_t i = 0; i < ed_->frontiers_with_info_.size(); i++){
 //    Eigen::Vector3d center, scale;
 //    for (int j = 0; j < 3; ++j)
@@ -1179,12 +1174,9 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
 //    for (int j = 0; j < 2; ++j)
 //      scale(j)  = abs(ed_->frontiers_with_info_[i].box_max_(j) - ed_->frontiers_with_info_[i].box_min_(j));
 //    scale(2) = 0.1;
-//    visualization_->drawFrontierRangeBox(center, scale,
-//                                         visualization_->getColor(double(i) / ed_->frontiers_with_info_.size(), 0.4),
 //                                         "frontier_range", 1000 + i, 4);
 //  }
 //  for (size_t i = ed_->frontiers_with_info_.size(); i < ed_->frontiers_with_info_.size() + 50; ++i) {
-//    visualization_->deleteFrontierRangeBox(Eigen::Vector3d(0, 0, 0), Eigen::Vector3d(0, 0, 0),
 //                                           Eigen::Vector4d(0, 0, 0, 1), "frontier_range", 1000 + i, 4);
 //  }
 
@@ -1194,25 +1186,15 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
     if (ftr.topo_father_ != nullptr)
       edge_list.emplace_back(ftr.average_, ftr.topo_father_->center_);
 
-  visualization_->drawFtrEdgeWithSkeleton(edge_list, 0.03, Eigen::Vector4d(0.051, 0.4, 0.6706, 1.0));
 
   //! TSP Vis
   vector<Eigen::Vector3d> global_tour_up = ed_->global_tour_;
   for (auto& p : global_tour_up) p.z() += 0.5;
-  visualization_->drawLines(global_tour_up, 0.07, Eigen::Vector4d(0, 0.5, 0, 1), "global_tour", 0, 6);
 
-  visualization_->drawLines(ed_->path_next_goal_, 0.05, Eigen::Vector4d(0, 1, 1, 1), "path_next_goal", 1, 6);
   vis_ptr_->visualize_pointcloud(ed_->path_next_goal_, "path_next_goal_pt");
 
   //! Local refined path Vis
-  visualization_->drawSpheres(ed_->refined_points_, 0.2, Eigen::Vector4d(0, 0, 1, 1), "refined_pts", 0, 6);
 
-  visualization_->drawLines(ed_->refined_points_, ed_->refined_views_, 0.05,
-                            Eigen::Vector4d(0.5, 0, 1, 1), "refined_view", 0, 6);
-  visualization_->drawLines(ed_->refined_tour_, 0.07, Eigen::Vector4d(0, 0, 1, 1), "refined_tour", 0, 6);
-  visualization_->drawLines(ed_->refined_views1_, ed_->refined_views2_, 0.04, Eigen::Vector4d(0, 0, 0, 1),
-                            "refined_view", 0, 6);
-                            
   //! HGrid Vis
   visHgrid(pos);
 }
@@ -1224,7 +1206,6 @@ void FrontierManager::visHgrid(const Eigen::Vector3d &pos) {
   // vis explore range
   Eigen::Vector3d map_box_max, map_box_min;
   map_->getGlobalBox(map_box_min, map_box_max);
-  visualization_->drawExploreBoxByMarkerArray(mk_array, map_box_min, map_box_max, 0.2, Eigen::Vector4d(0, 0, 1, 0.5), "explore_box", 0, 6);
   mk_array.markers.clear();
 
   // Vis Mesh
@@ -1244,7 +1225,6 @@ void FrontierManager::visHgrid(const Eigen::Vector3d &pos) {
   }
   vector<Eigen::Vector3d> pts1, pts2;
   hgrid_->getGridMarker(pts1, pts2, hgrid_update_adr_list);
-  visualization_->drawLinesByMarkerArray(mk_array, pts1, pts2, 0.05, Eigen::Vector4d(1, 0, 1, 0.5), "mesh", 1, 6);
 
   // vis text
   // mk_array.markers.clear();
@@ -1258,12 +1238,9 @@ void FrontierManager::visHgrid(const Eigen::Vector3d &pos) {
   // }
   // hgrid_->getGridMarker2(pts, texts, hgrid_update_adr_list);
   // static int last_text_num = 0;
-  // visualization_->fillBasicInfo(mk_text, Eigen::Vector3d(0.5, 0.5, 0.5),  Eigen::Vector4d(0, 0, 0, 1), "text", 0, visualization_msgs::Marker::TEXT_VIEW_FACING);
   // for (size_t i = 0; i < pts.size(); ++i) {
   //   Eigen::Vector3d ptt = pts[i];
-  //   visualization_->addHgridTextInfoMarkerToArray(mk_array, mk_text, ptt, texts[i], i);
   // }
-  // visualization_->drawHgridTextByMarkerArray(mk_array);
 
   // vis hgrid state
   mk_array.markers.clear();
@@ -1276,7 +1253,6 @@ void FrontierManager::visHgrid(const Eigen::Vector3d &pos) {
     mk_array.markers.push_back(mk_box);
   }
   hgrid_->getGridStateMarker(center_list, scale_list, is_cover_list, is_active_list, hgrid_update_adr_list);
-  visualization_->fillBasicInfo(mk_box, scale_list[0], Eigen::Vector4d(0, 0, 0, 0.3), "state", 0, visualization_msgs::Marker::CUBE);
   for (int i = 0; i < center_list.size(); ++i) {
     Eigen::Vector4d color;
     if (is_cover_list[i]) {
@@ -1284,12 +1260,12 @@ void FrontierManager::visHgrid(const Eigen::Vector3d &pos) {
     }
     else color << 0, 0, 1, 0.3;
 
-    if (is_active_list[i])
-      visualization_->addHgridActiveInfoMarkerToArray(mk_array, mk_box, center_list[i], color, i, visualization_msgs::Marker::ADD);
-    else
-      visualization_->addHgridActiveInfoMarkerToArray(mk_array, mk_box, center_list[i], color, i, visualization_msgs::Marker::DELETE);
+    if (is_active_list[i]) {
+      // active state visualization
+    } else {
+      // inactive state visualization
+    }
   }
-  visualization_->drawHgridActiveInfoByMarkerArray(mk_array);
 }
 
 void FrontierManager::visFrontierInx()
@@ -1311,12 +1287,10 @@ void FrontierManager::visFrontierInx()
 //   for (auto & point : ed_->topo_blacklist_){
 //     pcl::PointXYZI topo_p = ed_->posegraph_used_by_blacklist_cal_.getCor(point.first);
 //     Eigen::Vector3d topo_pos(topo_p.x, topo_p.y, topo_p.z);
-//     visualization_->drawBlacklistText(topo_pos, "X", 1, Eigen::Vector4d(1, 0, 0, 1), "blacklist_point", i, 8);
 //     i++;
 //   }
 //   // delete id that out of range
 //   for (int j = 0; j <= 20; j++)
-//     visualization_->drawBlacklistText(Eigen::Vector3d(0, 0, 0), "", 1, Eigen::Vector4d(1, 0, 0, 0),
 //                                       "blacklist_point", i + j, 8);
 // }
 

@@ -11,7 +11,6 @@
 #include <exploration/graph_search.h>
 #include <exploration/frontier_finder.h>
 #include <mission_executive/expl_data.h>
-#include <traj_utils/planning_visualization.h>
 #include <quadrotor_msgs/GoalSet.h>
 #include <nav_msgs/Odometry.h>
 #include <exploration/hgrid.h>
@@ -126,7 +125,6 @@ class FrontierManager{
 
  private:
   MapInterface::Ptr                 map_;
-  PlanningVisualization::Ptr        visualization_;
   ros::Timer                        frontier_timer, goal_timer;
   bool                              has_exploration_region_{false};
   std::vector<Eigen::Vector3d>      exploration_region_polygon_;

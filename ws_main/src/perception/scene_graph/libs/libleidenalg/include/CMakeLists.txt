@@ -3,7 +3,7 @@ target_sources(libleidenalg
   FILE_SET headers
   TYPE HEADERS
   BASE_DIRS 
-    ${PROJECT_SOURCE_DIR}/libs/libleidenalg/include/
+    ${CMAKE_CURRENT_SOURCE_DIR}
   FILES 
     Optimiser.h 
     GraphHelper.h 

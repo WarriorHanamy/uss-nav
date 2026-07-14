@@ -1440,14 +1440,6 @@ bool SkeletonGenerator::ifPtInIpsilateralOfPlane(const Eigen::Vector3d& pt1, con
   return !(std::signbit(d1) == std::signbit(d2));
 }
 
-inline double SkeletonGenerator::getDistance(const Eigen::Vector3d& point1, const Eigen::Vector3d& point2){
-  return (point1 - point2).norm();
-}
-
-inline bool SkeletonGenerator::isSamePose(const Eigen::Vector3d& point1, const Eigen::Vector3d& point2){
-  return getDistance(point1, point2) < 1e-4;
-}
-
 Eigen::Vector3d SkeletonGenerator::transPointToBodyFrame(const Eigen::Vector3d& point_in_world){
 
   Eigen::Matrix4d inverse_trans_mat = Eigen::Matrix4d::Identity();

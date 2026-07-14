@@ -2,6 +2,13 @@
 
 > 供 AI agent 快速了解 USS-NAV 的文档体系和可视化工具链。
 
+## Shell 环境
+
+| 上下文 | Shell | 说明 |
+|--------|-------|------|
+| 用户层（终端） | fish | `o push`/`o p` → `opencode run "commit and push ..."` |
+| Agent 层（工具执行） | bash | shell 命令统一由 bash 执行 |
+
 ## 文档索引（根目录 *.md）
 
 | 文件 | 说明 |

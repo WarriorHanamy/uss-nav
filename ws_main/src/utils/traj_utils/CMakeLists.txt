@@ -54,9 +54,7 @@ generate_messages(
 
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES traj_utils 
  CATKIN_DEPENDS message_runtime
-#  DEPENDS system_lib
 )
 
 include_directories( 
@@ -64,13 +62,4 @@ include_directories(
     include 
     ${catkin_INCLUDE_DIRS}
     ${Eigen3_INCLUDE_DIRS} 
-)
-
-# link_directories(${PCL_LIBRARY_DIRS})
-
-add_library( traj_utils
-    src/planning_visualization.cpp 
-    )
-target_link_libraries( traj_utils
-    ${catkin_LIBRARIES} 
-    )  
+)  

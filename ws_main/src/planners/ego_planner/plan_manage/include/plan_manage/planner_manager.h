@@ -8,7 +8,6 @@
 #include <plan_env/grid_map.h>
 #include <traj_utils/plan_container.hpp>
 #include <ros/ros.h>
-#include <traj_utils/planning_visualization.h>
 #include <optimizer/poly_traj_utils.hpp>
 
 namespace ego_planner
@@ -52,7 +51,7 @@ namespace ego_planner
      * @param[inout] nh  ROS node handle
      * @param[in] vis  Visualization instance
      */
-    void initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);
+    void initPlanModules(ros::NodeHandle &nh);
     /**
      * Compute the initial state for the trajectory optimizer.
      *
@@ -218,8 +217,6 @@ namespace ego_planner
     inline int getContinousFailureCount(void) { return continous_failures_count_; }
 
   private:
-    PlanningVisualization::Ptr visualization_;
-
     PolyTrajOptimizer::Ptr poly_traj_opt_;
 
     int continous_failures_count_{0}, success_cnt_{0}, failure_cnt_{0};

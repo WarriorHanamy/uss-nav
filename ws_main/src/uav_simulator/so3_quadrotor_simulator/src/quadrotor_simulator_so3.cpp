@@ -4,7 +4,7 @@
 #include <quadrotor_simulator/Quadrotor.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
-#include <uav_utils/geometry_utils.h>
+
 
 typedef struct _Control
 {
@@ -52,8 +52,11 @@ getControl(const QuadrotorSimulator::Quadrotor& quad, const Command& cmd)
   const QuadrotorSimulator::Quadrotor::State state = quad.getState();
 
   // Rotation, may use external yaw
-  Eigen::Vector3d _ypr = uav_utils::R_to_ypr(state.R);
-  Eigen::Vector3d ypr  = _ypr;
+  Eigen::Vector3d ypr;
+  ypr(0) = atan2(state.R(1,0), state.R(0,0));
+  ypr(1) = atan2(-state.R(2,0), state.R(0,0) * cos(ypr(0)) + state.R(1,0) * sin(ypr(0)));
+  ypr(2) = atan2(state.R(0,2) * sin(ypr(0)) - state.R(1,2) * cos(ypr(0)),
+                  -state.R(0,1) * sin(ypr(0)) + state.R(1,1) * cos(ypr(0)));
   if (cmd.use_external_yaw)
     ypr[0] = cmd.current_yaw;
   Eigen::Matrix3d R;

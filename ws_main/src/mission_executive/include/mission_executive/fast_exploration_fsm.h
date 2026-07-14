@@ -55,7 +55,6 @@ using std::string;
 namespace ego_planner {
 class Tabv;
 class FrontierManager;
-class PlanningVisualization;
 struct FSMParam;
 struct FSMData;
 class EkfEstimator;
@@ -71,7 +70,6 @@ private:
   CountingSceneGraph::Ptr                           counting_scene_graph_;
   shared_ptr<TrajectoryVisualizer>                  traj_visualizer_;
   VLASwarmMap::Ptr                                  vla_swarm_map_;
-  shared_ptr<PlanningVisualization>                 visualization_;
   shared_ptr<FSMParam>                              fp_;
   shared_ptr<FSMData>                               fd_;
   shared_ptr<MissionData>                           md_;

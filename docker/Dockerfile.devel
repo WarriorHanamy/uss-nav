@@ -1,65 +1,57 @@
-FROM ros:noetic-base
+FROM ros:noetic-ros-base
 
 SHELL ["/bin/bash", "-c"]
 
+RUN printf '%s\n' \
+  'Acquire::Retries "5";' \
+  'Acquire::http::Timeout "30";' \
+  'Acquire::https::Timeout "30";' \
+  'Acquire::http::Pipeline-Depth "0";' \
+  > /etc/apt/apt.conf.d/80-retries
+
 # ── build tools ────────────────────────────────────────────────────
-RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    git python3-catkin-tools python3-osrf-pycommon python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+  apt-get update && apt-get install -y --no-install-recommends \
+  git python3-catkin-tools python3-osrf-pycommon python3-pip
 
 # ── rendering libs (local_sensing 3D simulation) ──────────────────
-RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglfw3-dev mesa-utils \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+  apt-get update && apt-get install -y --no-install-recommends \
+  libgl1-mesa-dev libglu1-mesa-dev libglew-dev libglfw3-dev mesa-utils
 
 # ── math / scientific computation ─────────────────────────────────
-RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    libarmadillo-dev libigraph-dev libjpeg-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+  apt-get update && apt-get install -y --no-install-recommends \
+  libjpeg-dev
 
 # ── headless display for test ──────────────────────────────────────
-RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    xvfb \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+  apt-get update && apt-get install -y --no-install-recommends \
+  xvfb
 
 # ── ROS runtime + MQTT ────────────────────────────────────────────
-RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    ros-noetic-tf ros-noetic-nodelet ros-noetic-cv-bridge \
-    ros-noetic-image-transport ros-noetic-pcl-ros \
-    mosquitto-clients \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+  apt-get update && apt-get install -y --no-install-recommends \
+  ros-noetic-tf ros-noetic-nodelet ros-noetic-cv-bridge \
+  ros-noetic-image-transport ros-noetic-pcl-ros \
+  mosquitto-clients \
+  ros-noetic-mavros ros-noetic-mavros-extras
 
 RUN pip3 install paho-mqtt
 
-# ── upstream CMake + igraph 0.10 (scene_graph needs ≥0.10, Ubuntu 20.04 has 0.7) ─
-RUN apt-get update && apt-get install -y --no-install-recommends bison flex && \
-    rm -rf /var/lib/apt/lists/* && \
-    hash -r && \
-    CMAKE_BIN=$(which cmake) && \
-    pip3 install cmake --upgrade && \
-    CMAKE_NEW=$(which cmake) && \
-    if [ "$(dirname $CMAKE_BIN)" != "$(dirname $CMAKE_NEW)" ]; then \
-      CMAKE_PIP=$CMAKE_NEW; \
-    else \
-      CMAKE_PIP=$CMAKE_BIN; \
-    fi && \
-    git clone --depth 1 --branch 0.10.13 https://github.com/igraph/igraph.git /tmp/igraph && \
-    $CMAKE_NEW -S /tmp/igraph -B /tmp/igraph/build -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr -DIGRAPH_USE_INTERNAL_BLAS=ON \
-      -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
-    $CMAKE_NEW --build /tmp/igraph/build -j$(nproc) && \
-    $CMAKE_NEW --install /tmp/igraph/build && \
-    rm -rf /tmp/igraph && \
-    apt-get purge -y libigraph-dev && \
-    apt-get autoremove -y
+# ── 预编译依赖：igraph 0.10 + libleidenalg（静态库）──────────────
+COPY docker/assets/igraph/libigraph.a /usr/lib/x86_64-linux-gnu/libigraph.a
+COPY docker/assets/igraph/include/ /usr/include/igraph/
+COPY docker/assets/igraph/cmake/ /usr/lib/x86_64-linux-gnu/cmake/igraph/
 
-# igraph cmake config (not bundled in source build's cmake --install)
-COPY docker/igraphConfig.cmake /usr/lib/x86_64-linux-gnu/cmake/igraph/igraphConfig.cmake
+COPY docker/assets/libleidenalg/liblibleidenalg.a /usr/lib/x86_64-linux-gnu/liblibleidenalg.a
+COPY docker/assets/libleidenalg/include/ /usr/include/libleidenalg/
+COPY docker/assets/libleidenalg/cmake/ /usr/lib/x86_64-linux-gnu/cmake/libleidenalg/
 
 # ── create workspace ───────────────────────────────────────────────
 RUN mkdir -p /workspace/src
@@ -69,9 +61,6 @@ WORKDIR /workspace/src
 # utils
 COPY ws_main/src/utils/quadrotor_msgs ./utils/quadrotor_msgs
 COPY ws_main/src/utils/traj_utils     ./utils/traj_utils
-COPY ws_main/src/utils/uav_utils      ./utils/uav_utils
-COPY ws_main/src/utils/catkin_simple  ./utils/catkin_simple
-COPY ws_main/src/utils/pose_utils     ./utils/pose_utils
 
 # EGO planner core
 COPY ws_main/src/planners/ego_planner/plan_env       ./planners/ego_planner/plan_env
@@ -87,7 +76,7 @@ COPY ws_main/src/uav_simulator /workspace/src/uav_simulator
 COPY ws_main/src/perception/camera_fov ./perception/camera_fov
 
 # LKH TSP solver
-COPY ws_main/src/lkh_tsp_solver ./lkh_tsp_solver
+COPY ws_main/src/utils/lkh_tsp_solver ./utils/lkh_tsp_solver
 
 # Scene graph + exploration + mission executive
 COPY ws_main/src/perception/scene_graph     ./perception/scene_graph
@@ -101,21 +90,21 @@ RUN mkdir -p /workspace/.artifacts/{pcd,csv}
 # ── Layer 1: C++ build (slow, cached) ─────────────────────────────
 WORKDIR /workspace
 RUN source /opt/ros/noetic/setup.bash && \
-    catkin init && \
-    catkin build \
-        quadrotor_msgs uav_utils traj_utils catkin_simple \
-        plan_env path_searching traj_opt map_interface \
-        so3_quadrotor_simulator so3_control local_sensing_node map_generator \
-        pose_utils camera_fov lkh_tsp_solver \
-        scene_graph exploration mission_executive \
-        ego_planner \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-w" -DCMAKE_POLICY_DEFAULT_CMP0148=OLD -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+  catkin init && \
+  catkin build \
+  quadrotor_msgs traj_utils \
+  plan_env path_searching traj_opt map_interface \
+  so3_quadrotor_simulator so3_control local_sensing_node map_generator \
+  camera_fov lkh_tsp_solver \
+  scene_graph exploration mission_executive \
+  ego_planner \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-w" -DCMAKE_POLICY_DEFAULT_CMP0148=OLD -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 # ── Layer 2: bringup (fast, rebuilt on launch/config change) ──────
 COPY bringup_test /workspace/src/bringup_test
 RUN source /opt/ros/noetic/setup.bash && \
-    source /workspace/devel/setup.bash && \
-    catkin build bringup_test
+  source /workspace/devel/setup.bash && \
+  catkin build bringup_test
 
 # ── MQTT bridge ──────────────────────────────────────────────────
 COPY docker/bridge /bridge
