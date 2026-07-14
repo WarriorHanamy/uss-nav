@@ -13,7 +13,6 @@
   <depend>nodelet</depend>
   <depend>quadrotor_msgs</depend>
   <depend>fake_mapping</depend>
-  <depend>fake_traj_opt</depend>
   <depend>decomp_ros_utils</depend>
 
   <export>
