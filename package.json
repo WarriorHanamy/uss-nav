@@ -13,25 +13,20 @@
     "view:next_scenegraph": "cd tools/md2html && bun run view:next_scenegraph",
     "view:map-demo": "cd tools/map-demo && bun run view",
     "doxygen": "bun tools/doxygen/render.ts",
-    "infra": "bun tools/infra.ts",
-    "docker:build": "bun tools/infra.ts docker build",
-    "docker:run": "bun tools/infra.ts docker run",
-    "test:build": "bun src/cli/index.ts docker-build",
-    "test:run": "bun src/cli/index.ts test-run",
-    "test:status": "bun src/cli/index.ts test-status",
-    "test:stop": "bun src/cli/index.ts test-stop",
-    "test:report": "bun src/cli/index.ts test-report",
+    "test:explore": "bun src/cli/index.ts explore",
     "server": "bun src/server/index.ts",
-    "dev": "bun src/cli/index.ts dev",
     "dashboard": "bun src/cli/index.ts dashboard"
   },
   "dependencies": {
+    "@langchain/langgraph": "^1.4.7",
+    "@langchain/openai": "^1.5.5",
     "@react-three/drei": "^10.0.0",
     "@react-three/fiber": "^9.0.0",
     "mqtt": "^5.15.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "^0.170.0"
+    "three": "^0.170.0",
+    "zod": "3"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

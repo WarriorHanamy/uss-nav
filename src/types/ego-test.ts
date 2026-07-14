@@ -57,3 +57,50 @@ export interface FrontendTestState {
   planResults: PlanResult[];
   lastUpdate: number;
 }
+
+export interface MetricDef {
+  name: string;
+  description: string;
+  source: string;
+  unit: string;
+}
+
+export interface ExplorationIntent {
+  goal: string;
+  focusParams: string[];
+  paramRanges: Record<string, [number, number]>;
+  targetMetrics: string[];
+}
+
+export interface ExplorationPlan {
+  intent: ExplorationIntent;
+  batches: TestConfig[][];
+  description: string;
+  estimatedMinutes: number;
+}
+
+export interface TestResult {
+  testId: string;
+  exitCode: number;
+  metrics: Record<string, number>;
+  error?: string;
+}
+
+export interface BatchResult {
+  configs: TestConfig[];
+  results: TestResult[];
+}
+
+export interface ExplorationReport {
+  intent: ExplorationIntent;
+  summary: string;
+  batches: BatchResult[];
+  findings: string[];
+  suggestions: string[];
+}
+
+export type ExplorationAction =
+  | { type: "continue" }
+  | { type: "refine"; params: Record<string, number[]> }
+  | { type: "report" }
+  | { type: "stop"; reason: string };

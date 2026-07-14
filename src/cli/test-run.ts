@@ -1,76 +1,38 @@
+import { extractAllMetrics } from "../core/telemetry";
 import { CFG } from "../core/config";
-import { BUILTIN_SCENARIOS, expandScenario } from "./scenarios";
-import { cmdTestStop } from "./test-stop";
-import type { TestConfig } from "../types/ego-test";
 
-async function dockerRunTest(cfg: TestConfig): Promise<void> {
-  const containerName = `ego-test-${cfg.id}`;
-  const env: Record<string, string> = {
-    TEST_ID: cfg.id,
+function buildEnv(config: Record<string, any>): Record<string, string> {
+  const p = config.params ?? config;
+  return {
+    TEST_ID: config.id ?? "test",
     MQTT_HOST: "host.docker.internal",
-    FLIGHT_TYPE: String(cfg.params.flight_type ?? 2),
-    MAX_VEL: String(cfg.params.max_vel ?? 0.6),
-    MAX_ACC: String(cfg.params.max_acc ?? 1.0),
-    OBS_NUM: String(cfg.params.obs_num ?? 30),
-    X_SIZE: String(cfg.params.x_size ?? 50),
-    Y_SIZE: String(cfg.params.y_size ?? 30),
-    DURATION: String(cfg.duration),
+    FLIGHT_TYPE: String(p.flight_type ?? 2),
+    MAX_VEL: String(p.max_vel ?? 0.6),
+    MAX_ACC: String(p.max_acc ?? 1.0),
+    OBS_NUM: String(p.obs_num ?? 30),
+    X_SIZE: String(p.x_size ?? 50),
+    Y_SIZE: String(p.y_size ?? 30),
+    DURATION: String(config.duration ?? CFG.defaultDuration),
   };
-
-  const envArgs = Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
-  const args = [
-    "run", "-d", "--rm",
-    "--name", containerName,
-    "--gpus", "all",
-    "--ipc=host",
-    "--security-opt", "seccomp=unconfined",
-    "--add-host", "host.docker.internal:host-gateway",
-    ...envArgs,
-    CFG.dockerImage,
-  ];
-
-  const proc = Bun.spawn(["docker", ...args], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-
-  const exitCode = await proc.exited;
-  if (exitCode === 0) {
-    console.log(`  ✓ ${containerName}`);
-  } else {
-    console.error(`  ✗ ${containerName} failed`);
-  }
 }
 
-export async function cmdTestRun(scenarioId?: string): Promise<void> {
-  const scenarios = scenarioId
-    ? BUILTIN_SCENARIOS.filter((s) => s.id === scenarioId)
-    : BUILTIN_SCENARIOS;
+export async function cmdTestRun(config: Record<string, any>): Promise<{ testId: string; exitCode: number; metrics: Record<string, number> }> {
+  const name = `uss-nav-test-${(config.id ?? "unknown").replace(/[._]/g, "-")}`;
+  const env = buildEnv(config);
+  const envArgs = Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 
-  if (scenarios.length === 0) {
-    console.error(`[test-run] No scenario: ${scenarioId}`);
-    process.exit(1);
-  }
+  console.log(`  [test-run] starting ${name}...`);
 
-  // auto-reset: stop all previous test containers
-  console.log("[test-run] Clearing previous runs...");
-  await cmdTestStop();
+  const proc = Bun.spawn(
+    ["docker", "compose", "run", "--rm", "--name", name, ...envArgs, "test"],
+    { stdout: "inherit", stderr: "inherit", cwd: process.env.PWD ?? process.cwd() }
+  );
 
-  let total = 0;
+  const exitCode = await proc.exited;
+  const testId = config.id ?? "test";
+  const metrics = await extractAllMetrics(testId);
 
-  for (const scenario of scenarios) {
-    const configs = expandScenario(scenario);
-    console.log(`[test-run] Scenario "${scenario.id}": ${configs.length} config(s)`);
+  console.log(`  [test-run] ${testId} exit=${exitCode}`);
 
-    for (let i = 0; i < configs.length; i += CFG.maxContainers) {
-      const batch = configs.slice(i, i + CFG.maxContainers);
-      console.log(`  batch ${Math.floor(i / CFG.maxContainers) + 1}: ${batch.length} container(s)`);
-
-      await Promise.all(batch.map(dockerRunTest));
-      total += batch.length;
-    }
-  }
-
-  console.log(`[test-run] ${total} container(s) started`);
+  return { testId, exitCode, metrics };
 }
