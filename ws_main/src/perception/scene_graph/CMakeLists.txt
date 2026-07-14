@@ -45,7 +45,7 @@ add_message_files(
   WordVector.msg
   EncodeMask.msg
   PromptMsg.msg
-  VLASwarmObservation.msg
+  VLASearchObservation.msg
 )
 
 generate_messages(

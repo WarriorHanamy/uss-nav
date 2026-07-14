@@ -16,7 +16,7 @@
 #include <../include/exploration/ikd_Tree.h>
 #include <../include/exploration/viewpoint_handler.h>
 
-// #include <exploration/visualization.hpp>
+#include <exploration/visualization.hpp>
 using Eigen::Vector3d;
 using std::shared_ptr;
 using std::unique_ptr;
@@ -156,7 +156,7 @@ public:
   HGrid::Ptr                        hgrid_;
   SceneGraph::Ptr                   scene_graph_;
 
-  visualization::Visualization::Ptr visPtr_;
+  expl_vis::Visualization::Ptr visPtr_;
 
   //! Params
   // cluster params

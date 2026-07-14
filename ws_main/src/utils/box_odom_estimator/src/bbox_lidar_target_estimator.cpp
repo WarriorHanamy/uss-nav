@@ -1,9 +1,9 @@
 #include <Eigen/Geometry>
 #include <nav_msgs/Odometry.h>
-#include <quadrotor_msgs/VLASwarmBBox.h>
-#include <quadrotor_msgs/VLASwarmTarget.h>
+#include <quadrotor_msgs/VLASearchBBox.h>
+#include <quadrotor_msgs/VLASearchTarget.h>
 #include <ros/ros.h>
-#include <scene_graph/VLASwarmObservation.h>
+#include <scene_graph/VLASearchObservation.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
@@ -60,12 +60,12 @@ class BBoxLidarTargetEstimator {
  public:
   BBoxLidarTargetEstimator() : node_(), private_node_("~") {
     private_node_.param(
-        "bbox_topic", bbox_topic_, std::string("/vla_swarm/bbox"));
+        "bbox_topic", bbox_topic_, std::string("/vla_search/bbox"));
     private_node_.param(
         "fallback_topic", fallback_topic_,
-        std::string("/vla_swarm/bbox/fallback"));
+        std::string("/vla_search/bbox/fallback"));
     private_node_.param(
-        "target_topic", target_topic_, std::string("/vla_swarm/target"));
+        "target_topic", target_topic_, std::string("/vla_search/target"));
     private_node_.param(
         "camera_info_topic", camera_info_topic_,
         std::string("/camera/color/camera_info"));
@@ -75,7 +75,7 @@ class BBoxLidarTargetEstimator {
         "odom_topic", odom_topic_, std::string("/odom_world"));
     private_node_.param(
         "observation_topic", observation_topic_,
-        std::string("/vla_swarm/observation"));
+        std::string("/vla_search/observation"));
     private_node_.param("cloud_in_world_frame", cloud_in_world_frame_, true);
     private_node_.param("history_duration", history_duration_, 8.0);
     private_node_.param("max_sync_delta", max_sync_delta_, 0.25);
@@ -113,9 +113,9 @@ class BBoxLidarTargetEstimator {
         observation_topic_, 10,
         &BBoxLidarTargetEstimator::observationCallback, this);
     fallback_publisher_ =
-        node_.advertise<quadrotor_msgs::VLASwarmBBox>(fallback_topic_, 10);
+        node_.advertise<quadrotor_msgs::VLASearchBBox>(fallback_topic_, 10);
     target_publisher_ =
-        node_.advertise<quadrotor_msgs::VLASwarmTarget>(target_topic_, 10);
+        node_.advertise<quadrotor_msgs::VLASearchTarget>(target_topic_, 10);
   }
 
  private:
@@ -187,7 +187,7 @@ class BBoxLidarTargetEstimator {
   }
 
   void observationCallback(
-      const scene_graph::VLASwarmObservationConstPtr& message) {
+      const scene_graph::VLASearchObservationConstPtr& message) {
     std::lock_guard<std::mutex> lock(mutex_);
     const sensor_msgs::PointCloud2ConstPtr cloud =
         nearestMessage(cloud_history_, message->header.stamp, max_sync_delta_);
@@ -207,14 +207,14 @@ class BBoxLidarTargetEstimator {
   }
 
   void publishFailure(
-      const quadrotor_msgs::VLASwarmBBox& request,
+      const quadrotor_msgs::VLASearchBBox& request,
       const std::string& reason) {
     ROS_WARN_STREAM_THROTTLE(
-        1.0, "[VLA_SWARM][LiDAR] " << reason << ", use MoGe fallback.");
+        1.0, "[VLA_SEARCH][LiDAR] " << reason << ", use MoGe fallback.");
     fallback_publisher_.publish(request);
   }
 
-  void bboxCallback(const quadrotor_msgs::VLASwarmBBoxConstPtr& message) {
+  void bboxCallback(const quadrotor_msgs::VLASearchBBoxConstPtr& message) {
     if (message->observation_index >= camera_rotations_.size()) {
       publishFailure(*message, "observation_index is outside [0,3]");
       return;
@@ -345,7 +345,7 @@ class BBoxLidarTargetEstimator {
 
     const Eigen::Vector3d target_world =
         world_from_base * (point_sum / point_count) + world_translation;
-    quadrotor_msgs::VLASwarmTarget target;
+    quadrotor_msgs::VLASearchTarget target;
     target.header = message->header;
     target.header.stamp = ros::Time::now();
     target.header.frame_id = "world";
@@ -354,7 +354,7 @@ class BBoxLidarTargetEstimator {
     target.request_id = message->request_id;
     target.observation_index = message->observation_index;
     target.success = true;
-    target.source = quadrotor_msgs::VLASwarmTarget::SOURCE_LIDAR;
+    target.source = quadrotor_msgs::VLASearchTarget::SOURCE_LIDAR;
     target.pose.position.x = target_world.x();
     target.pose.position.y = target_world.y();
     target.pose.position.z = target_world.z();

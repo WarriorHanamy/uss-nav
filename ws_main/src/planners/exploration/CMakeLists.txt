@@ -12,6 +12,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
 
 find_package(PCL 1.7 REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
     roscpp
     rospy
@@ -43,6 +44,7 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     ${Eigen3_INCLUDE_DIRS} 
     ${PCL_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 add_library( exploration
@@ -54,8 +56,10 @@ add_library( exploration
     src/graph_node.cpp
     src/uniform_grid.cpp
     src/hgrid.cpp
+    src/frontier_manager.cpp
     )
 target_link_libraries( exploration
     ${catkin_LIBRARIES} 
+    ${OpenCV_LIBRARIES}
     ${PCL_LIBRARIES}
 )  

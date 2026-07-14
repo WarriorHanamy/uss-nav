@@ -1,4 +1,4 @@
-#include <mission_executive/vla_swarm_map.h>
+#include <mission_executive/vla_search_map.h>
 
 #include <cv_bridge/cv_bridge.h>
 #include <scene_graph/scene_graph.h>
@@ -17,7 +17,7 @@
 namespace ego_planner {
 namespace {
 
-cv::Rect roomRectFromWorld(const VLASwarmRoom& room) {
+cv::Rect roomRectFromWorld(const VLASearchRoom& room) {
   return room.pixel_box;
 }
 
@@ -29,21 +29,21 @@ double pointDistance(const cv::Point& lhs, const cv::Point& rhs) {
 
 }  // namespace
 
-VLASwarmMap::VLASwarmMap(ros::NodeHandle& nh, const MapInterface::Ptr& map)
+VLASearchMap::VLASearchMap(ros::NodeHandle& nh, const MapInterface::Ptr& map)
     : map_(map) {
-  nh.param("vla_swarm/small_map_topic", image_topic_, image_topic_);
-  nh.param("vla_swarm/small_map_frame", frame_id_, frame_id_);
-  nh.param("vla_swarm/small_map_width", image_width_, image_width_);
-  nh.param("vla_swarm/small_map_height", image_height_, image_height_);
-  nh.param("vla_swarm/map_height_min", sample_height_min_, sample_height_min_);
-  nh.param("vla_swarm/map_height_max", sample_height_max_, sample_height_max_);
-  nh.param("vla_swarm/map_height_step", sample_height_step_, sample_height_step_);
-  nh.param("vla_swarm/min_room_area_px", min_room_area_px_, min_room_area_px_);
-  nh.param("vla_swarm/room_erode_iterations", room_erode_iterations_, room_erode_iterations_);
-  nh.param("vla_swarm/door_min_width_px", door_min_width_px_, door_min_width_px_);
-  nh.param("vla_swarm/door_max_width_px", door_max_width_px_, door_max_width_px_);
-  nh.param("vla_swarm/door_merge_distance_px", door_merge_distance_px_, door_merge_distance_px_);
-  nh.param("vla_swarm/astar_clearance_px", astar_clearance_px_, astar_clearance_px_);
+  nh.param("vla_search/small_map_topic", image_topic_, image_topic_);
+  nh.param("vla_search/small_map_frame", frame_id_, frame_id_);
+  nh.param("vla_search/small_map_width", image_width_, image_width_);
+  nh.param("vla_search/small_map_height", image_height_, image_height_);
+  nh.param("vla_search/map_height_min", sample_height_min_, sample_height_min_);
+  nh.param("vla_search/map_height_max", sample_height_max_, sample_height_max_);
+  nh.param("vla_search/map_height_step", sample_height_step_, sample_height_step_);
+  nh.param("vla_search/min_room_area_px", min_room_area_px_, min_room_area_px_);
+  nh.param("vla_search/room_erode_iterations", room_erode_iterations_, room_erode_iterations_);
+  nh.param("vla_search/door_min_width_px", door_min_width_px_, door_min_width_px_);
+  nh.param("vla_search/door_max_width_px", door_max_width_px_, door_max_width_px_);
+  nh.param("vla_search/door_merge_distance_px", door_merge_distance_px_, door_merge_distance_px_);
+  nh.param("vla_search/astar_clearance_px", astar_clearance_px_, astar_clearance_px_);
 
   image_width_ = std::max(64, image_width_);
   image_height_ = std::max(64, image_height_);
@@ -53,7 +53,7 @@ VLASwarmMap::VLASwarmMap(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   image_pub_ = nh.advertise<sensor_msgs::Image>(image_topic_, 2, true);
 }
 
-bool VLASwarmMap::update(const Eigen::Vector3d& robot_position) {
+bool VLASearchMap::update(const Eigen::Vector3d& robot_position) {
   if (!map_ || !map_->isInited()) {
     return false;
   }
@@ -79,10 +79,10 @@ bool VLASwarmMap::update(const Eigen::Vector3d& robot_position) {
   buildOccupancyImage(map_image, free_mask, unknown_mask);
 
   cv::Mat room_labels;
-  std::vector<VLASwarmRoom> new_rooms;
+  std::vector<VLASearchRoom> new_rooms;
   segmentRooms(free_mask, room_labels, new_rooms);
 
-  std::vector<VLASwarmDoor> new_doors;
+  std::vector<VLASearchDoor> new_doors;
   detectDoors(free_mask, unknown_mask, room_labels, new_doors);
 
   // 只保留与机器人处于同一自由空间连通域的候选。这里做二维地图级粗过滤，
@@ -116,7 +116,7 @@ bool VLASwarmMap::update(const Eigen::Vector3d& robot_position) {
       new_doors.erase(
           std::remove_if(
               new_doors.begin(), new_doors.end(),
-              [&](const VLASwarmDoor& door) {
+              [&](const VLASearchDoor& door) {
                 return free_components.at<int>(
                            door.pixel.y, door.pixel.x) != robot_component;
               }),
@@ -156,7 +156,7 @@ bool VLASwarmMap::update(const Eigen::Vector3d& robot_position) {
   return true;
 }
 
-void VLASwarmMap::reset() {
+void VLASearchMap::reset() {
   std::lock_guard<std::mutex> lock(mutex_);
   ready_ = false;
   map_sequence_ = 0;
@@ -167,36 +167,36 @@ void VLASwarmMap::reset() {
   doors_.clear();
 }
 
-bool VLASwarmMap::ready() const {
+bool VLASearchMap::ready() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return ready_;
 }
 
-uint64_t VLASwarmMap::mapSequence() const {
+uint64_t VLASearchMap::mapSequence() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return map_sequence_;
 }
 
-cv::Mat VLASwarmMap::image() const {
+cv::Mat VLASearchMap::image() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return image_.clone();
 }
 
-std::vector<VLASwarmRoom> VLASwarmMap::rooms() const {
+std::vector<VLASearchRoom> VLASearchMap::rooms() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return rooms_;
 }
 
-std::vector<VLASwarmDoor> VLASwarmMap::doors() const {
+std::vector<VLASearchDoor> VLASearchMap::doors() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return doors_;
 }
 
-bool VLASwarmMap::findDoor(int door_id, VLASwarmDoor& door) const {
+bool VLASearchMap::findDoor(int door_id, VLASearchDoor& door) const {
   std::lock_guard<std::mutex> lock(mutex_);
   const auto iterator = std::find_if(
       doors_.begin(), doors_.end(),
-      [door_id](const VLASwarmDoor& candidate) {
+      [door_id](const VLASearchDoor& candidate) {
         return candidate.id == door_id;
       });
   if (iterator == doors_.end()) {
@@ -206,7 +206,7 @@ bool VLASwarmMap::findDoor(int door_id, VLASwarmDoor& door) const {
   return true;
 }
 
-bool VLASwarmMap::planDoorPath(
+bool VLASearchMap::planDoorPath(
     const Eigen::Vector3d& start_position, int door_id, double flight_height,
     double waypoint_distance, std::vector<Eigen::Vector3d>& path) const {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -218,7 +218,7 @@ bool VLASwarmMap::planDoorPath(
 
   const auto door_iterator = std::find_if(
       doors_.begin(), doors_.end(),
-      [door_id](const VLASwarmDoor& door) {
+      [door_id](const VLASearchDoor& door) {
         return door.id == door_id;
       });
   if (door_iterator == doors_.end()) {
@@ -415,7 +415,7 @@ bool VLASwarmMap::planDoorPath(
   return path.size() >= 2;
 }
 
-nlohmann::json VLASwarmMap::promptContext(
+nlohmann::json VLASearchMap::promptContext(
     const SceneGraph& scene_graph, const Eigen::Vector3d& robot_position) const {
   std::lock_guard<std::mutex> lock(mutex_);
   nlohmann::json context;
@@ -509,7 +509,7 @@ nlohmann::json VLASwarmMap::promptContext(
   return context;
 }
 
-bool VLASwarmMap::worldToPixel(const Eigen::Vector2d& world, cv::Point& pixel) const {
+bool VLASearchMap::worldToPixel(const Eigen::Vector2d& world, cv::Point& pixel) const {
   std::lock_guard<std::mutex> lock(mutex_);
   if (pixels_per_meter_x_ <= 0.0 || pixels_per_meter_y_ <= 0.0) {
     return false;
@@ -520,7 +520,7 @@ bool VLASwarmMap::worldToPixel(const Eigen::Vector2d& world, cv::Point& pixel) c
          pixel.y >= 0 && pixel.y < image_height_;
 }
 
-bool VLASwarmMap::pixelToWorld(const cv::Point& pixel, Eigen::Vector2d& world) const {
+bool VLASearchMap::pixelToWorld(const cv::Point& pixel, Eigen::Vector2d& world) const {
   std::lock_guard<std::mutex> lock(mutex_);
   if (pixel.x < 0 || pixel.x >= image_width_ ||
       pixel.y < 0 || pixel.y >= image_height_ ||
@@ -532,7 +532,7 @@ bool VLASwarmMap::pixelToWorld(const cv::Point& pixel, Eigen::Vector2d& world) c
   return true;
 }
 
-void VLASwarmMap::buildOccupancyImage(
+void VLASearchMap::buildOccupancyImage(
     cv::Mat& image, cv::Mat& free_mask, cv::Mat& unknown_mask) const {
   image = cv::Mat(image_height_, image_width_, CV_8UC3, cv::Scalar(255, 255, 255));
   free_mask = cv::Mat(image_height_, image_width_, CV_8UC1, cv::Scalar(0));
@@ -569,9 +569,9 @@ void VLASwarmMap::buildOccupancyImage(
   cv::morphologyEx(free_mask, free_mask, cv::MORPH_CLOSE, kernel);
 }
 
-void VLASwarmMap::segmentRooms(
+void VLASearchMap::segmentRooms(
     const cv::Mat& free_mask, cv::Mat& room_labels,
-    std::vector<VLASwarmRoom>& rooms) {
+    std::vector<VLASearchRoom>& rooms) {
   const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
   cv::Mat seeds;
   cv::erode(free_mask, seeds, kernel, cv::Point(-1, -1), room_erode_iterations_);
@@ -645,7 +645,7 @@ void VLASwarmMap::segmentRooms(
     if (pixels.empty()) {
       continue;
     }
-    VLASwarmRoom& room = rooms[room_index];
+    VLASearchRoom& room = rooms[room_index];
     room.pixel_box = cv::boundingRect(pixels);
     room.area = static_cast<double>(pixels.size()) /
                 (pixels_per_meter_x_ * pixels_per_meter_y_);
@@ -659,9 +659,9 @@ void VLASwarmMap::segmentRooms(
   }
 }
 
-void VLASwarmMap::detectDoors(
+void VLASearchMap::detectDoors(
     const cv::Mat& free_mask, const cv::Mat& unknown_mask,
-    const cv::Mat& room_labels, std::vector<VLASwarmDoor>& doors) {
+    const cv::Mat& room_labels, std::vector<VLASearchDoor>& doors) {
   std::vector<DoorCandidate> candidates;
 
   // 不同房间标签在自由空间中的接触带表示房间间开口。
@@ -760,7 +760,7 @@ void VLASwarmMap::detectDoors(
       }
     }
     if (!merged) {
-      VLASwarmDoor door;
+      VLASearchDoor door;
       door.pixel = candidate.pixel;
       door.frontier = candidate.frontier;
       door.room_ids = candidate.room_ids;
@@ -779,7 +779,7 @@ void VLASwarmMap::detectDoors(
   }
 }
 
-void VLASwarmMap::assignStableRoomIds(std::vector<VLASwarmRoom>& rooms) {
+void VLASearchMap::assignStableRoomIds(std::vector<VLASearchRoom>& rooms) {
   std::set<int> used_ids;
   for (auto& room : rooms) {
     double best_overlap = 0.0;
@@ -801,7 +801,7 @@ void VLASwarmMap::assignStableRoomIds(std::vector<VLASwarmRoom>& rooms) {
   }
 }
 
-void VLASwarmMap::assignStableDoorIds(std::vector<VLASwarmDoor>& doors) {
+void VLASearchMap::assignStableDoorIds(std::vector<VLASearchDoor>& doors) {
   std::set<int> used_ids;
   for (auto& door : doors) {
     double best_distance = std::numeric_limits<double>::max();
@@ -821,7 +821,7 @@ void VLASwarmMap::assignStableDoorIds(std::vector<VLASwarmDoor>& doors) {
   }
 }
 
-void VLASwarmMap::drawSemanticOverlay(
+void VLASearchMap::drawSemanticOverlay(
     cv::Mat& image, const cv::Mat&, const Eigen::Vector3d& robot_position) const {
   for (const auto& room : rooms_) {
     cv::rectangle(image, room.pixel_box, cv::Scalar(0, 180, 0), 1);
@@ -853,7 +853,7 @@ void VLASwarmMap::drawSemanticOverlay(
   }
 }
 
-void VLASwarmMap::publishImage(const cv::Mat& image) const {
+void VLASearchMap::publishImage(const cv::Mat& image) const {
   if (image.empty()) {
     return;
   }
@@ -863,7 +863,7 @@ void VLASwarmMap::publishImage(const cv::Mat& image) const {
   image_pub_.publish(cv_bridge::CvImage(header, "bgr8", image).toImageMsg());
 }
 
-double VLASwarmMap::rectangleOverlapRatio(
+double VLASearchMap::rectangleOverlapRatio(
     const cv::Rect& lhs, const cv::Rect& rhs) {
   const cv::Rect intersection = lhs & rhs;
   const double smaller_area = std::min(lhs.area(), rhs.area());
@@ -872,7 +872,7 @@ double VLASwarmMap::rectangleOverlapRatio(
              : 0.0;
 }
 
-std::string VLASwarmMap::roomLabel(int id) {
+std::string VLASearchMap::roomLabel(int id) {
   int value = id + 1;
   std::string label;
   while (value > 0) {

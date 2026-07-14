@@ -10,7 +10,7 @@ import queue
 import threading
 import sys
 import json
-from vla_swarm_prompt_router import (
+from vla_search_prompt_router import (
     create_answer,
     load_prompt_specs,
     resolve_text_request,

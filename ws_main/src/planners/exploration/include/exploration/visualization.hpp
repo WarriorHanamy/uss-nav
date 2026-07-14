@@ -1,5 +1,5 @@
-#ifndef _VISUALIZATION_HPP_
-#define _VISUALIZATION_HPP_
+#ifndef _EXPL_VISUALIZATION_HPP_
+#define _EXPL_VISUALIZATION_HPP_
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -11,13 +11,16 @@
 #include <sstream>
 #include <string>
 
-using namespace std;
-namespace visualization {
-  using PublisherMap = std::unordered_map<std::string, ros::Publisher>;
+
+namespace ego_planner { namespace expl_vis {
+  typedef std::unordered_map<std::string, ros::Publisher> PublisherMap;
   enum Color { red, green, blue };
   
 class Visualization {
-  
+
+ public:
+  using Ptr = std::shared_ptr<Visualization>;
+
  private:
   ros::NodeHandle nh_;
   PublisherMap publisher_map_;
@@ -319,6 +322,7 @@ class Visualization {
 
 };
 
-} // namespace visualization
+}  // namespace expl_vis
+}  // namespace ego_planner
 
 # endif

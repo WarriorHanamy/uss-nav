@@ -35,11 +35,11 @@
     <arg name="elastic_tracker_trigger_topic" default="/triger"/>
     <arg name="elastic_tracker_finish_topic" default="/elastic_tracker/tracking_finish"/>
     <arg name="elastic_tracker_stop_topic" default="/elastic_tracker/stop"/>
-    <arg name="vla_swarm_target_estimator_enable" default="false"/>
-    <arg name="vla_swarm_camera_info_topic" default="/drone_$(arg drone_id)/camera/color/info"/>
-    <arg name="vla_swarm_cloud_topic" default="/drone_$(arg drone_id)_laserMapping/cloud_registered"/>
-    <arg name="vla_swarm_moge_root" default=""/>
-    <arg name="vla_swarm_moge_model_path" default=""/>
+    <arg name="vla_search_target_estimator_enable" default="false"/>
+    <arg name="vla_search_camera_info_topic" default="/drone_$(arg drone_id)/camera/color/info"/>
+    <arg name="vla_search_cloud_topic" default="/drone_$(arg drone_id)_laserMapping/cloud_registered"/>
+    <arg name="vla_search_moge_root" default=""/>
+    <arg name="vla_search_moge_model_path" default=""/>
 
 	<!-- swarm topic transmitter bridge-->
 <!--	<include file="$(find swarm_bridge)/launch/bridge_tcp_drone_fy_sim.launch">-->
@@ -89,14 +89,14 @@
         <arg name="flight_type" value="$(arg flight_type)" />
     </include>
 
-    <include if="$(arg vla_swarm_target_estimator_enable)"
-             file="$(find box_odom_estimator)/launch/vla_swarm_target_estimator.launch">
-        <arg name="camera_info_topic" value="$(arg vla_swarm_camera_info_topic)"/>
-        <arg name="observation_topic" value="/vla_swarm/observation"/>
+    <include if="$(arg vla_search_target_estimator_enable)"
+             file="$(find box_odom_estimator)/launch/vla_search_target_estimator.launch">
+        <arg name="camera_info_topic" value="$(arg vla_search_camera_info_topic)"/>
+        <arg name="observation_topic" value="/vla_search/observation"/>
         <arg name="odom_topic" value="$(arg odom_topic)"/>
-        <arg name="cloud_topic" value="$(arg vla_swarm_cloud_topic)"/>
-        <arg name="moge_root" value="$(arg vla_swarm_moge_root)"/>
-        <arg name="moge_model_path" value="$(arg vla_swarm_moge_model_path)"/>
+        <arg name="cloud_topic" value="$(arg vla_search_cloud_topic)"/>
+        <arg name="moge_root" value="$(arg vla_search_moge_root)"/>
+        <arg name="moge_model_path" value="$(arg vla_search_moge_model_path)"/>
     </include>
 
     <node pkg="mission_executive" type="planner_cmd_mux" name="drone_$(arg drone_id)_planner_cmd_mux" output="screen">

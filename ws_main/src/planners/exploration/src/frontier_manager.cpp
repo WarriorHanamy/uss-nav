@@ -1,4 +1,4 @@
-#include <mission_executive/frontier_manager.h>
+#include <exploration/frontier_manager.h>
 #include <algorithm>
 #include <fstream>
 #include <memory>
@@ -32,7 +32,7 @@ FrontierManager::FrontierManager(ros::NodeHandle& nh, const MapInterface::Ptr& m
   // ViewNode::posegraph_m_  = ed_->posegraph_m_;
   ViewNode::sensor_range_ = frontier_finder_->percep_utils_->getSensorMaxDist();
 
-  vis_ptr_       = std::make_shared<visualization::Visualization>(nh);
+  vis_ptr_       = std::make_shared<expl_vis::Visualization>(nh);
 
   nh.param("exploration/refine_local", ep_->refine_local_, true);
   nh.param("exploration/refined_num", ep_->refined_num_, -1);
@@ -1138,8 +1138,8 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
     }
   }
   vis_ptr_->visualize_pointcloud_intensity(viewpoints, "viewpoints");
-  vis_ptr_->visualize_pairline(arrows_pair_list, "viewpoints_line", 0.06, visualization::Color::red);
-  vis_ptr_->visualize_arrows(vp_yaw_pair_list, "viewpoints_yaw", visualization::Color::blue);
+  vis_ptr_->visualize_pairline(arrows_pair_list, "viewpoints_line", 0.06, expl_vis::Color::red);
+  vis_ptr_->visualize_arrows(vp_yaw_pair_list, "viewpoints_yaw", expl_vis::Color::blue);
 
   // All viewpoints vis
   vp_yaw_pair_list.clear();
@@ -1150,7 +1150,7 @@ void FrontierManager::visualize(const Eigen::Vector3d &pos)
     t_p(1) += sin(vp->yaw_)*arrow_len;
     vp_yaw_pair_list.emplace_back(vp->pos_, t_p);
   }
-  vis_ptr_->visualize_arrows(vp_yaw_pair_list, "all_viewpoints_yaw", visualization::Color::green);
+  vis_ptr_->visualize_arrows(vp_yaw_pair_list, "all_viewpoints_yaw", expl_vis::Color::green);
 
   vector<vector<Vector3d>> dfrontiers;
   frontier_finder_->getDormantFrontiers(dfrontiers);

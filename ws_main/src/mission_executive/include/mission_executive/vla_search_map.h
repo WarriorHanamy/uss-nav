@@ -1,5 +1,5 @@
-#ifndef VLA_SWARM_MAP_H
-#define VLA_SWARM_MAP_H
+#ifndef VLA_SEARCH_MAP_H
+#define VLA_SEARCH_MAP_H
 
 #include <Eigen/Eigen>
 #include <map_interface/map_interface.hpp>
@@ -17,7 +17,7 @@ class SceneGraph;
 
 namespace ego_planner {
 
-struct VLASwarmRoom {
+struct VLASearchRoom {
   int id{-1};
   cv::Rect pixel_box;
   Eigen::Vector2d world_min{Eigen::Vector2d::Zero()};
@@ -27,7 +27,7 @@ struct VLASwarmRoom {
   std::string description;
 };
 
-struct VLASwarmDoor {
+struct VLASearchDoor {
   int id{-1};
   cv::Point pixel;
   Eigen::Vector2d position{Eigen::Vector2d::Zero()};
@@ -43,9 +43,9 @@ struct VLASwarmDoor {
  * world-to-pixel conversions are shared so downstream path planning
  * can reuse world coordinates directly.
  */
-class VLASwarmMap {
+class VLASearchMap {
  public:
-  using Ptr = std::shared_ptr<VLASwarmMap>;
+  using Ptr = std::shared_ptr<VLASearchMap>;
 
   /**
    * Construct the VLA swarm map with ROS node handle and map interface.
@@ -53,7 +53,7 @@ class VLASwarmMap {
    * @param[in] nh   ROS node handle
    * @param[in] map  Map interface pointer
    */
-  VLASwarmMap(ros::NodeHandle& nh, const MapInterface::Ptr& map);
+  VLASearchMap(ros::NodeHandle& nh, const MapInterface::Ptr& map);
   /**
    * Update the 2D semantic map from the current occupancy grid.
    *
@@ -88,13 +88,13 @@ class VLASwarmMap {
    *
    * @return Room list
    */
-  std::vector<VLASwarmRoom> rooms() const;
+  std::vector<VLASearchRoom> rooms() const;
   /**
    * Get the list of detected doors.
    *
    * @return Door list
    */
-  std::vector<VLASwarmDoor> doors() const;
+  std::vector<VLASearchDoor> doors() const;
   /**
    * Find a door by its stable ID.
    *
@@ -102,7 +102,7 @@ class VLASwarmMap {
    * @param[out] door     Found door (output)
    * @return True if the door was found
    */
-  bool findDoor(int door_id, VLASwarmDoor& door) const;
+  bool findDoor(int door_id, VLASearchDoor& door) const;
   /**
    * Plan a multi-waypoint path through a specified door.
    *
@@ -166,7 +166,7 @@ class VLASwarmMap {
    * @param[out] rooms       Detected room list
    */
   void segmentRooms(const cv::Mat& free_mask, cv::Mat& room_labels,
-                    std::vector<VLASwarmRoom>& rooms);
+                    std::vector<VLASearchRoom>& rooms);
   /**
    * Detect door positions at the boundary between free and unknown space.
    *
@@ -177,19 +177,19 @@ class VLASwarmMap {
    */
   void detectDoors(const cv::Mat& free_mask, const cv::Mat& unknown_mask,
                    const cv::Mat& room_labels,
-                   std::vector<VLASwarmDoor>& doors);
+                   std::vector<VLASearchDoor>& doors);
   /**
    * Assign temporally stable IDs to rooms by matching with previous frame.
    *
    * @param[in,out] rooms  Room list with IDs updated in-place
    */
-  void assignStableRoomIds(std::vector<VLASwarmRoom>& rooms);
+  void assignStableRoomIds(std::vector<VLASearchRoom>& rooms);
   /**
    * Assign temporally stable IDs to doors by matching with previous frame.
    *
    * @param[in,out] doors  Door list with IDs updated in-place
    */
-  void assignStableDoorIds(std::vector<VLASwarmDoor>& doors);
+  void assignStableDoorIds(std::vector<VLASearchDoor>& doors);
   /**
    * Draw room labels, door markers, and robot position on the image.
    *
@@ -223,7 +223,7 @@ class VLASwarmMap {
 
   MapInterface::Ptr map_;
   ros::Publisher image_pub_;
-  std::string image_topic_{"/vla_swarm/small_map"};
+  std::string image_topic_{"/vla_search/small_map"};
   std::string frame_id_{"world"};
 
   int image_width_{320};
@@ -251,8 +251,8 @@ class VLASwarmMap {
   cv::Mat image_;
   cv::Mat free_mask_;
   cv::Mat room_labels_;
-  std::vector<VLASwarmRoom> rooms_;
-  std::vector<VLASwarmDoor> doors_;
+  std::vector<VLASearchRoom> rooms_;
+  std::vector<VLASearchDoor> doors_;
 };
 
 }  // namespace ego_planner

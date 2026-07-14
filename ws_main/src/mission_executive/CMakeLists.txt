@@ -44,9 +44,7 @@ include_directories(
 add_executable(exploration_node
   src/exploration_node.cpp 
   src/fast_exploration_fsm.cpp
-  src/frontier_manager.cpp
-  src/vla_swarm_map.cpp
-#        src/perception_data_factory.cpp
+  src/vla_search_map.cpp
 )
 add_dependencies(exploration_node ${catkin_EXPORTED_TARGETS})
 

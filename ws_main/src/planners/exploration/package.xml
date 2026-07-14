@@ -60,6 +60,7 @@
   <build_depend>lkh_tsp_solver</build_depend>
   <build_depend>camera_fov</build_depend>
   <build_depend>scene_graph</build_depend>
+  <build_depend>cv_bridge</build_depend>
   
 
   <build_export_depend>roscpp</build_export_depend>

@@ -12,10 +12,10 @@
     <arg name="elastic_tracker_finish_topic" default="/elastic_tracker/tracking_finish" />
     <arg name="elastic_tracker_stop_topic" default="/elastic_tracker/stop" />
     <!-- VLA-Swarm bbox 三维定位直接随 obj_nav 启动。 -->
-    <arg name="vla_swarm_camera_info_topic" default="/drone_0/camera/color/info" />
-    <arg name="vla_swarm_cloud_topic" default="/livox/lidar_world" />
-    <arg name="vla_swarm_moge_root" default="" />
-    <arg name="vla_swarm_moge_model_path" default="" />
+    <arg name="vla_search_camera_info_topic" default="/drone_0/camera/color/info" />
+    <arg name="vla_search_cloud_topic" default="/livox/lidar_world" />
+    <arg name="vla_search_moge_root" default="" />
+    <arg name="vla_search_moge_model_path" default="" />
 
 
     <!-- map -->
@@ -126,13 +126,13 @@
         <arg name="flight_type" value="2"/>
     </include>
 
-    <include file="$(find box_odom_estimator)/launch/vla_swarm_target_estimator.launch">
-        <arg name="camera_info_topic" value="$(arg vla_swarm_camera_info_topic)"/>
-        <arg name="observation_topic" value="/vla_swarm/observation"/>
+    <include file="$(find box_odom_estimator)/launch/vla_search_target_estimator.launch">
+        <arg name="camera_info_topic" value="$(arg vla_search_camera_info_topic)"/>
+        <arg name="observation_topic" value="/vla_search/observation"/>
         <arg name="odom_topic" value="$(arg odom_topic)"/>
-        <arg name="cloud_topic" value="$(arg vla_swarm_cloud_topic)"/>
-        <arg name="moge_root" value="$(arg vla_swarm_moge_root)"/>
-        <arg name="moge_model_path" value="$(arg vla_swarm_moge_model_path)"/>
+        <arg name="cloud_topic" value="$(arg vla_search_cloud_topic)"/>
+        <arg name="moge_root" value="$(arg vla_search_moge_root)"/>
+        <arg name="moge_model_path" value="$(arg vla_search_moge_model_path)"/>
     </include>
 
 

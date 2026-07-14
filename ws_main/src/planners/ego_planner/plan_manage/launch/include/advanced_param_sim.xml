@@ -80,44 +80,44 @@
         <param name="fsm/frontier_update_dt" value="0.2" type="double"/>
 
         <!-- VLA_Swarm 独立任务状态机 -->
-        <param name="vla_swarm/enable" value="true" type="bool"/>
-        <param name="vla_swarm/result_topic" value="/planning/vla_swarm_result" type="string"/>
-        <param name="vla_swarm/bbox_topic" value="/vla_swarm/bbox" type="string"/>
-        <param name="vla_swarm/bbox_fallback_topic" value="/vla_swarm/bbox/fallback" type="string"/>
-        <param name="vla_swarm/target_topic" value="/vla_swarm/target" type="string"/>
-        <param name="vla_swarm/camera_topic" value="/camera1/color_sync/image/compressed" type="string"/>
-        <param name="vla_swarm/observation_topic" value="/vla_swarm/observation" type="string"/>
-        <param name="vla_swarm/prompt_timeout" value="20.0" type="double"/>
-        <param name="vla_swarm/target_timeout" value="10.0" type="double"/>
-        <param name="vla_swarm/ego_plan_timeout" value="5.0" type="double"/>
-        <param name="vla_swarm/ego_exec_timeout" value="30.0" type="double"/>
-        <param name="vla_swarm/max_plan_retries" value="2" type="int"/>
-        <param name="vla_swarm/max_target_retries" value="2" type="int"/>
-        <param name="vla_swarm/max_exploration_rounds" value="6" type="int"/>
-        <param name="vla_swarm/enable_room_description" value="false" type="bool"/>
-        <param name="vla_swarm/waypoint_distance" value="2.0" type="double"/>
-        <param name="vla_swarm/goal_tolerance" value="0.5" type="double"/>
-        <param name="vla_swarm/flight_height" value="1.0" type="double"/>
+        <param name="vla_search/enable" value="true" type="bool"/>
+        <param name="vla_search/result_topic" value="/planning/vla_search_result" type="string"/>
+        <param name="vla_search/bbox_topic" value="/vla_search/bbox" type="string"/>
+        <param name="vla_search/bbox_fallback_topic" value="/vla_search/bbox/fallback" type="string"/>
+        <param name="vla_search/target_topic" value="/vla_search/target" type="string"/>
+        <param name="vla_search/camera_topic" value="/camera1/color_sync/image/compressed" type="string"/>
+        <param name="vla_search/observation_topic" value="/vla_search/observation" type="string"/>
+        <param name="vla_search/prompt_timeout" value="20.0" type="double"/>
+        <param name="vla_search/target_timeout" value="10.0" type="double"/>
+        <param name="vla_search/ego_plan_timeout" value="5.0" type="double"/>
+        <param name="vla_search/ego_exec_timeout" value="30.0" type="double"/>
+        <param name="vla_search/max_plan_retries" value="2" type="int"/>
+        <param name="vla_search/max_target_retries" value="2" type="int"/>
+        <param name="vla_search/max_exploration_rounds" value="6" type="int"/>
+        <param name="vla_search/enable_room_description" value="false" type="bool"/>
+        <param name="vla_search/waypoint_distance" value="2.0" type="double"/>
+        <param name="vla_search/goal_tolerance" value="0.5" type="double"/>
+        <param name="vla_search/flight_height" value="1.0" type="double"/>
         <!-- 扫描偏航步长(度)，自动生成方向序列: [0, ±step, ±2*step, ..., 180] -->
-        <param name="vla_swarm/scan_yaw_step_deg" value="60.0" type="double"/>
-        <param name="vla_swarm/scan_yaw_tolerance" value="0.08" type="double"/>
-        <param name="vla_swarm/scan_settle_time" value="0.4" type="double"/>
-        <param name="vla_swarm/scan_timeout" value="8.0" type="double"/>
+        <param name="vla_search/scan_yaw_step_deg" value="60.0" type="double"/>
+        <param name="vla_search/scan_yaw_tolerance" value="0.08" type="double"/>
+        <param name="vla_search/scan_settle_time" value="0.4" type="double"/>
+        <param name="vla_search/scan_timeout" value="8.0" type="double"/>
         <!-- SmallMap：黑色障碍、粉色自由空间、白色未知区域、绿色门候选 -->
-        <param name="vla_swarm/small_map_topic" value="/vla_swarm/small_map" type="string"/>
-        <param name="vla_swarm/small_map_frame" value="world" type="string"/>
-        <param name="vla_swarm/small_map_width" value="320" type="int"/>
-        <param name="vla_swarm/small_map_height" value="240" type="int"/>
-        <param name="vla_swarm/map_update_period" value="1.0" type="double"/>
-        <param name="vla_swarm/map_height_min" value="0.6" type="double"/>
-        <param name="vla_swarm/map_height_max" value="1.6" type="double"/>
-        <param name="vla_swarm/map_height_step" value="0.4" type="double"/>
-        <param name="vla_swarm/min_room_area_px" value="300" type="int"/>
-        <param name="vla_swarm/room_erode_iterations" value="4" type="int"/>
-        <param name="vla_swarm/door_min_width_px" value="4" type="int"/>
-        <param name="vla_swarm/door_max_width_px" value="30" type="int"/>
-        <param name="vla_swarm/door_merge_distance_px" value="12" type="int"/>
-        <param name="vla_swarm/astar_clearance_px" value="2" type="int"/>
+        <param name="vla_search/small_map_topic" value="/vla_search/small_map" type="string"/>
+        <param name="vla_search/small_map_frame" value="world" type="string"/>
+        <param name="vla_search/small_map_width" value="320" type="int"/>
+        <param name="vla_search/small_map_height" value="240" type="int"/>
+        <param name="vla_search/map_update_period" value="1.0" type="double"/>
+        <param name="vla_search/map_height_min" value="0.6" type="double"/>
+        <param name="vla_search/map_height_max" value="1.6" type="double"/>
+        <param name="vla_search/map_height_step" value="0.4" type="double"/>
+        <param name="vla_search/min_room_area_px" value="300" type="int"/>
+        <param name="vla_search/room_erode_iterations" value="4" type="int"/>
+        <param name="vla_search/door_min_width_px" value="4" type="int"/>
+        <param name="vla_search/door_max_width_px" value="30" type="int"/>
+        <param name="vla_search/door_merge_distance_px" value="12" type="int"/>
+        <param name="vla_search/astar_clearance_px" value="2" type="int"/>
 
         <!-- ego state trigger -->
         <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>

@@ -3,6 +3,7 @@
 
 #include <Eigen/Eigen>
 #include <Eigen/Geometry>
+#include <exploration/expl_data.h>
 #include <exploration/ftr_data_structure.h>
 #include <sys/types.h>
 #include <string>
@@ -10,8 +11,6 @@
 #include <quadrotor_msgs/PerceptionMsg.h>
 #include <quadrotor_msgs/Instruction.h>
 #include <scene_graph/scene_graph.h>
-// #include "poly_traj_utils.hpp"
-
 
 using std::vector;
 using Eigen::Vector3d;
@@ -30,7 +29,7 @@ enum TARGET_TYPE
 };
 
 /**
- * Runtime FSM data shared across exploration states.
+ * Runtime FSM data shared across mission states.
  */
 struct FSMData
 {
@@ -153,72 +152,6 @@ struct FSMParam
   int    object_id_nav_replan_stuck_max_consecutive_{0};
   double object_id_nav_replan_mode2_stuck_fallback_delay_{10.0};
   bool   object_id_nav_require_final_yaw_{true};
-};
-
-/**
- * Per-cycle exploration data including frontiers, viewpoints, and tour results.
- */
-struct ExplorationData {
-  Frontier                          frontier_to_goal, frontier_to_explore_;
-  vector<vector<Vector3d>>          frontiers_;
-  vector<Frontier>                  frontiers_with_info_;
-  vector<vector<Vector3d>>          dead_frontiers_;
-  vector<pair<Vector3d, Vector3d>>  frontier_boxes_;
-  std::unordered_map<int, int>      topo_blacklist_;
-  bool                              flag_first_plangoal_;
-  vector<Vector3d>                  points_;
-  vector<Vector3d>                  averages_;
-  vector<Vector3d>                  views_;
-  vector<double>                    yaws_;
-  vector<Vector3d>                  global_tour_;
-  map<int, vector<Vector3d>>        global_tour_map_;
-  bool                              force_plangoal_by_frontier_;
-
-  vector<Frontier>                  last_frontiers_with_info_;
-  vector<int>                       last_indices_;
-  bool                              is_gohome = false;
-  bool                              is_stick_to_last = false;
-
-  vector<int>                       refined_ids_;
-  vector<vector<Vector3d>>          n_points_;
-  vector<Vector3d>                  unrefined_points_;
-  vector<Vector3d>                  refined_points_;
-  vector<Vector3d>                  refined_views_;
-  vector<Vector3d>                  refined_views1_, refined_views2_;
-  vector<Vector3d>                  refined_tour_;
-
-  vector<Vector3d>                  path_next_goal_;
-  vector<int>                       last_grid_ids_;
-
-  vector<Vector3d>                  views_vis1_, views_vis2_;
-  vector<Vector3d>                  centers_, scales_;
-  typedef std::shared_ptr<ExplorationData> Ptr;
-};
-
-/**
- * Exploration planner parameters.
- */
-struct ExplorationParam
-{
-  bool         refine_local_;
-  int          refined_num_;
-  double       refined_radius_;
-  int          top_view_num_;
-  double       max_decay_;
-  std::string  tsp_dir_;
-  double       relax_time_;
-  double       radius_close_;
-  double       radius_far_;
-  int          frontier_tsp_mode_{0};
-  double       track_dist_;
-  double       track_dist_thr_;
-  double       track_replan_dist_;
-  double       track_turn_yaw_dist_;
-  double       track_fly_yaw_thr_;
-  double       track_yaw_thr_;
-  double       track_detect_error_;
-
-  typedef std::shared_ptr<ExplorationParam> Ptr;
 };
 
 }  // namespace ego_planner

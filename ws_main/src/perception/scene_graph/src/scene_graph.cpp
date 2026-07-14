@@ -557,7 +557,7 @@ void SceneGraph::sendSceneGraphJson(std::string &scene_graph_json_str){
     INFO_MSG_CYAN("[SceneGraph] | Published scene graph json to CoPaw, json size: " << scene_graph_json_str.size() << " bytes\n");
 }
 
-bool SceneGraph::vlaSwarmPromptGen(unsigned char prompt_type, const std::string &command,
+bool SceneGraph::vlaSearchPromptGen(unsigned char prompt_type, const std::string &command,
                                   uint32_t task_session_id, uint32_t observation_batch_id,
                                   const nlohmann::json &semantic_context,
                                   std::string &prompt_str) const
@@ -633,10 +633,10 @@ bool SceneGraph::vlaSwarmPromptGen(unsigned char prompt_type, const std::string 
     return true;
 }
 
-VLASwarmPromptResult SceneGraph::parseVlaSwarmPromptResult(
+VLASearchPromptResult SceneGraph::parseVlaSearchPromptResult(
     unsigned int prompt_id, unsigned char expected_prompt_type)
 {
-    VLASwarmPromptResult result;
+    VLASearchPromptResult result;
     std::string answer;
     {
         std::lock_guard<std::mutex> lock(mutex_);

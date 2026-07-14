@@ -13,7 +13,7 @@ import rospy
 from loguru import logger
 from rospkg import RosPack
 from scene_graph.msg import PromptMsg
-from vla_swarm_prompt_router import (
+from vla_search_prompt_router import (
     create_answer,
     load_prompt_specs,
     resolve_prompt_request,

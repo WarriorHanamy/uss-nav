@@ -59,7 +59,7 @@ FrontierFinder::FrontierFinder(const MapInterface::Ptr& map, ros::NodeHandle& nh
   nh.param("posegraph/connected_min_seqential_dis", connected_min_seqential_dis_, -1.0);
   nh.param("posegraph/connected_max_euler_dis", connected_max_euler_dis_, -1.0);
 
-  visPtr_ = std::make_shared<visualization::Visualization>(nh);
+  visPtr_ = std::make_shared<expl_vis::Visualization>(nh);
 
   raycaster_  = std::make_unique<RayCaster>();
   resolution_ = edt_env_->getResolution();

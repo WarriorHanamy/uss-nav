@@ -12,8 +12,8 @@ import cv2
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry
-from quadrotor_msgs.msg import VLASwarmBBox, VLASwarmTarget
-from scene_graph.msg import VLASwarmObservation
+from quadrotor_msgs.msg import VLASearchBBox, VLASearchTarget
+from scene_graph.msg import VLASearchObservation
 from sensor_msgs.msg import CameraInfo
 
 
@@ -49,14 +49,14 @@ class MoGeTargetEstimator:
         self.lock = threading.Lock()
         self.history_duration = float(rospy.get_param("~history_duration", 8.0))
         self.max_sync_delta = float(rospy.get_param("~max_sync_delta", 0.25))
-        self.bbox_topic = rospy.get_param("~bbox_topic", "/vla_swarm/bbox/fallback")
-        self.target_topic = rospy.get_param("~target_topic", "/vla_swarm/target")
+        self.bbox_topic = rospy.get_param("~bbox_topic", "/vla_search/bbox/fallback")
+        self.target_topic = rospy.get_param("~target_topic", "/vla_search/target")
         self.camera_info_topic = rospy.get_param(
             "~camera_info_topic", "/camera/color/camera_info"
         )
         self.odom_topic = rospy.get_param("~odom_topic", "/odom_world")
         self.observation_topic = rospy.get_param(
-            "~observation_topic", "/vla_swarm/observation"
+            "~observation_topic", "/vla_search/observation"
         )
         self.moge_root = rospy.get_param("~moge_root", "")
         self.model_path = rospy.get_param("~model_path", "")
@@ -92,7 +92,7 @@ class MoGeTargetEstimator:
         )
 
         self.target_publisher = rospy.Publisher(
-            self.target_topic, VLASwarmTarget, queue_size=10
+            self.target_topic, VLASearchTarget, queue_size=10
         )
         rospy.Subscriber(
             self.camera_info_topic, CameraInfo, self.camera_info_callback, queue_size=1
@@ -100,13 +100,13 @@ class MoGeTargetEstimator:
         rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback, queue_size=50)
         rospy.Subscriber(
             self.observation_topic,
-            VLASwarmObservation,
+            VLASearchObservation,
             self.observation_callback,
             queue_size=10,
             buff_size=2**24,
         )
         rospy.Subscriber(
-            self.bbox_topic, VLASwarmBBox, self.bbox_callback, queue_size=10
+            self.bbox_topic, VLASearchBBox, self.bbox_callback, queue_size=10
         )
 
     def trim_history(self, history):
@@ -136,7 +136,7 @@ class MoGeTargetEstimator:
         encoded = np.frombuffer(message.image.data, dtype=np.uint8)
         image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
         if image is None:
-            rospy.logwarn_throttle(2.0, "[VLA_SWARM][MoGe] Failed to decode image.")
+            rospy.logwarn_throttle(2.0, "[VLA_SEARCH][MoGe] Failed to decode image.")
             return
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         with self.lock:
@@ -191,7 +191,7 @@ class MoGeTargetEstimator:
             else "cpu"
         )
         rospy.loginfo(
-            "[VLA_SWARM][MoGe] Loading model %s on %s",
+            "[VLA_SEARCH][MoGe] Loading model %s on %s",
             self.model_path,
             device,
         )
@@ -199,7 +199,7 @@ class MoGeTargetEstimator:
         self.device = device
 
     def publish_result(self, request, success, source, position=None, error=""):
-        result = VLASwarmTarget()
+        result = VLASearchTarget()
         result.header.stamp = rospy.Time.now()
         result.header.frame_id = request.header.frame_id or "world"
         result.task_session_id = request.task_session_id
@@ -221,7 +221,7 @@ class MoGeTargetEstimator:
             self.publish_result(
                 request,
                 False,
-                VLASwarmTarget.SOURCE_MOGE,
+                VLASearchTarget.SOURCE_MOGE,
                 error="observation_index is outside [0,3]",
             )
             return
@@ -253,7 +253,7 @@ class MoGeTargetEstimator:
             self.publish_result(
                 request,
                 False,
-                VLASwarmTarget.SOURCE_MOGE,
+                VLASearchTarget.SOURCE_MOGE,
                 error="historical image or odometry is unavailable",
             )
             return
@@ -328,21 +328,21 @@ class MoGeTargetEstimator:
             self.publish_result(
                 request,
                 True,
-                VLASwarmTarget.SOURCE_MOGE,
+                VLASearchTarget.SOURCE_MOGE,
                 position=target_world,
             )
         except Exception as error:
-            rospy.logerr("[VLA_SWARM][MoGe] Target estimation failed: %s", error)
+            rospy.logerr("[VLA_SEARCH][MoGe] Target estimation failed: %s", error)
             self.publish_result(
                 request,
                 False,
-                VLASwarmTarget.SOURCE_MOGE,
+                VLASearchTarget.SOURCE_MOGE,
                 error=str(error),
             )
 
 
 def main():
-    rospy.init_node("vla_swarm_moge_target_estimator")
+    rospy.init_node("vla_search_moge_target_estimator")
     MoGeTargetEstimator()
     rospy.spin()
 

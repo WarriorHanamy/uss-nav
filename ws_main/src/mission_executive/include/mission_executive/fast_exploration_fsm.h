@@ -21,8 +21,8 @@
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <quadrotor_msgs/DetectOut.h>
 #include <quadrotor_msgs/TrackCommand.h>
-#include <quadrotor_msgs/VLASwarmBBox.h>
-#include <quadrotor_msgs/VLASwarmTarget.h>
+#include <quadrotor_msgs/VLASearchBBox.h>
+#include <quadrotor_msgs/VLASearchTarget.h>
 #include <quadrotor_msgs/ReplanState.h>
 
 #include <algorithm>
@@ -33,14 +33,14 @@
 #include <thread>
 #include <deque>
 #include <mutex>
-#include <mission_executive/frontier_manager.h>
+#include <exploration/frontier_manager.h>
 #include <mission_executive/mission_data.h>
-#include <mission_executive/vla_swarm_map.h>
+#include <mission_executive/vla_search_map.h>
 #include <scene_graph/object_factory.h>
 #include <scene_graph/counting_scene_graph.h>
 #include <scene_graph/scene_graph.h>
 #include <scene_graph/traj_visualizer.h>
-#include <scene_graph/VLASwarmObservation.h>
+#include <scene_graph/VLASearchObservation.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Empty.h>
 #include <std_msgs/String.h>
@@ -68,7 +68,7 @@ private:
   shared_ptr<SceneGraph>                            scene_graph_;
   CountingSceneGraph::Ptr                           counting_scene_graph_;
   shared_ptr<TrajectoryVisualizer>                  traj_visualizer_;
-  VLASwarmMap::Ptr                                  vla_swarm_map_;
+  VLASearchMap::Ptr                                  vla_search_map_;
   shared_ptr<FSMParam>                              fp_;
   shared_ptr<FSMData>                               fd_;
   shared_ptr<MissionData>                           md_;
@@ -80,13 +80,13 @@ private:
 
   /* ROS utils */
   ros::NodeHandle node_;
-  ros::Timer exec_timer_, frontier_timer_, vla_swarm_map_timer_;
+  ros::Timer exec_timer_, frontier_timer_, vla_search_map_timer_;
   ros::Subscriber trigger_sub_, odom_sub_, ego_exec_finish_sub_;
   ros::Subscriber track_command_sub_, target_sub_, elastic_tracking_finish_sub_;
   ros::Subscriber elastic_tracker_replan_state_sub_;
   ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
-  ros::Subscriber vla_swarm_target_sub_, vla_swarm_camera_sub_;
-  ros::Subscriber vla_swarm_ego_state_trigger_sub_;
+  ros::Subscriber vla_search_target_sub_, vla_search_camera_sub_;
+  ros::Subscriber vla_search_ego_state_trigger_sub_;
   ros::Subscriber object_id_nav_replan_sub_;    // 订阅 /object_id_nav_replan
   ros::Publisher ego_goal_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
@@ -97,9 +97,9 @@ private:
   ros::Publisher elastic_tracker_trigger_pub_;
   ros::Publisher elastic_tracker_stop_pub_;
   ros::Publisher exploration_result_pub_;
-  ros::Publisher vla_swarm_result_pub_;
-  ros::Publisher vla_swarm_bbox_pub_;
-  ros::Publisher vla_swarm_observation_pub_;
+  ros::Publisher vla_search_result_pub_;
+  ros::Publisher vla_search_bbox_pub_;
+  ros::Publisher vla_search_observation_pub_;
 
   // LLM related
   MISSION_FSM_STATE stash_state_{MISSION_FSM_STATE::UNKONWN};
@@ -127,78 +127,78 @@ private:
   double think_start_time_;
 
   // VLA_Swarm 独立任务上下文。
-  bool vla_swarm_enabled_{false};
-  bool vla_swarm_active_{false};
-  bool vla_swarm_result_published_{false};
-  bool vla_swarm_success_{false};
-  uint32_t vla_swarm_session_id_{0};
-  std::string vla_swarm_command_;
-  std::string vla_swarm_finish_reason_;
-  std::string vla_swarm_finish_detail_;
-  std::string vla_swarm_result_topic_{"/planning/vla_swarm_result"};
-  std::string vla_swarm_bbox_topic_{"/vla_swarm/bbox"};
-  std::string vla_swarm_target_topic_{"/vla_swarm/target"};
-  std::string vla_swarm_camera_topic_;
-  std::string vla_swarm_observation_topic_{"/vla_swarm/observation"};
-  bool vla_swarm_prompt_pending_{false};
-  bool vla_swarm_place_checked_{false};
-  int vla_swarm_explore_area_id_{-1};
-  unsigned int vla_swarm_prompt_id_{0};
-  uint8_t vla_swarm_prompt_type_{0};
-  uint32_t vla_swarm_observation_batch_id_{0};
-  uint32_t vla_swarm_target_request_id_{0};
-  ros::Time vla_swarm_prompt_start_time_;
-  ros::Time vla_swarm_target_start_time_;
-  ros::Time vla_swarm_observation_stamp_;
-  sensor_msgs::CompressedImageConstPtr vla_swarm_latest_camera_image_;
-  ros::Time vla_swarm_latest_camera_receive_time_;
-  std::mutex vla_swarm_camera_mutex_;
-  std::vector<double> vla_swarm_scan_yaw_offsets_;
-  size_t vla_swarm_scan_index_{0};
-  double vla_swarm_scan_base_yaw_{0.0};
-  double vla_swarm_scan_target_yaw_{0.0};
-  Eigen::Vector3d vla_swarm_scan_hold_position_{Eigen::Vector3d::Zero()};
-  ros::Time vla_swarm_scan_command_time_;
-  ros::Time vla_swarm_scan_yaw_reached_time_;
-  bool vla_swarm_scan_initialized_{false};
-  bool vla_swarm_scan_command_published_{false};
-  bool vla_swarm_target_pending_{false};
-  bool vla_swarm_target_received_{false};
-  bool vla_swarm_target_success_{false};
-  uint8_t vla_swarm_target_observation_index_{0};
-  uint8_t vla_swarm_target_source_{0};
-  Eigen::Vector3d vla_swarm_target_position_{Eigen::Vector3d::Zero()};
-  std::string vla_swarm_target_error_;
-  std::vector<Eigen::Vector3d> vla_swarm_path_;
-  ros::Time vla_swarm_waypoint_publish_time_;
-  bool vla_swarm_path_reaches_task_target_{false};
-  bool vla_swarm_waypoint_published_{false};
-  bool vla_swarm_waypoint_is_final_{false};
-  bool vla_swarm_plan_feedback_received_{false};
-  bool vla_swarm_plan_feedback_success_{false};
-  int vla_swarm_waypoint_retry_count_{0};
-  double vla_swarm_prompt_timeout_{20.0};
-  double vla_swarm_target_timeout_{10.0};
-  double vla_swarm_ego_plan_timeout_{5.0};
-  double vla_swarm_ego_exec_timeout_{30.0};
-  int vla_swarm_max_plan_retries_{2};
-  int vla_swarm_max_target_retries_{2};
-  double vla_swarm_waypoint_distance_{2.0};
-  double vla_swarm_goal_tolerance_{0.5};
-  double vla_swarm_flight_height_{1.0};
-  double vla_swarm_map_update_period_{1.0};
-  double vla_swarm_scan_yaw_tolerance_{0.08};
-  double vla_swarm_scan_settle_time_{0.4};
-  double vla_swarm_scan_timeout_{8.0};
-  double vla_swarm_scan_yaw_step_deg_{90.0};
-  bool vla_swarm_ego_stable_{true};
-  int vla_swarm_exploration_round_{0};
-  int vla_swarm_max_exploration_rounds_{6};
+  bool vla_search_enabled_{false};
+  bool vla_search_active_{false};
+  bool vla_search_result_published_{false};
+  bool vla_search_success_{false};
+  uint32_t vla_search_session_id_{0};
+  std::string vla_search_command_;
+  std::string vla_search_finish_reason_;
+  std::string vla_search_finish_detail_;
+  std::string vla_search_result_topic_{"/planning/vla_search_result"};
+  std::string vla_search_bbox_topic_{"/vla_search/bbox"};
+  std::string vla_search_target_topic_{"/vla_search/target"};
+  std::string vla_search_camera_topic_;
+  std::string vla_search_observation_topic_{"/vla_search/observation"};
+  bool vla_search_prompt_pending_{false};
+  bool vla_search_place_checked_{false};
+  int vla_search_explore_area_id_{-1};
+  unsigned int vla_search_prompt_id_{0};
+  uint8_t vla_search_prompt_type_{0};
+  uint32_t vla_search_observation_batch_id_{0};
+  uint32_t vla_search_target_request_id_{0};
+  ros::Time vla_search_prompt_start_time_;
+  ros::Time vla_search_target_start_time_;
+  ros::Time vla_search_observation_stamp_;
+  sensor_msgs::CompressedImageConstPtr vla_search_latest_camera_image_;
+  ros::Time vla_search_latest_camera_receive_time_;
+  std::mutex vla_search_camera_mutex_;
+  std::vector<double> vla_search_scan_yaw_offsets_;
+  size_t vla_search_scan_index_{0};
+  double vla_search_scan_base_yaw_{0.0};
+  double vla_search_scan_target_yaw_{0.0};
+  Eigen::Vector3d vla_search_scan_hold_position_{Eigen::Vector3d::Zero()};
+  ros::Time vla_search_scan_command_time_;
+  ros::Time vla_search_scan_yaw_reached_time_;
+  bool vla_search_scan_initialized_{false};
+  bool vla_search_scan_command_published_{false};
+  bool vla_search_target_pending_{false};
+  bool vla_search_target_received_{false};
+  bool vla_search_target_success_{false};
+  uint8_t vla_search_target_observation_index_{0};
+  uint8_t vla_search_target_source_{0};
+  Eigen::Vector3d vla_search_target_position_{Eigen::Vector3d::Zero()};
+  std::string vla_search_target_error_;
+  std::vector<Eigen::Vector3d> vla_search_path_;
+  ros::Time vla_search_waypoint_publish_time_;
+  bool vla_search_path_reaches_task_target_{false};
+  bool vla_search_waypoint_published_{false};
+  bool vla_search_waypoint_is_final_{false};
+  bool vla_search_plan_feedback_received_{false};
+  bool vla_search_plan_feedback_success_{false};
+  int vla_search_waypoint_retry_count_{0};
+  double vla_search_prompt_timeout_{20.0};
+  double vla_search_target_timeout_{10.0};
+  double vla_search_ego_plan_timeout_{5.0};
+  double vla_search_ego_exec_timeout_{30.0};
+  int vla_search_max_plan_retries_{2};
+  int vla_search_max_target_retries_{2};
+  double vla_search_waypoint_distance_{2.0};
+  double vla_search_goal_tolerance_{0.5};
+  double vla_search_flight_height_{1.0};
+  double vla_search_map_update_period_{1.0};
+  double vla_search_scan_yaw_tolerance_{0.08};
+  double vla_search_scan_settle_time_{0.4};
+  double vla_search_scan_timeout_{8.0};
+  double vla_search_scan_yaw_step_deg_{90.0};
+  bool vla_search_ego_stable_{true};
+  int vla_search_exploration_round_{0};
+  int vla_search_max_exploration_rounds_{6};
   // AA 阶段：全局评估与跨轮记忆，参照原始 VLA_Swarm 的 AA→A→B→C→TASK_OVER 链路
-  bool vla_swarm_aa_done_{false};
-  nlohmann::json vla_swarm_key_action_history_;
-  std::map<int, std::string> vla_swarm_room_descriptions_;
-  bool vla_swarm_enable_room_description_{false};
+  bool vla_search_aa_done_{false};
+  nlohmann::json vla_search_key_action_history_;
+  std::map<int, std::string> vla_search_room_descriptions_;
+  bool vla_search_enable_room_description_{false};
 
  private:
   /* helper functions */
@@ -321,24 +321,24 @@ private:
    * @param[in] state  FSM state to check
    * @return True if state is a VLA swarm substate
    */
-  bool isVlaSwarmState(MISSION_FSM_STATE state) const;
+  bool isVlaSearchState(MISSION_FSM_STATE state) const;
   /**
    * Reset all VLA swarm task context variables.
    */
-  void resetVlaSwarmContext();
+  void resetVlaSearchContext();
   /**
    * Start a new VLA swarm task from an instruction message.
    *
    * @param[in] msg  Instruction message with VLA swarm command
    */
-  void startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg);
+  void startVlaSearchTask(const quadrotor_msgs::InstructionConstPtr& msg);
   /**
    * Cancel the current VLA swarm task.
    *
    * @param[in] reason  Cancellation reason
    * @param[in] detail  Detail description
    */
-  void cancelVlaSwarmTask(const std::string& reason, const std::string& detail);
+  void cancelVlaSearchTask(const std::string& reason, const std::string& detail);
   /**
    * Publish VLA swarm task result.
    *
@@ -346,7 +346,7 @@ private:
    * @param[in] reason  Reason string
    * @param[in] detail  Detail description
    */
-  void publishVlaSwarmResult(bool success, const std::string& reason,
+  void publishVlaSearchResult(bool success, const std::string& reason,
                              const std::string& detail = "");
   /**
    * Start a VLA swarm target request via LLM.
@@ -354,7 +354,7 @@ private:
    * @param[in] payload  JSON payload for the LLM request
    * @return True if request was sent successfully
    */
-  bool startVlaSwarmTargetRequest(const nlohmann::json& payload);
+  bool startVlaSearchTargetRequest(const nlohmann::json& payload);
   /**
    * Prepare a global path to the requested VLA swarm goal.
    *
@@ -363,48 +363,48 @@ private:
    * @param[in] door_id            Door ID to traverse, -1 for direct path
    * @return True if path was prepared successfully
    */
-  bool prepareVlaSwarmPath(const Eigen::Vector3d& requested_goal,
+  bool prepareVlaSearchPath(const Eigen::Vector3d& requested_goal,
                            bool reaches_task_target, int door_id = -1);
   /**
    * Publish the next waypoint along the prepared VLA swarm path.
    *
    * @return True if a waypoint was published
    */
-  bool publishNextVlaSwarmWaypoint();
+  bool publishNextVlaSearchWaypoint();
   /**
    * Retry the current VLA swarm waypoint due to planning failure.
    *
    * @param[in] failure_reason  Reason for the failure
    */
-  void retryVlaSwarmWaypoint(const std::string& failure_reason);
+  void retryVlaSearchWaypoint(const std::string& failure_reason);
   /**
    * Handle VLA swarm PLAN_LOCAL FSM state.
    */
-  void handleVlaSwarmPlanLocal();
+  void handleVlaSearchPlanLocal();
   /**
    * Handle VLA swarm WAIT_LLM FSM state.
    */
-  void handleVlaSwarmWaitLLM();
+  void handleVlaSearchWaitLLM();
   /**
    * Handle VLA swarm WAIT_TARGET FSM state.
    */
-  void handleVlaSwarmWaitTarget();
+  void handleVlaSearchWaitTarget();
   /**
    * Handle VLA swarm APPROACH FSM state.
    */
-  void handleVlaSwarmApproach();
+  void handleVlaSearchApproach();
   /**
    * Handle VLA swarm YAW FSM state (yaw scanning).
    */
-  void handleVlaSwarmYaw();
+  void handleVlaSearchYaw();
   /**
    * Handle VLA swarm RECOVERY FSM state.
    */
-  void handleVlaSwarmRecovery();
+  void handleVlaSearchRecovery();
   /**
    * Handle VLA swarm FINISH FSM state.
    */
-  void handleVlaSwarmFinish();
+  void handleVlaSearchFinish();
   
   /**
    * Transition the FSM to a new state.
@@ -453,7 +453,7 @@ private:
    *
    * @param[in] e  Timer event
    */
-  void vlaSwarmMapCallback(const ros::TimerEvent& e);
+  void vlaSearchMapCallback(const ros::TimerEvent& e);
   /**
    * Callback for external trigger pose (RViz click or station).
    *
@@ -495,21 +495,21 @@ private:
    *
    * @param[in] msg  VLA swarm target message
    */
-  void vlaSwarmTargetCallback(
-      const quadrotor_msgs::VLASwarmTarget::ConstPtr& msg);
+  void vlaSearchTargetCallback(
+      const quadrotor_msgs::VLASearchTarget::ConstPtr& msg);
   /**
    * Callback for VLA swarm camera image.
    *
    * @param[in] msg  Compressed camera image
    */
-  void vlaSwarmCameraCallback(
+  void vlaSearchCameraCallback(
       const sensor_msgs::CompressedImageConstPtr& msg);
   /**
    * Callback for VLA swarm ego state trigger.
    *
    * @param[in] msg  Ego state trigger message
    */
-  void vlaSwarmEgoStateTriggerCallback(
+  void vlaSearchEgoStateTriggerCallback(
       const quadrotor_msgs::EgoStateTrigger::ConstPtr& msg);
   /**
    * Callback for object-id navigation replan trigger.

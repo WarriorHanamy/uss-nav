@@ -137,73 +137,73 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("object_id_nav_replan/stuck_max_consecutive", fp_->object_id_nav_replan_stuck_max_consecutive_, 0);
   nh.param("object_id_nav_replan/mode2_stuck_fallback_delay", fp_->object_id_nav_replan_mode2_stuck_fallback_delay_, 10.0);
   nh.param("object_id_nav/require_final_yaw",             fp_->object_id_nav_require_final_yaw_, true);
-  nh.param("vla_swarm/enable",                  vla_swarm_enabled_, false);
-  nh.param("vla_swarm/result_topic",            vla_swarm_result_topic_, std::string("/planning/vla_swarm_result"));
-  nh.param("vla_swarm/bbox_topic",              vla_swarm_bbox_topic_, std::string("/vla_swarm/bbox"));
-  nh.param("vla_swarm/target_topic",            vla_swarm_target_topic_, std::string("/vla_swarm/target"));
+  nh.param("vla_search/enable",                  vla_search_enabled_, false);
+  nh.param("vla_search/result_topic",            vla_search_result_topic_, std::string("/planning/vla_search_result"));
+  nh.param("vla_search/bbox_topic",              vla_search_bbox_topic_, std::string("/vla_search/bbox"));
+  nh.param("vla_search/target_topic",            vla_search_target_topic_, std::string("/vla_search/target"));
   nh.param(
-      "vla_swarm/camera_topic", vla_swarm_camera_topic_,
+      "vla_search/camera_topic", vla_search_camera_topic_,
       std::string("/drone_") + std::to_string(md_->drone_id_) +
           "/camera/color/image/compressed");
   nh.param(
-      "vla_swarm/observation_topic", vla_swarm_observation_topic_,
-      std::string("/vla_swarm/observation"));
-  nh.param("vla_swarm/prompt_timeout",          vla_swarm_prompt_timeout_, 20.0);
-  nh.param("vla_swarm/target_timeout",          vla_swarm_target_timeout_, 10.0);
-  nh.param("vla_swarm/ego_plan_timeout",        vla_swarm_ego_plan_timeout_, 5.0);
-  nh.param("vla_swarm/ego_exec_timeout",        vla_swarm_ego_exec_timeout_, 30.0);
-  nh.param("vla_swarm/max_plan_retries",        vla_swarm_max_plan_retries_, 2);
-  nh.param("vla_swarm/max_target_retries",      vla_swarm_max_target_retries_, 2);
-  nh.param("vla_swarm/max_exploration_rounds",  vla_swarm_max_exploration_rounds_, 6);
-  nh.param("vla_swarm/enable_room_description", vla_swarm_enable_room_description_, false);
-  nh.param("vla_swarm/waypoint_distance",       vla_swarm_waypoint_distance_, 2.0);
-  nh.param("vla_swarm/goal_tolerance",          vla_swarm_goal_tolerance_, 0.5);
-  nh.param("vla_swarm/flight_height",           vla_swarm_flight_height_, 1.0);
-  nh.param("vla_swarm/map_update_period",        vla_swarm_map_update_period_, 1.0);
+      "vla_search/observation_topic", vla_search_observation_topic_,
+      std::string("/vla_search/observation"));
+  nh.param("vla_search/prompt_timeout",          vla_search_prompt_timeout_, 20.0);
+  nh.param("vla_search/target_timeout",          vla_search_target_timeout_, 10.0);
+  nh.param("vla_search/ego_plan_timeout",        vla_search_ego_plan_timeout_, 5.0);
+  nh.param("vla_search/ego_exec_timeout",        vla_search_ego_exec_timeout_, 30.0);
+  nh.param("vla_search/max_plan_retries",        vla_search_max_plan_retries_, 2);
+  nh.param("vla_search/max_target_retries",      vla_search_max_target_retries_, 2);
+  nh.param("vla_search/max_exploration_rounds",  vla_search_max_exploration_rounds_, 6);
+  nh.param("vla_search/enable_room_description", vla_search_enable_room_description_, false);
+  nh.param("vla_search/waypoint_distance",       vla_search_waypoint_distance_, 2.0);
+  nh.param("vla_search/goal_tolerance",          vla_search_goal_tolerance_, 0.5);
+  nh.param("vla_search/flight_height",           vla_search_flight_height_, 1.0);
+  nh.param("vla_search/map_update_period",        vla_search_map_update_period_, 1.0);
   nh.param(
-      "vla_swarm/scan_yaw_tolerance", vla_swarm_scan_yaw_tolerance_, 0.08);
+      "vla_search/scan_yaw_tolerance", vla_search_scan_yaw_tolerance_, 0.08);
   nh.param(
-      "vla_swarm/scan_settle_time", vla_swarm_scan_settle_time_, 0.4);
+      "vla_search/scan_settle_time", vla_search_scan_settle_time_, 0.4);
   nh.param(
-      "vla_swarm/scan_timeout", vla_swarm_scan_timeout_, 8.0);
+      "vla_search/scan_timeout", vla_search_scan_timeout_, 8.0);
   // 优先使用显式角度列表；若未设置则根据扫描步长自动生成。
   std::vector<double> scan_yaw_offsets_deg;
-  nh.getParam("vla_swarm/scan_yaw_offsets_deg", scan_yaw_offsets_deg);
-  nh.param("vla_swarm/scan_yaw_step_deg", vla_swarm_scan_yaw_step_deg_, 90.0);
-  vla_swarm_scan_yaw_step_deg_ = std::max(1.0, std::min(180.0, vla_swarm_scan_yaw_step_deg_));
+  nh.getParam("vla_search/scan_yaw_offsets_deg", scan_yaw_offsets_deg);
+  nh.param("vla_search/scan_yaw_step_deg", vla_search_scan_yaw_step_deg_, 90.0);
+  vla_search_scan_yaw_step_deg_ = std::max(1.0, std::min(180.0, vla_search_scan_yaw_step_deg_));
 
   if (scan_yaw_offsets_deg.empty()) {
     // 先直行方向(0)，左转一次(-step)，然后持续右转累加直至覆盖近360°，最后归零。
     scan_yaw_offsets_deg.push_back(0.0);
-    scan_yaw_offsets_deg.push_back(-vla_swarm_scan_yaw_step_deg_);
-    double angle = vla_swarm_scan_yaw_step_deg_;
+    scan_yaw_offsets_deg.push_back(-vla_search_scan_yaw_step_deg_);
+    double angle = vla_search_scan_yaw_step_deg_;
     while (angle < 360.0 - 1e-6) {
       scan_yaw_offsets_deg.push_back(angle);
-      angle += vla_swarm_scan_yaw_step_deg_;
+      angle += vla_search_scan_yaw_step_deg_;
     }
     scan_yaw_offsets_deg.push_back(0.0);
   }
 
-  vla_swarm_scan_yaw_offsets_.clear();
+  vla_search_scan_yaw_offsets_.clear();
   for (const double offset_deg : scan_yaw_offsets_deg) {
-    vla_swarm_scan_yaw_offsets_.push_back(offset_deg * M_PI / 180.0);
+    vla_search_scan_yaw_offsets_.push_back(offset_deg * M_PI / 180.0);
   }
-  if (vla_swarm_scan_yaw_offsets_.empty()) {
-    vla_swarm_scan_yaw_offsets_.push_back(0.0);
-  } else if (vla_swarm_scan_yaw_offsets_.size() > 24) {
+  if (vla_search_scan_yaw_offsets_.empty()) {
+    vla_search_scan_yaw_offsets_.push_back(0.0);
+  } else if (vla_search_scan_yaw_offsets_.size() > 24) {
     ROS_WARN(
-        "[VLA_SWARM] scan_yaw_offsets_deg supports at most 24 observations; "
+        "[VLA_SEARCH] scan_yaw_offsets_deg supports at most 24 observations; "
         "extra entries are ignored.");
-    vla_swarm_scan_yaw_offsets_.resize(24);
+    vla_search_scan_yaw_offsets_.resize(24);
   }
-  vla_swarm_waypoint_distance_ = std::max(0.2, vla_swarm_waypoint_distance_);
-  vla_swarm_goal_tolerance_ = std::max(0.1, vla_swarm_goal_tolerance_);
-  vla_swarm_map_update_period_ = std::max(0.2, vla_swarm_map_update_period_);
-  vla_swarm_scan_yaw_tolerance_ =
-      std::max(0.01, vla_swarm_scan_yaw_tolerance_);
-  vla_swarm_scan_settle_time_ =
-      std::max(0.0, vla_swarm_scan_settle_time_);
-  vla_swarm_scan_timeout_ = std::max(1.0, vla_swarm_scan_timeout_);
+  vla_search_waypoint_distance_ = std::max(0.2, vla_search_waypoint_distance_);
+  vla_search_goal_tolerance_ = std::max(0.1, vla_search_goal_tolerance_);
+  vla_search_map_update_period_ = std::max(0.2, vla_search_map_update_period_);
+  vla_search_scan_yaw_tolerance_ =
+      std::max(0.01, vla_search_scan_yaw_tolerance_);
+  vla_search_scan_settle_time_ =
+      std::max(0.0, vla_search_scan_settle_time_);
+  vla_search_scan_timeout_ = std::max(1.0, vla_search_scan_timeout_);
 
   std::cout << "\n***** Target Cmd : " << fd_->target_cmd_ << "\n" << std::endl;
   std::cout << "ALL Main FSM Params loaded successfully ..." << std::endl;
@@ -215,7 +215,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   /* Initialize main modules */
   map_ = map;
   scene_graph_        = std::make_shared<SceneGraph>(nh, map_);
-  vla_swarm_map_      = std::make_shared<VLASwarmMap>(nh, map_);
+  vla_search_map_      = std::make_shared<VLASearchMap>(nh, map_);
   counting_scene_graph_ = std::make_shared<CountingSceneGraph>(nh);
   expl_manager_       = std::make_shared<FrontierManager>(nh, map, scene_graph_);
   traj_visualizer_    = std::make_shared<TrajectoryVisualizer>(nh);
@@ -243,13 +243,13 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   md_->state_str_[MISSION_FSM_STATE::FIND_TERMINATE_TARGET] = "FIND_TERMINATE_TARGET";
   md_->state_str_[MISSION_FSM_STATE::FINISH]            = "FINISH";
   md_->state_str_[MISSION_FSM_STATE::DF_DEMO]           = "DF_DEMO";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL] = "VLA_SWARM_PLAN_LOCAL";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM] = "VLA_SWARM_WAIT_LLM";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_WAIT_TARGET] = "VLA_SWARM_WAIT_TARGET";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_APPROACH] = "VLA_SWARM_APPROACH";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_YAW_HANDLE] = "VLA_SWARM_YAW_HANDLE";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_RECOVERY] = "VLA_SWARM_RECOVERY";
-  md_->state_str_[MISSION_FSM_STATE::VLA_SWARM_FINISH] = "VLA_SWARM_FINISH";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL] = "VLA_SEARCH_PLAN_LOCAL";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM] = "VLA_SEARCH_WAIT_LLM";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_WAIT_TARGET] = "VLA_SEARCH_WAIT_TARGET";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_APPROACH] = "VLA_SEARCH_APPROACH";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_YAW_HANDLE] = "VLA_SEARCH_YAW_HANDLE";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_RECOVERY] = "VLA_SEARCH_RECOVERY";
+  md_->state_str_[MISSION_FSM_STATE::VLA_SEARCH_FINISH] = "VLA_SEARCH_FINISH";
 
   /* Initialize FSM data */
   fd_->have_odom_    = false;
@@ -271,9 +271,9 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   /* Ros sub, pub and timer */
   exec_timer_      = nh.createTimer(ros::Duration(0.1), &MissionFSM::FSMCallback, this);
   frontier_timer_  = nh.createTimer(ros::Duration(fp_->frontier_update_dt_), &MissionFSM::frontierCallback, this);
-  vla_swarm_map_timer_ = nh.createTimer(
-      ros::Duration(vla_swarm_map_update_period_),
-      &MissionFSM::vlaSwarmMapCallback, this);
+  vla_search_map_timer_ = nh.createTimer(
+      ros::Duration(vla_search_map_update_period_),
+      &MissionFSM::vlaSearchMapCallback, this);
 
   // vis_timer_       = nh.createTimer(ros::Duration(0.2), &MissionFSM::visualize, this); // [gwq] has thread problem! Don't turn on!
 
@@ -296,17 +296,17 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   emergency_stop_sub_ = nh.subscribe("/command/emergency_stop", 10,
                                      &MissionFSM::emergencyStopCallback, this,
                                      ros::TransportHints().tcpNoDelay());
-  vla_swarm_target_sub_ = nh.subscribe(
-      vla_swarm_target_topic_, 10,
-      &MissionFSM::vlaSwarmTargetCallback, this,
+  vla_search_target_sub_ = nh.subscribe(
+      vla_search_target_topic_, 10,
+      &MissionFSM::vlaSearchTargetCallback, this,
       ros::TransportHints().tcpNoDelay());
-  vla_swarm_camera_sub_ = nh.subscribe(
-      vla_swarm_camera_topic_, 2,
-      &MissionFSM::vlaSwarmCameraCallback, this,
+  vla_search_camera_sub_ = nh.subscribe(
+      vla_search_camera_topic_, 2,
+      &MissionFSM::vlaSearchCameraCallback, this,
       ros::TransportHints().tcpNoDelay());
-  vla_swarm_ego_state_trigger_sub_ = nh.subscribe(
+  vla_search_ego_state_trigger_sub_ = nh.subscribe(
       "/planning/ego_state_trigger", 10,
-      &MissionFSM::vlaSwarmEgoStateTriggerCallback, this,
+      &MissionFSM::vlaSearchEgoStateTriggerCallback, this,
       ros::TransportHints().tcpNoDelay());
   object_id_nav_replan_sub_ = nh.subscribe("/object_id_nav_replan", 10,
       &MissionFSM::objectIdNavReplanCallback, this,
@@ -326,12 +326,12 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   elastic_tracker_trigger_pub_ = nh.advertise<geometry_msgs::PoseStamped>(fp_->elastic_tracker_trigger_topic_, 10);
   elastic_tracker_stop_pub_ = nh.advertise<std_msgs::Empty>(fp_->elastic_tracker_stop_topic_, 10);
   exploration_result_pub_ = nh.advertise<std_msgs::String>("/planning/exploration_result", 10);
-  vla_swarm_result_pub_ = nh.advertise<std_msgs::String>(vla_swarm_result_topic_, 10);
-  vla_swarm_bbox_pub_ =
-      nh.advertise<quadrotor_msgs::VLASwarmBBox>(vla_swarm_bbox_topic_, 10);
-  vla_swarm_observation_pub_ =
-      nh.advertise<scene_graph::VLASwarmObservation>(
-          vla_swarm_observation_topic_, 10);
+  vla_search_result_pub_ = nh.advertise<std_msgs::String>(vla_search_result_topic_, 10);
+  vla_search_bbox_pub_ =
+      nh.advertise<quadrotor_msgs::VLASearchBBox>(vla_search_bbox_topic_, 10);
+  vla_search_observation_pub_ =
+      nh.advertise<scene_graph::VLASearchObservation>(
+          vla_search_observation_topic_, 10);
 
   switchPlannerCmdMuxToEgo("fsm_init");
 }
@@ -376,124 +376,124 @@ void MissionFSM::publishExplorationResult(bool success, const std::string& reaso
   exploration_result_pub_.publish(msg);
 }
 
-bool MissionFSM::isVlaSwarmState(MISSION_FSM_STATE state) const
+bool MissionFSM::isVlaSearchState(MISSION_FSM_STATE state) const
 {
-  return state == MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL ||
-         state == MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM ||
-         state == MISSION_FSM_STATE::VLA_SWARM_WAIT_TARGET ||
-         state == MISSION_FSM_STATE::VLA_SWARM_APPROACH ||
-         state == MISSION_FSM_STATE::VLA_SWARM_YAW_HANDLE ||
-         state == MISSION_FSM_STATE::VLA_SWARM_RECOVERY ||
-         state == MISSION_FSM_STATE::VLA_SWARM_FINISH;
+  return state == MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_WAIT_TARGET ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_APPROACH ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_YAW_HANDLE ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_RECOVERY ||
+         state == MISSION_FSM_STATE::VLA_SEARCH_FINISH;
 }
 
-void MissionFSM::resetVlaSwarmContext()
+void MissionFSM::resetVlaSearchContext()
 {
-  if (vla_swarm_prompt_pending_ && scene_graph_ != nullptr) {
-    scene_graph_->clearPromptData(vla_swarm_prompt_id_);
+  if (vla_search_prompt_pending_ && scene_graph_ != nullptr) {
+    scene_graph_->clearPromptData(vla_search_prompt_id_);
   }
-  vla_swarm_active_ = false;
-  vla_swarm_result_published_ = false;
-  vla_swarm_success_ = false;
-  vla_swarm_session_id_ = 0;
-  vla_swarm_command_.clear();
-  vla_swarm_finish_reason_.clear();
-  vla_swarm_finish_detail_.clear();
-  vla_swarm_prompt_pending_ = false;
-  vla_swarm_place_checked_ = false;
-  vla_swarm_explore_area_id_ = -1;
-  vla_swarm_prompt_id_ = 0;
-  vla_swarm_prompt_type_ = 0;
-  vla_swarm_observation_batch_id_ = 0;
-  vla_swarm_target_request_id_ = 0;
-  vla_swarm_prompt_start_time_ = ros::Time();
-  vla_swarm_target_start_time_ = ros::Time();
-  vla_swarm_observation_stamp_ = ros::Time();
-  vla_swarm_scan_index_ = 0;
-  vla_swarm_scan_base_yaw_ = 0.0;
-  vla_swarm_scan_target_yaw_ = 0.0;
-  vla_swarm_scan_hold_position_.setZero();
-  vla_swarm_scan_command_time_ = ros::Time();
-  vla_swarm_scan_yaw_reached_time_ = ros::Time();
-  vla_swarm_scan_initialized_ = false;
-  vla_swarm_scan_command_published_ = false;
-  vla_swarm_target_pending_ = false;
-  vla_swarm_target_received_ = false;
-  vla_swarm_target_success_ = false;
-  vla_swarm_target_observation_index_ = 0;
-  vla_swarm_target_source_ = quadrotor_msgs::VLASwarmTarget::SOURCE_UNKNOWN;
-  vla_swarm_target_position_.setZero();
-  vla_swarm_target_error_.clear();
-  vla_swarm_path_.clear();
-  vla_swarm_waypoint_publish_time_ = ros::Time();
-  vla_swarm_path_reaches_task_target_ = false;
-  vla_swarm_waypoint_published_ = false;
-  vla_swarm_waypoint_is_final_ = false;
-  vla_swarm_plan_feedback_received_ = false;
-  vla_swarm_plan_feedback_success_ = false;
-  vla_swarm_waypoint_retry_count_ = 0;
-  vla_swarm_ego_stable_ = false;
-  vla_swarm_exploration_round_ = 0;
-  vla_swarm_aa_done_ = false;
-  vla_swarm_key_action_history_.clear();
+  vla_search_active_ = false;
+  vla_search_result_published_ = false;
+  vla_search_success_ = false;
+  vla_search_session_id_ = 0;
+  vla_search_command_.clear();
+  vla_search_finish_reason_.clear();
+  vla_search_finish_detail_.clear();
+  vla_search_prompt_pending_ = false;
+  vla_search_place_checked_ = false;
+  vla_search_explore_area_id_ = -1;
+  vla_search_prompt_id_ = 0;
+  vla_search_prompt_type_ = 0;
+  vla_search_observation_batch_id_ = 0;
+  vla_search_target_request_id_ = 0;
+  vla_search_prompt_start_time_ = ros::Time();
+  vla_search_target_start_time_ = ros::Time();
+  vla_search_observation_stamp_ = ros::Time();
+  vla_search_scan_index_ = 0;
+  vla_search_scan_base_yaw_ = 0.0;
+  vla_search_scan_target_yaw_ = 0.0;
+  vla_search_scan_hold_position_.setZero();
+  vla_search_scan_command_time_ = ros::Time();
+  vla_search_scan_yaw_reached_time_ = ros::Time();
+  vla_search_scan_initialized_ = false;
+  vla_search_scan_command_published_ = false;
+  vla_search_target_pending_ = false;
+  vla_search_target_received_ = false;
+  vla_search_target_success_ = false;
+  vla_search_target_observation_index_ = 0;
+  vla_search_target_source_ = quadrotor_msgs::VLASearchTarget::SOURCE_UNKNOWN;
+  vla_search_target_position_.setZero();
+  vla_search_target_error_.clear();
+  vla_search_path_.clear();
+  vla_search_waypoint_publish_time_ = ros::Time();
+  vla_search_path_reaches_task_target_ = false;
+  vla_search_waypoint_published_ = false;
+  vla_search_waypoint_is_final_ = false;
+  vla_search_plan_feedback_received_ = false;
+  vla_search_plan_feedback_success_ = false;
+  vla_search_waypoint_retry_count_ = 0;
+  vla_search_ego_stable_ = false;
+  vla_search_exploration_round_ = 0;
+  vla_search_aa_done_ = false;
+  vla_search_key_action_history_.clear();
   // room_descriptions_ 不在此清理 —— 同一 session 内跨轮复用
 }
 
-void MissionFSM::publishVlaSwarmResult(bool success, const std::string& reason,
+void MissionFSM::publishVlaSearchResult(bool success, const std::string& reason,
                                                const std::string& detail)
 {
-  if (!vla_swarm_active_ || vla_swarm_result_published_) {
+  if (!vla_search_active_ || vla_search_result_published_) {
     return;
   }
 
   std_msgs::String msg;
   std::ostringstream ss;
   ss << "{"
-     << "\"task_session_id\":" << vla_swarm_session_id_ << ","
+     << "\"task_session_id\":" << vla_search_session_id_ << ","
      << "\"finished\":true,"
      << "\"success\":" << (success ? "true" : "false") << ","
      << "\"reason\":\"" << jsonEscape(reason) << "\","
      << "\"detail\":\"" << jsonEscape(detail) << "\","
-     << "\"command\":\"" << jsonEscape(vla_swarm_command_) << "\","
+     << "\"command\":\"" << jsonEscape(vla_search_command_) << "\","
      << "\"state\":\"" << md_->state_str_[md_->mission_state_] << "\""
      << "}";
   msg.data = ss.str();
-  vla_swarm_result_pub_.publish(msg);
-  vla_swarm_result_published_ = true;
+  vla_search_result_pub_.publish(msg);
+  vla_search_result_published_ = true;
 }
 
-void MissionFSM::startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg)
+void MissionFSM::startVlaSearchTask(const quadrotor_msgs::InstructionConstPtr& msg)
 {
-  resetVlaSwarmContext();
-  vla_swarm_room_descriptions_.clear();
-  vla_swarm_active_ = true;
-  vla_swarm_session_id_ = msg->task_session_id;
-  vla_swarm_observation_batch_id_ = 1;
-  vla_swarm_command_ = msg->command;
+  resetVlaSearchContext();
+  vla_search_room_descriptions_.clear();
+  vla_search_active_ = true;
+  vla_search_session_id_ = msg->task_session_id;
+  vla_search_observation_batch_id_ = 1;
+  vla_search_command_ = msg->command;
   active_instruction_task_id_ = msg->source_task_id;
   active_instruction_session_id_ = msg->task_session_id;
   fd_->target_cmd_ = msg->command;
 
-  switchPlannerCmdMuxToEgo("startVlaSwarmTask");
-  stopElasticTracker("startVlaSwarmTask");
+  switchPlannerCmdMuxToEgo("startVlaSearchTask");
+  stopElasticTracker("startVlaSearchTask");
   expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
   stopMotion();
-  transitState(MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL, "startVlaSwarmTask");
+  transitState(MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL, "startVlaSearchTask");
 }
 
-bool MissionFSM::startVlaSwarmTargetRequest(
+bool MissionFSM::startVlaSearchTargetRequest(
     const nlohmann::json& payload)
 {
   if (!payload.contains("bounding_box") ||
       !payload["bounding_box"].is_array() ||
       payload["bounding_box"].size() != 4) {
-    vla_swarm_finish_detail_ =
+    vla_search_finish_detail_ =
         "Visual target prompt requires bounding_box=[x0,y0,x1,y1]";
     return false;
   }
 
   int observation_index = 0;
-  switch (vla_swarm_prompt_type_) {
+  switch (vla_search_prompt_type_) {
     case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A1:
     case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B1:
       observation_index = 1;
@@ -514,19 +514,19 @@ bool MissionFSM::startVlaSwarmTargetRequest(
       break;
   }
   if (observation_index < 0 || observation_index > 3) {
-    vla_swarm_finish_detail_ = "observation_index must be in [0,3]";
+    vla_search_finish_detail_ = "observation_index must be in [0,3]";
     return false;
   }
 
-  quadrotor_msgs::VLASwarmBBox request;
+  quadrotor_msgs::VLASearchBBox request;
   request.header.stamp =
-      vla_swarm_observation_stamp_.isZero()
-          ? vla_swarm_prompt_start_time_
-          : vla_swarm_observation_stamp_;
+      vla_search_observation_stamp_.isZero()
+          ? vla_search_prompt_start_time_
+          : vla_search_observation_stamp_;
   request.header.frame_id = "world";
-  request.task_session_id = vla_swarm_session_id_;
-  request.observation_batch_id = vla_swarm_observation_batch_id_;
-  request.request_id = ++vla_swarm_target_request_id_;
+  request.task_session_id = vla_search_session_id_;
+  request.observation_batch_id = vla_search_observation_batch_id_;
+  request.request_id = ++vla_search_target_request_id_;
   request.observation_index = static_cast<uint8_t>(observation_index);
   try {
     for (size_t index = 0; index < 4; ++index) {
@@ -534,48 +534,48 @@ bool MissionFSM::startVlaSwarmTargetRequest(
           payload["bounding_box"][index].get<int>();
     }
   } catch (const std::exception& error) {
-    vla_swarm_finish_detail_ = error.what();
+    vla_search_finish_detail_ = error.what();
     return false;
   }
   if (request.bbox_xyxy[2] <= request.bbox_xyxy[0] ||
       request.bbox_xyxy[3] <= request.bbox_xyxy[1]) {
-    vla_swarm_finish_detail_ = "bounding_box has non-positive width or height";
+    vla_search_finish_detail_ = "bounding_box has non-positive width or height";
     return false;
   }
 
-  vla_swarm_target_observation_index_ = request.observation_index;
-  vla_swarm_target_pending_ = true;
-  vla_swarm_target_received_ = false;
-  vla_swarm_target_success_ = false;
-  vla_swarm_target_error_.clear();
-  vla_swarm_target_start_time_ = ros::Time::now();
-  vla_swarm_bbox_pub_.publish(request);
+  vla_search_target_observation_index_ = request.observation_index;
+  vla_search_target_pending_ = true;
+  vla_search_target_received_ = false;
+  vla_search_target_success_ = false;
+  vla_search_target_error_.clear();
+  vla_search_target_start_time_ = ros::Time::now();
+  vla_search_bbox_pub_.publish(request);
   transitState(
-      MISSION_FSM_STATE::VLA_SWARM_WAIT_TARGET,
-      "VLA_Swarm bbox target request sent");
+      MISSION_FSM_STATE::VLA_SEARCH_WAIT_TARGET,
+      "VLA_Search bbox target request sent");
   return true;
 }
 
-bool MissionFSM::prepareVlaSwarmPath(
+bool MissionFSM::prepareVlaSearchPath(
     const Eigen::Vector3d& requested_goal, bool reaches_task_target,
     int door_id)
 {
   if (!requested_goal.allFinite()) {
-    vla_swarm_finish_reason_ = "invalid_navigation_goal";
-    vla_swarm_finish_detail_ = "Navigation goal contains non-finite values";
+    vla_search_finish_reason_ = "invalid_navigation_goal";
+    vla_search_finish_detail_ = "Navigation goal contains non-finite values";
     return false;
   }
 
   Eigen::Vector3d navigation_goal = requested_goal;
   std::vector<Eigen::Vector3d> raw_path;
   if (door_id >= 0) {
-    navigation_goal.z() = vla_swarm_flight_height_;
-    if (vla_swarm_map_ == nullptr ||
-        !vla_swarm_map_->planDoorPath(
+    navigation_goal.z() = vla_search_flight_height_;
+    if (vla_search_map_ == nullptr ||
+        !vla_search_map_->planDoorPath(
             fd_->odom_pos_, door_id, navigation_goal.z(),
-            vla_swarm_waypoint_distance_, raw_path)) {
-      vla_swarm_finish_reason_ = "small_map_path_unreachable";
-      vla_swarm_finish_detail_ =
+            vla_search_waypoint_distance_, raw_path)) {
+      vla_search_finish_reason_ = "small_map_path_unreachable";
+      vla_search_finish_detail_ =
           "SmallMap A* cannot reach door id=" + std::to_string(door_id);
       return false;
     }
@@ -584,8 +584,8 @@ bool MissionFSM::prepareVlaSwarmPath(
     std::vector<Eigen::Vector3d> verification_path;
     if (!map_->searchPath(
             fd_->odom_pos_, navigation_goal, verification_path, 0.2)) {
-      vla_swarm_finish_reason_ = "door_path_unreachable_3d";
-      vla_swarm_finish_detail_ =
+      vla_search_finish_reason_ = "door_path_unreachable_3d";
+      vla_search_finish_detail_ =
           "3D occupancy map rejects door id=" + std::to_string(door_id);
       return false;
     }
@@ -610,16 +610,16 @@ bool MissionFSM::prepareVlaSwarmPath(
     if (!goal_is_free ||
         !map_->searchPath(
             fd_->odom_pos_, navigation_goal, raw_path, 0.2)) {
-      vla_swarm_finish_reason_ = "target_path_unreachable";
-      vla_swarm_finish_detail_ =
+      vla_search_finish_reason_ = "target_path_unreachable";
+      vla_search_finish_detail_ =
           "No collision-free 3D path exists for the selected target";
       return false;
     }
   }
 
   if (raw_path.size() < 2) {
-    vla_swarm_finish_reason_ = "path_generation_failed";
-    vla_swarm_finish_detail_ =
+    vla_search_finish_reason_ = "path_generation_failed";
+    vla_search_finish_detail_ =
         "Path generator returned fewer than two points";
     return false;
   }
@@ -636,9 +636,9 @@ bool MissionFSM::prepareVlaSwarmPath(
     double segment_length = segment.norm();
     while (segment_length > 1e-6 &&
            distance_since_last_sample + segment_length >=
-               vla_swarm_waypoint_distance_) {
+               vla_search_waypoint_distance_) {
       const double step =
-          vla_swarm_waypoint_distance_ - distance_since_last_sample;
+          vla_search_waypoint_distance_ - distance_since_last_sample;
       segment_start += segment * (step / segment_length);
       sampled_path.push_back(segment_start);
       segment = segment_end - segment_start;
@@ -651,242 +651,242 @@ bool MissionFSM::prepareVlaSwarmPath(
     sampled_path.push_back(raw_path.back());
   }
 
-  vla_swarm_path_ = std::move(sampled_path);
-  vla_swarm_path_reaches_task_target_ = reaches_task_target;
-  vla_swarm_waypoint_published_ = false;
-  vla_swarm_waypoint_is_final_ = false;
-  vla_swarm_plan_feedback_received_ = false;
-  vla_swarm_plan_feedback_success_ = false;
-  vla_swarm_waypoint_retry_count_ = 0;
+  vla_search_path_ = std::move(sampled_path);
+  vla_search_path_reaches_task_target_ = reaches_task_target;
+  vla_search_waypoint_published_ = false;
+  vla_search_waypoint_is_final_ = false;
+  vla_search_plan_feedback_received_ = false;
+  vla_search_plan_feedback_success_ = false;
+  vla_search_waypoint_retry_count_ = 0;
   fd_->path_inx_ = 0;
-  vla_swarm_finish_reason_.clear();
-  vla_swarm_finish_detail_.clear();
+  vla_search_finish_reason_.clear();
+  vla_search_finish_detail_.clear();
   transitState(
-      MISSION_FSM_STATE::VLA_SWARM_APPROACH,
-      door_id >= 0 ? "VLA_Swarm door path ready"
-                   : "VLA_Swarm target path ready");
+      MISSION_FSM_STATE::VLA_SEARCH_APPROACH,
+      door_id >= 0 ? "VLA_Search door path ready"
+                   : "VLA_Search target path ready");
   return true;
 }
 
-bool MissionFSM::publishNextVlaSwarmWaypoint()
+bool MissionFSM::publishNextVlaSearchWaypoint()
 {
-  if (vla_swarm_path_.size() < 2) {
+  if (vla_search_path_.size() < 2) {
     return false;
   }
 
-  vla_swarm_plan_feedback_received_ = false;
-  vla_swarm_plan_feedback_success_ = false;
-  vla_swarm_waypoint_retry_count_ = 0;
-  if (!getAndPublishNextAim(vla_swarm_path_, true, fd_->odom_yaw_)) {
+  vla_search_plan_feedback_received_ = false;
+  vla_search_plan_feedback_success_ = false;
+  vla_search_waypoint_retry_count_ = 0;
+  if (!getAndPublishNextAim(vla_search_path_, true, fd_->odom_yaw_)) {
     return false;
   }
-  vla_swarm_waypoint_published_ = true;
-  vla_swarm_waypoint_is_final_ =
-      vla_swarm_path_.size() <= 2 ||
-      fd_->path_inx_ >= static_cast<int>(vla_swarm_path_.size()) - 1;
-  vla_swarm_waypoint_publish_time_ = ros::Time::now();
+  vla_search_waypoint_published_ = true;
+  vla_search_waypoint_is_final_ =
+      vla_search_path_.size() <= 2 ||
+      fd_->path_inx_ >= static_cast<int>(vla_search_path_.size()) - 1;
+  vla_search_waypoint_publish_time_ = ros::Time::now();
   return true;
 }
 
-void MissionFSM::retryVlaSwarmWaypoint(
+void MissionFSM::retryVlaSearchWaypoint(
     const std::string& failure_reason)
 {
-  if (vla_swarm_waypoint_retry_count_ >=
-      std::max(0, vla_swarm_max_plan_retries_)) {
-    vla_swarm_finish_reason_ = failure_reason;
-    vla_swarm_finish_detail_ =
+  if (vla_search_waypoint_retry_count_ >=
+      std::max(0, vla_search_max_plan_retries_)) {
+    vla_search_finish_reason_ = failure_reason;
+    vla_search_finish_detail_ =
         "EGO failed waypoint after " +
-        std::to_string(vla_swarm_waypoint_retry_count_) + " retries";
+        std::to_string(vla_search_waypoint_retry_count_) + " retries";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm EGO retry exhausted");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search EGO retry exhausted");
     return;
   }
 
-  ++vla_swarm_waypoint_retry_count_;
-  vla_swarm_plan_feedback_received_ = false;
-  vla_swarm_plan_feedback_success_ = false;
+  ++vla_search_waypoint_retry_count_;
+  vla_search_plan_feedback_received_ = false;
+  vla_search_plan_feedback_success_ = false;
   pubLocalGoal(fd_->local_aim_pos_, fd_->odom_yaw_, true);
-  vla_swarm_waypoint_publish_time_ = ros::Time::now();
+  vla_search_waypoint_publish_time_ = ros::Time::now();
   ROS_WARN_STREAM(
-      "[VLA_SWARM] Retry waypoint " << vla_swarm_waypoint_retry_count_
-      << "/" << vla_swarm_max_plan_retries_
+      "[VLA_SEARCH] Retry waypoint " << vla_search_waypoint_retry_count_
+      << "/" << vla_search_max_plan_retries_
       << ", reason=" << failure_reason);
 }
 
-void MissionFSM::cancelVlaSwarmTask(const std::string& reason, const std::string& detail)
+void MissionFSM::cancelVlaSearchTask(const std::string& reason, const std::string& detail)
 {
-  if (!vla_swarm_active_) {
+  if (!vla_search_active_) {
     return;
   }
   stopMotion();
-  vla_swarm_success_ = false;
-  vla_swarm_finish_reason_ = reason;
-  vla_swarm_finish_detail_ = detail;
-  transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "cancelVlaSwarmTask");
-  handleVlaSwarmFinish();
+  vla_search_success_ = false;
+  vla_search_finish_reason_ = reason;
+  vla_search_finish_detail_ = detail;
+  transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "cancelVlaSearchTask");
+  handleVlaSearchFinish();
 }
 
-void MissionFSM::handleVlaSwarmPlanLocal()
+void MissionFSM::handleVlaSearchPlanLocal()
 {
-  if (!vla_swarm_active_) {
-    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm inactive");
+  if (!vla_search_active_) {
+    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Search inactive");
     return;
   }
 
-  if (vla_swarm_prompt_pending_) {
-    transitState(MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM, "VLA_Swarm prompt already pending");
+  if (vla_search_prompt_pending_) {
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM, "VLA_Search prompt already pending");
     return;
   }
 
   // AA 阶段：全局评估，参照原始 VLA_Swarm 的 AA→A→B→C→TASK_OVER 链路。
   // 在每轮 PLACE 之前询问 LLM 是否继续探索、有无新发现。
-  if (!vla_swarm_aa_done_) {
+  if (!vla_search_aa_done_) {
     nlohmann::json aa_context;
-    aa_context["exploration_round"] = vla_swarm_exploration_round_;
-    aa_context["key_action_history"] = vla_swarm_key_action_history_;
-    aa_context["room_descriptions"] = vla_swarm_room_descriptions_;
+    aa_context["exploration_round"] = vla_search_exploration_round_;
+    aa_context["key_action_history"] = vla_search_key_action_history_;
+    aa_context["room_descriptions"] = vla_search_room_descriptions_;
 
-    vla_swarm_prompt_type_ =
+    vla_search_prompt_type_ =
         scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_AA;
-    vla_swarm_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
+    vla_search_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
     std::string prompt;
-    if (!scene_graph_->vlaSwarmPromptGen(
-            vla_swarm_prompt_type_, vla_swarm_command_,
-            vla_swarm_session_id_, vla_swarm_observation_batch_id_,
+    if (!scene_graph_->vlaSearchPromptGen(
+            vla_search_prompt_type_, vla_search_command_,
+            vla_search_session_id_, vla_search_observation_batch_id_,
             aa_context, prompt)) {
-      vla_swarm_finish_reason_ = "aa_prompt_generation_failed";
-      vla_swarm_finish_detail_ = "Failed to generate AA prompt";
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-                   "VLA_Swarm AA prompt generation failed");
+      vla_search_finish_reason_ = "aa_prompt_generation_failed";
+      vla_search_finish_detail_ = "Failed to generate AA prompt";
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+                   "VLA_Search AA prompt generation failed");
       return;
     }
     const int aa_timeout =
-        std::max(1, static_cast<int>(std::ceil(vla_swarm_prompt_timeout_)));
-    scene_graph_->sendPrompt(vla_swarm_prompt_id_, vla_swarm_prompt_type_,
+        std::max(1, static_cast<int>(std::ceil(vla_search_prompt_timeout_)));
+    scene_graph_->sendPrompt(vla_search_prompt_id_, vla_search_prompt_type_,
                              prompt, std::chrono::seconds(aa_timeout), 1);
-    vla_swarm_prompt_pending_ = true;
-    vla_swarm_prompt_start_time_ = ros::Time::now();
-    vla_swarm_aa_done_ = true;
-    transitState(MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM,
-                 "VLA_Swarm AA prompt sent");
+    vla_search_prompt_pending_ = true;
+    vla_search_prompt_start_time_ = ros::Time::now();
+    vla_search_aa_done_ = true;
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM,
+                 "VLA_Search AA prompt sent");
     return;
   }
 
-  if (vla_swarm_map_ == nullptr ||
-      (!vla_swarm_map_->ready() && !vla_swarm_map_->update(fd_->odom_pos_))) {
-    vla_swarm_finish_reason_ = "small_map_not_ready";
-    vla_swarm_finish_detail_ = "SmallMap cannot be generated from the current occupancy map";
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm SmallMap unavailable");
+  if (vla_search_map_ == nullptr ||
+      (!vla_search_map_->ready() && !vla_search_map_->update(fd_->odom_pos_))) {
+    vla_search_finish_reason_ = "small_map_not_ready";
+    vla_search_finish_detail_ = "SmallMap cannot be generated from the current occupancy map";
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search SmallMap unavailable");
     return;
   }
 
   nlohmann::json semantic_context =
-      vla_swarm_map_->promptContext(*scene_graph_, fd_->odom_pos_);
+      vla_search_map_->promptContext(*scene_graph_, fd_->odom_pos_);
   // 注入跨轮记忆与房间描述，传递给 PLACE/LOCAL_PLAN prompt。
-  semantic_context["key_action_history"] = vla_swarm_key_action_history_;
-  semantic_context["exploration_round"] = vla_swarm_exploration_round_;
-  if (!vla_swarm_room_descriptions_.empty()) {
-    semantic_context["room_descriptions"] = vla_swarm_room_descriptions_;
+  semantic_context["key_action_history"] = vla_search_key_action_history_;
+  semantic_context["exploration_round"] = vla_search_exploration_round_;
+  if (!vla_search_room_descriptions_.empty()) {
+    semantic_context["room_descriptions"] = vla_search_room_descriptions_;
   }
 
-  vla_swarm_prompt_type_ =
-      vla_swarm_place_checked_
+  vla_search_prompt_type_ =
+      vla_search_place_checked_
           ? scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION
           : scene_graph::PromptMsg::PROMPT_TYPE_PLACE_PREDICTION;
-  if (vla_swarm_place_checked_ &&
+  if (vla_search_place_checked_ &&
       semantic_context["candidate_ids"].empty()) {
-    vla_swarm_finish_reason_ = "no_exploration_candidate";
-    vla_swarm_finish_detail_ = "SmallMap contains no valid door or frontier candidate";
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm has no map candidate");
+    vla_search_finish_reason_ = "no_exploration_candidate";
+    vla_search_finish_detail_ = "SmallMap contains no valid door or frontier candidate";
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search has no map candidate");
     return;
   }
 
-  vla_swarm_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
+  vla_search_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
   std::string prompt;
-  if (!scene_graph_->vlaSwarmPromptGen(
-          vla_swarm_prompt_type_,
-          vla_swarm_command_,
-          vla_swarm_session_id_,
-          vla_swarm_observation_batch_id_,
+  if (!scene_graph_->vlaSearchPromptGen(
+          vla_search_prompt_type_,
+          vla_search_command_,
+          vla_search_session_id_,
+          vla_search_observation_batch_id_,
           semantic_context,
           prompt)) {
-    vla_swarm_finish_reason_ = "prompt_generation_failed";
-    vla_swarm_finish_detail_ = "Failed to generate VLA_Swarm prompt from SmallMap context";
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm prompt generation failed");
+    vla_search_finish_reason_ = "prompt_generation_failed";
+    vla_search_finish_detail_ = "Failed to generate VLA_Swarm prompt from SmallMap context";
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search prompt generation failed");
     return;
   }
 
-  const int timeout_seconds = std::max(1, static_cast<int>(std::ceil(vla_swarm_prompt_timeout_)));
-  const int max_retries = std::max(1, vla_swarm_max_plan_retries_);
+  const int timeout_seconds = std::max(1, static_cast<int>(std::ceil(vla_search_prompt_timeout_)));
+  const int max_retries = std::max(1, vla_search_max_plan_retries_);
   scene_graph_->sendPrompt(
-      vla_swarm_prompt_id_,
-      vla_swarm_prompt_type_,
+      vla_search_prompt_id_,
+      vla_search_prompt_type_,
       prompt,
       std::chrono::seconds(timeout_seconds),
       max_retries);
-  vla_swarm_prompt_pending_ = true;
-  vla_swarm_prompt_start_time_ = ros::Time::now();
-  vla_swarm_observation_stamp_ = vla_swarm_prompt_start_time_;
+  vla_search_prompt_pending_ = true;
+  vla_search_prompt_start_time_ = ros::Time::now();
+  vla_search_observation_stamp_ = vla_search_prompt_start_time_;
   transitState(
-      MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM,
-      vla_swarm_place_checked_
-          ? "VLA_Swarm LOCAL_PLAN prompt sent"
-          : "VLA_Swarm PLACE prompt sent");
+      MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM,
+      vla_search_place_checked_
+          ? "VLA_Search LOCAL_PLAN prompt sent"
+          : "VLA_Search PLACE prompt sent");
 }
 
-void MissionFSM::handleVlaSwarmWaitLLM()
+void MissionFSM::handleVlaSearchWaitLLM()
 {
-  if (!vla_swarm_active_ || !vla_swarm_prompt_pending_) {
-    vla_swarm_finish_reason_ = "prompt_state_invalid";
-    vla_swarm_finish_detail_ = "VLA_SWARM_WAIT_LLM has no active prompt";
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm missing active prompt");
+  if (!vla_search_active_ || !vla_search_prompt_pending_) {
+    vla_search_finish_reason_ = "prompt_state_invalid";
+    vla_search_finish_detail_ = "VLA_SEARCH_WAIT_LLM has no active prompt";
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search missing active prompt");
     return;
   }
 
-  if (!scene_graph_->hasPromptAnswer(vla_swarm_prompt_id_)) {
+  if (!scene_graph_->hasPromptAnswer(vla_search_prompt_id_)) {
     const double retry_window =
-        std::max(1.0, vla_swarm_prompt_timeout_) * std::max(1, vla_swarm_max_plan_retries_) + 1.0;
-    if ((ros::Time::now() - vla_swarm_prompt_start_time_).toSec() <= retry_window) {
+        std::max(1.0, vla_search_prompt_timeout_) * std::max(1, vla_search_max_plan_retries_) + 1.0;
+    if ((ros::Time::now() - vla_search_prompt_start_time_).toSec() <= retry_window) {
       return;
     }
-    scene_graph_->clearPromptData(vla_swarm_prompt_id_);
-    vla_swarm_prompt_pending_ = false;
-    vla_swarm_finish_reason_ = "prompt_timeout";
-    vla_swarm_finish_detail_ = "VLA_Swarm prompt did not return within the configured retry window";
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm prompt timeout");
+    scene_graph_->clearPromptData(vla_search_prompt_id_);
+    vla_search_prompt_pending_ = false;
+    vla_search_finish_reason_ = "prompt_timeout";
+    vla_search_finish_detail_ = "VLA_Search prompt did not return within the configured retry window";
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search prompt timeout");
     return;
   }
 
-  const VLASwarmPromptResult result =
-      scene_graph_->parseVlaSwarmPromptResult(vla_swarm_prompt_id_, vla_swarm_prompt_type_);
-  scene_graph_->clearPromptData(vla_swarm_prompt_id_);
-  vla_swarm_prompt_pending_ = false;
+  const VLASearchPromptResult result =
+      scene_graph_->parseVlaSearchPromptResult(vla_search_prompt_id_, vla_search_prompt_type_);
+  scene_graph_->clearPromptData(vla_search_prompt_id_);
+  vla_search_prompt_pending_ = false;
 
   if (!result.valid) {
-    vla_swarm_finish_reason_ = result.error.empty() ? "invalid_prompt_result" : result.error;
-    vla_swarm_finish_detail_ = result.detail;
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm invalid prompt JSON");
+    vla_search_finish_reason_ = result.error.empty() ? "invalid_prompt_result" : result.error;
+    vla_search_finish_detail_ = result.detail;
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search invalid prompt JSON");
     return;
   }
   if (!result.success) {
     if (result.error == "observation_not_ready") {
       // 图像快照尚未被处理端接收时，留在当前方向重新固化一帧。
-      vla_swarm_scan_command_published_ = false;
+      vla_search_scan_command_published_ = false;
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_YAW_HANDLE,
-          "VLA_Swarm observation cache not ready");
+          MISSION_FSM_STATE::VLA_SEARCH_YAW_HANDLE,
+          "VLA_Search observation cache not ready");
       return;
     }
-    vla_swarm_finish_reason_ = result.error.empty() ? "prompt_error" : result.error;
-    vla_swarm_finish_detail_ = result.detail;
-    transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm prompt processor error");
+    vla_search_finish_reason_ = result.error.empty() ? "prompt_error" : result.error;
+    vla_search_finish_detail_ = result.detail;
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search prompt processor error");
     return;
   }
 
   auto parseIntegerField = [&](const char* field_name, int& value) {
     if (!result.payload.contains(field_name)) {
-      vla_swarm_finish_detail_ =
+      vla_search_finish_detail_ =
           std::string("Prompt answer requires field: ") + field_name;
       return false;
     }
@@ -905,16 +905,16 @@ void MissionFSM::handleVlaSwarmWaitLLM()
         }
       }
     } catch (const std::exception& e) {
-      vla_swarm_finish_detail_ = e.what();
+      vla_search_finish_detail_ = e.what();
       return false;
     }
-    vla_swarm_finish_detail_ =
+    vla_search_finish_detail_ =
         std::string(field_name) + " must be an integer or integer string";
     return false;
   };
 
   // AA 阶段响应路由：LLM 基于全局历史判断是否继续探索。
-  if (vla_swarm_prompt_type_ ==
+  if (vla_search_prompt_type_ ==
       scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_AA) {
     bool aa_found = false;
     if (result.payload.contains("found") &&
@@ -928,50 +928,50 @@ void MissionFSM::handleVlaSwarmWaitLLM()
     }
 
     if (aa_action == "stop") {
-      vla_swarm_success_ = false;
-      vla_swarm_finish_reason_ = "task_over_by_llm";
-      vla_swarm_finish_detail_ = "AA stage: LLM decided exploration is complete";
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-                   "VLA_Swarm AA says stop");
+      vla_search_success_ = false;
+      vla_search_finish_reason_ = "task_over_by_llm";
+      vla_search_finish_detail_ = "AA stage: LLM decided exploration is complete";
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+                   "VLA_Search AA says stop");
       return;
     }
 
     if (aa_found) {
       nlohmann::json entry;
-      entry["round"] = vla_swarm_exploration_round_;
+      entry["round"] = vla_search_exploration_round_;
       entry["action"] = "AA: found potential target, continuing exploration";
-      vla_swarm_key_action_history_.push_back(entry);
+      vla_search_key_action_history_.push_back(entry);
     }
 
-    transitState(MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL,
-                 "VLA_Swarm AA complete, continue to PLACE");
+    transitState(MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL,
+                 "VLA_Search AA complete, continue to PLACE");
     return;
   }
 
-  if (vla_swarm_prompt_type_ ==
+  if (vla_search_prompt_type_ ==
       scene_graph::PromptMsg::PROMPT_TYPE_PLACE_PREDICTION) {
     int action = 0;
     if (!parseIntegerField("action", action) ||
         (action != -1 && action != 1 && action != 2)) {
-      vla_swarm_finish_reason_ = "invalid_prompt_schema";
-      if (vla_swarm_finish_detail_.empty()) {
-        vla_swarm_finish_detail_ = "PLACE action must be -1, 1 or 2";
+      vla_search_finish_reason_ = "invalid_prompt_schema";
+      if (vla_search_finish_detail_.empty()) {
+        vla_search_finish_detail_ = "PLACE action must be -1, 1 or 2";
       }
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm invalid PLACE result");
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search invalid PLACE result");
       return;
     }
 
     if (action == -1) {
       // 当前语义没有直接目标时，转入 SmallMap 视觉局部规划。
-      vla_swarm_place_checked_ = true;
-      transitState(MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL, "VLA_Swarm PLACE continues to LOCAL_PLAN");
+      vla_search_place_checked_ = true;
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL, "VLA_Search PLACE continues to LOCAL_PLAN");
       return;
     }
 
     int selected_id = -1;
     if (!parseIntegerField("id", selected_id)) {
-      vla_swarm_finish_reason_ = "invalid_prompt_schema";
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm invalid PLACE id");
+      vla_search_finish_reason_ = "invalid_prompt_schema";
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search invalid PLACE id");
       return;
     }
 
@@ -979,12 +979,12 @@ void MissionFSM::handleVlaSwarmWaitLLM()
     bool reaches_task_target = false;
     bool selected_goal_found = false;
     if (action == 1) {
-      for (const auto& room : vla_swarm_map_->rooms()) {
+      for (const auto& room : vla_search_map_->rooms()) {
         if (room.id == selected_id) {
           selected_goal =
               Eigen::Vector3d(
                   room.center.x(), room.center.y(),
-                  vla_swarm_flight_height_);
+                  vla_search_flight_height_);
           selected_goal_found = true;
           break;
         }
@@ -1001,87 +1001,87 @@ void MissionFSM::handleVlaSwarmWaitLLM()
       }
     }
     if (!selected_goal_found) {
-      vla_swarm_finish_reason_ = "place_target_not_found";
-      vla_swarm_finish_detail_ =
+      vla_search_finish_reason_ = "place_target_not_found";
+      vla_search_finish_detail_ =
           "PLACE selected unknown id=" + std::to_string(selected_id);
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm PLACE target missing");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search PLACE target missing");
       return;
     }
-    if (!prepareVlaSwarmPath(
+    if (!prepareVlaSearchPath(
             selected_goal, reaches_task_target)) {
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm PLACE target path failed");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search PLACE target path failed");
     }
     return;
   }
 
-  if (vla_swarm_prompt_type_ ==
+  if (vla_search_prompt_type_ ==
       scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION) {
     int explore_area_id = -1;
     if (!parseIntegerField("explore_area_id", explore_area_id)) {
-      vla_swarm_finish_reason_ = "invalid_prompt_schema";
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm invalid LOCAL_PLAN result");
+      vla_search_finish_reason_ = "invalid_prompt_schema";
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search invalid LOCAL_PLAN result");
       return;
     }
 
     bool candidate_exists = false;
-    for (const auto& door : vla_swarm_map_->doors()) {
+    for (const auto& door : vla_search_map_->doors()) {
       if (door.id == explore_area_id) {
         candidate_exists = true;
         break;
       }
     }
     if (!candidate_exists) {
-      vla_swarm_finish_reason_ = "invalid_exploration_candidate";
-      vla_swarm_finish_detail_ =
+      vla_search_finish_reason_ = "invalid_exploration_candidate";
+      vla_search_finish_detail_ =
           "LOCAL_PLAN explore_area_id is not present in the current SmallMap";
-      transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm candidate not found");
+      transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search candidate not found");
       return;
     }
 
-    vla_swarm_explore_area_id_ = explore_area_id;
-    VLASwarmDoor selected_door;
-    if (!vla_swarm_map_->findDoor(
-            vla_swarm_explore_area_id_, selected_door)) {
-      vla_swarm_finish_reason_ = "invalid_exploration_candidate";
-      vla_swarm_finish_detail_ =
+    vla_search_explore_area_id_ = explore_area_id;
+    VLASearchDoor selected_door;
+    if (!vla_search_map_->findDoor(
+            vla_search_explore_area_id_, selected_door)) {
+      vla_search_finish_reason_ = "invalid_exploration_candidate";
+      vla_search_finish_detail_ =
           "Selected door disappeared before path generation";
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm selected door expired");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search selected door expired");
       return;
     }
     const Eigen::Vector3d door_goal(
         selected_door.position.x(), selected_door.position.y(),
-        vla_swarm_flight_height_);
-    if (!prepareVlaSwarmPath(
-            door_goal, false, vla_swarm_explore_area_id_)) {
+        vla_search_flight_height_);
+    if (!prepareVlaSearchPath(
+            door_goal, false, vla_search_explore_area_id_)) {
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm door path failed");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search door path failed");
     }
     return;
   }
 
   const bool is_visual_target_prompt =
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A1 ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A2 ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A3 ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B1 ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B2 ||
-      vla_swarm_prompt_type_ ==
+      vla_search_prompt_type_ ==
           scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B3;
   if (is_visual_target_prompt) {
     bool found = result.payload.contains("bounding_box");
@@ -1090,162 +1090,162 @@ void MissionFSM::handleVlaSwarmWaitLLM()
       found = result.payload["found"].get<bool>();
     }
     if (!found) {
-      ++vla_swarm_scan_index_;
-      vla_swarm_scan_command_published_ = false;
-      vla_swarm_scan_yaw_reached_time_ = ros::Time();
+      ++vla_search_scan_index_;
+      vla_search_scan_command_published_ = false;
+      vla_search_scan_yaw_reached_time_ = ros::Time();
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_YAW_HANDLE,
-          "VLA_Swarm target absent in current observation");
+          MISSION_FSM_STATE::VLA_SEARCH_YAW_HANDLE,
+          "VLA_Search target absent in current observation");
       return;
     }
-    if (!startVlaSwarmTargetRequest(result.payload)) {
-      vla_swarm_finish_reason_ = "invalid_bbox_result";
+    if (!startVlaSearchTargetRequest(result.payload)) {
+      vla_search_finish_reason_ = "invalid_bbox_result";
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm invalid visual target result");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search invalid visual target result");
     }
     return;
   }
 
-  vla_swarm_finish_reason_ = "invalid_prompt_type";
-  vla_swarm_finish_detail_ = "Unexpected VLA_Swarm prompt type in WAIT_LLM";
-  transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm unexpected prompt type");
+  vla_search_finish_reason_ = "invalid_prompt_type";
+  vla_search_finish_detail_ = "Unexpected VLA_Swarm prompt type in WAIT_LLM";
+  transitState(MISSION_FSM_STATE::VLA_SEARCH_RECOVERY, "VLA_Search unexpected prompt type");
 }
 
-void MissionFSM::handleVlaSwarmWaitTarget()
+void MissionFSM::handleVlaSearchWaitTarget()
 {
-  if (!vla_swarm_active_ || !vla_swarm_target_pending_) {
-    vla_swarm_finish_reason_ = "target_state_invalid";
-    vla_swarm_finish_detail_ = "VLA_SWARM_WAIT_TARGET has no active bbox request";
+  if (!vla_search_active_ || !vla_search_target_pending_) {
+    vla_search_finish_reason_ = "target_state_invalid";
+    vla_search_finish_detail_ = "VLA_SEARCH_WAIT_TARGET has no active bbox request";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm target request missing");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search target request missing");
     return;
   }
 
-  if (!vla_swarm_target_received_) {
-    if ((ros::Time::now() - vla_swarm_target_start_time_).toSec() <=
-        std::max(1.0, vla_swarm_target_timeout_)) {
+  if (!vla_search_target_received_) {
+    if ((ros::Time::now() - vla_search_target_start_time_).toSec() <=
+        std::max(1.0, vla_search_target_timeout_)) {
       return;
     }
-    vla_swarm_target_pending_ = false;
-    vla_swarm_finish_reason_ = "target_timeout";
-    vla_swarm_finish_detail_ =
+    vla_search_target_pending_ = false;
+    vla_search_finish_reason_ = "target_timeout";
+    vla_search_finish_detail_ =
         "Neither LiDAR nor MoGe returned a target within target_timeout";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm target localization timeout");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search target localization timeout");
     return;
   }
 
-  vla_swarm_target_pending_ = false;
-  if (!vla_swarm_target_success_) {
-    vla_swarm_finish_reason_ = "target_localization_failed";
-    vla_swarm_finish_detail_ = vla_swarm_target_error_;
+  vla_search_target_pending_ = false;
+  if (!vla_search_target_success_) {
+    vla_search_finish_reason_ = "target_localization_failed";
+    vla_search_finish_detail_ = vla_search_target_error_;
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm target localization failed");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search target localization failed");
     return;
   }
 
-  if (!prepareVlaSwarmPath(
-          vla_swarm_target_position_, true)) {
+  if (!prepareVlaSearchPath(
+          vla_search_target_position_, true)) {
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm localized target path failed");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search localized target path failed");
   }
 }
 
-void MissionFSM::handleVlaSwarmApproach()
+void MissionFSM::handleVlaSearchApproach()
 {
-  if (!vla_swarm_active_ || vla_swarm_path_.size() < 2) {
-    vla_swarm_finish_reason_ = "approach_state_invalid";
-    vla_swarm_finish_detail_ =
-        "VLA_SWARM_APPROACH has no active path";
+  if (!vla_search_active_ || vla_search_path_.size() < 2) {
+    vla_search_finish_reason_ = "approach_state_invalid";
+    vla_search_finish_detail_ =
+        "VLA_SEARCH_APPROACH has no active path";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm approach path missing");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search approach path missing");
     return;
   }
 
-  if (!vla_swarm_waypoint_published_) {
+  if (!vla_search_waypoint_published_) {
     // 等待 ego_state_trigger 确保无人机已停止运动后再发布导航指令。
-    if (!vla_swarm_ego_stable_) {
+    if (!vla_search_ego_stable_) {
       return;
     }
-    vla_swarm_ego_stable_ = false;
-    if (!publishNextVlaSwarmWaypoint()) {
-      vla_swarm_finish_reason_ = "waypoint_generation_failed";
-      vla_swarm_finish_detail_ =
+    vla_search_ego_stable_ = false;
+    if (!publishNextVlaSearchWaypoint()) {
+      vla_search_finish_reason_ = "waypoint_generation_failed";
+      vla_search_finish_detail_ =
           "No valid local waypoint can be selected from the path";
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm waypoint unavailable");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search waypoint unavailable");
     }
     return;
   }
 
   const double elapsed =
-      (ros::Time::now() - vla_swarm_waypoint_publish_time_).toSec();
-  if (!vla_swarm_plan_feedback_received_) {
-    if (elapsed > std::max(0.5, vla_swarm_ego_plan_timeout_)) {
-      retryVlaSwarmWaypoint("ego_plan_timeout");
+      (ros::Time::now() - vla_search_waypoint_publish_time_).toSec();
+  if (!vla_search_plan_feedback_received_) {
+    if (elapsed > std::max(0.5, vla_search_ego_plan_timeout_)) {
+      retryVlaSearchWaypoint("ego_plan_timeout");
     }
     return;
   }
-  if (!vla_swarm_plan_feedback_success_) {
-    retryVlaSwarmWaypoint("ego_plan_failed");
+  if (!vla_search_plan_feedback_success_) {
+    retryVlaSearchWaypoint("ego_plan_failed");
     return;
   }
 
   const double distance_to_waypoint =
       (fd_->odom_pos_ - fd_->local_aim_pos_).norm();
   const bool waypoint_reached =
-      distance_to_waypoint <= vla_swarm_goal_tolerance_ ||
+      distance_to_waypoint <= vla_search_goal_tolerance_ ||
       (fd_->ego_exec_finished_ &&
        distance_to_waypoint <=
-           std::max(0.75, 2.0 * vla_swarm_goal_tolerance_));
+           std::max(0.75, 2.0 * vla_search_goal_tolerance_));
   if (!waypoint_reached) {
     if (elapsed > std::max(
-                      vla_swarm_ego_plan_timeout_ + 0.5,
-                      vla_swarm_ego_exec_timeout_)) {
-      retryVlaSwarmWaypoint("ego_execution_timeout");
+                      vla_search_ego_plan_timeout_ + 0.5,
+                      vla_search_ego_exec_timeout_)) {
+      retryVlaSearchWaypoint("ego_execution_timeout");
     }
     return;
   }
 
-  if (!vla_swarm_waypoint_is_final_) {
-    vla_swarm_waypoint_published_ = false;
-    if (!publishNextVlaSwarmWaypoint()) {
-      vla_swarm_finish_reason_ = "waypoint_advance_failed";
-      vla_swarm_finish_detail_ =
+  if (!vla_search_waypoint_is_final_) {
+    vla_search_waypoint_published_ = false;
+    if (!publishNextVlaSearchWaypoint()) {
+      vla_search_finish_reason_ = "waypoint_advance_failed";
+      vla_search_finish_detail_ =
           "Path ended before the final waypoint was reached";
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm waypoint advance failed");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search waypoint advance failed");
     }
     return;
   }
 
-  if (vla_swarm_path_reaches_task_target_) {
-    vla_swarm_success_ = true;
-    vla_swarm_finish_reason_ = "target_reached";
-    vla_swarm_finish_detail_ =
+  if (vla_search_path_reaches_task_target_) {
+    vla_search_success_ = true;
+    vla_search_finish_reason_ = "target_reached";
+    vla_search_finish_detail_ =
         "EGO completed the VLA_Swarm target path";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_FINISH,
-        "VLA_Swarm target reached");
+        MISSION_FSM_STATE::VLA_SEARCH_FINISH,
+        "VLA_Search target reached");
     return;
   }
 
   // 到达房间或门后，优先沿路径末端方向观察。对门路径而言，该方向通常指向门后新空间。
-  vla_swarm_scan_base_yaw_ = fd_->odom_yaw_;
-  if (vla_swarm_path_.size() >= 2) {
+  vla_search_scan_base_yaw_ = fd_->odom_yaw_;
+  if (vla_search_path_.size() >= 2) {
     const Eigen::Vector3d terminal_direction =
-        vla_swarm_path_.back() -
-        vla_swarm_path_[vla_swarm_path_.size() - 2];
+        vla_search_path_.back() -
+        vla_search_path_[vla_search_path_.size() - 2];
     if (terminal_direction.head<2>().norm() > 1e-3) {
-      vla_swarm_scan_base_yaw_ =
+      vla_search_scan_base_yaw_ =
           std::atan2(terminal_direction.y(), terminal_direction.x());
     }
   }
@@ -1253,136 +1253,136 @@ void MissionFSM::handleVlaSwarmApproach()
   // 记录本轮到达的门/区域，作为 AA 阶段的跨轮记忆输入。
   {
     nlohmann::json entry;
-    entry["round"] = vla_swarm_exploration_round_ + 1;
+    entry["round"] = vla_search_exploration_round_ + 1;
     entry["action"] =
-        "Arrived at door " + std::to_string(vla_swarm_explore_area_id_);
-    vla_swarm_key_action_history_.push_back(entry);
+        "Arrived at door " + std::to_string(vla_search_explore_area_id_);
+    vla_search_key_action_history_.push_back(entry);
   }
 
   // 到达房间或门仅表示完成一轮局部探索，刷新批次并执行正面优先的分时观察。
-  ++vla_swarm_observation_batch_id_;
-  vla_swarm_place_checked_ = false;
-  vla_swarm_path_.clear();
-  vla_swarm_waypoint_published_ = false;
-  vla_swarm_scan_initialized_ = false;
+  ++vla_search_observation_batch_id_;
+  vla_search_place_checked_ = false;
+  vla_search_path_.clear();
+  vla_search_waypoint_published_ = false;
+  vla_search_scan_initialized_ = false;
   transitState(
-      MISSION_FSM_STATE::VLA_SWARM_YAW_HANDLE,
-      "VLA_Swarm exploration waypoint reached, start visual scan");
+      MISSION_FSM_STATE::VLA_SEARCH_YAW_HANDLE,
+      "VLA_Search exploration waypoint reached, start visual scan");
 }
 
-void MissionFSM::handleVlaSwarmYaw()
+void MissionFSM::handleVlaSearchYaw()
 {
-  if (!vla_swarm_active_ || vla_swarm_scan_yaw_offsets_.empty()) {
-    vla_swarm_finish_reason_ = "yaw_state_invalid";
-    vla_swarm_finish_detail_ =
-        "VLA_SWARM_YAW_HANDLE has no active task or scan direction";
+  if (!vla_search_active_ || vla_search_scan_yaw_offsets_.empty()) {
+    vla_search_finish_reason_ = "yaw_state_invalid";
+    vla_search_finish_detail_ =
+        "VLA_SEARCH_YAW_HANDLE has no active task or scan direction";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm yaw state invalid");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search yaw state invalid");
     return;
   }
 
-  if (!vla_swarm_scan_initialized_) {
-    vla_swarm_scan_index_ = 0;
-    vla_swarm_scan_command_published_ = false;
-    vla_swarm_scan_yaw_reached_time_ = ros::Time();
-    vla_swarm_scan_initialized_ = true;
+  if (!vla_search_scan_initialized_) {
+    vla_search_scan_index_ = 0;
+    vla_search_scan_command_published_ = false;
+    vla_search_scan_yaw_reached_time_ = ros::Time();
+    vla_search_scan_initialized_ = true;
   }
 
-  if (vla_swarm_scan_index_ >= vla_swarm_scan_yaw_offsets_.size()) {
+  if (vla_search_scan_index_ >= vla_search_scan_yaw_offsets_.size()) {
     // 当前门前所有方向均已扫描且未发现目标。
-    vla_swarm_scan_initialized_ = false;
-    vla_swarm_explore_area_id_ = -1;
-    ++vla_swarm_exploration_round_;
+    vla_search_scan_initialized_ = false;
+    vla_search_explore_area_id_ = -1;
+    ++vla_search_exploration_round_;
 
     // 达到最大探索轮次时终止，交由上层 agent_run 决定是否重试。
-    if (vla_swarm_exploration_round_ > vla_swarm_max_exploration_rounds_) {
-      vla_swarm_success_ = false;
-      vla_swarm_finish_reason_ = "max_exploration_rounds";
-      vla_swarm_finish_detail_ =
+    if (vla_search_exploration_round_ > vla_search_max_exploration_rounds_) {
+      vla_search_success_ = false;
+      vla_search_finish_reason_ = "max_exploration_rounds";
+      vla_search_finish_detail_ =
           "Exceeded maximum exploration rounds (" +
-          std::to_string(vla_swarm_max_exploration_rounds_) +
+          std::to_string(vla_search_max_exploration_rounds_) +
           ") without finding target";
       transitState(
-          MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-          "VLA_Swarm max exploration rounds reached");
+          MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+          "VLA_Search max exploration rounds reached");
       return;
     }
 
     // 累积跨轮记忆，参照原始 VLA_Swarm 的 key_action_history 机制。
     {
       nlohmann::json entry;
-      entry["round"] = vla_swarm_exploration_round_;
+      entry["round"] = vla_search_exploration_round_;
       entry["action"] =
-          "Scanned " + std::to_string(vla_swarm_scan_yaw_offsets_.size()) +
-          " directions at door " + std::to_string(vla_swarm_explore_area_id_) +
+          "Scanned " + std::to_string(vla_search_scan_yaw_offsets_.size()) +
+          " directions at door " + std::to_string(vla_search_explore_area_id_) +
           ", no target found";
-      vla_swarm_key_action_history_.push_back(entry);
+      vla_search_key_action_history_.push_back(entry);
     }
     // 重置 AA 标记，下一轮重新评估全局状态。
-    vla_swarm_aa_done_ = false;
+    vla_search_aa_done_ = false;
 
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL,
-        "VLA_Swarm visual scan completed without target");
+        MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL,
+        "VLA_Search visual scan completed without target");
     return;
   }
 
-  if (!vla_swarm_scan_command_published_) {
+  if (!vla_search_scan_command_published_) {
     // 等待 ego_state_trigger 确保无人机已停止运动后再发布旋转指令。
-    if (!vla_swarm_ego_stable_) {
+    if (!vla_search_ego_stable_) {
       return;
     }
-    vla_swarm_ego_stable_ = false;
+    vla_search_ego_stable_ = false;
     // 在确定无人机停稳后记录悬停位置，避免捕获到惯性滑行中的偏移坐标。
-    vla_swarm_scan_hold_position_ = fd_->odom_pos_;
-    vla_swarm_scan_target_yaw_ = normalizeAngle(
-        vla_swarm_scan_base_yaw_ +
-        vla_swarm_scan_yaw_offsets_[vla_swarm_scan_index_]);
+    vla_search_scan_hold_position_ = fd_->odom_pos_;
+    vla_search_scan_target_yaw_ = normalizeAngle(
+        vla_search_scan_base_yaw_ +
+        vla_search_scan_yaw_offsets_[vla_search_scan_index_]);
     pubLocalGoal(
-        vla_swarm_scan_hold_position_, vla_swarm_scan_target_yaw_, false,
+        vla_search_scan_hold_position_, vla_search_scan_target_yaw_, false,
         quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
-    vla_swarm_scan_command_time_ = ros::Time::now();
-    vla_swarm_scan_yaw_reached_time_ = ros::Time();
-    vla_swarm_scan_command_published_ = true;
+    vla_search_scan_command_time_ = ros::Time::now();
+    vla_search_scan_yaw_reached_time_ = ros::Time();
+    vla_search_scan_command_published_ = true;
     ROS_INFO_STREAM(
-        "[VLA_SWARM] Scan observation=" << vla_swarm_scan_index_
-        << ", target_yaw=" << vla_swarm_scan_target_yaw_);
+        "[VLA_SEARCH] Scan observation=" << vla_search_scan_index_
+        << ", target_yaw=" << vla_search_scan_target_yaw_);
     return;
   }
 
-  if ((ros::Time::now() - vla_swarm_scan_command_time_).toSec() >
-      vla_swarm_scan_timeout_) {
-    vla_swarm_finish_reason_ = "yaw_scan_timeout";
-    vla_swarm_finish_detail_ =
+  if ((ros::Time::now() - vla_search_scan_command_time_).toSec() >
+      vla_search_scan_timeout_) {
+    vla_search_finish_reason_ = "yaw_scan_timeout";
+    vla_search_finish_detail_ =
         "Yaw did not reach the requested observation direction";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm yaw scan timeout");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search yaw scan timeout");
     return;
   }
 
   const double yaw_error =
-      std::abs(normalizeAngle(vla_swarm_scan_target_yaw_ - fd_->odom_yaw_));
-  if (yaw_error > vla_swarm_scan_yaw_tolerance_) {
-    vla_swarm_scan_yaw_reached_time_ = ros::Time();
+      std::abs(normalizeAngle(vla_search_scan_target_yaw_ - fd_->odom_yaw_));
+  if (yaw_error > vla_search_scan_yaw_tolerance_) {
+    vla_search_scan_yaw_reached_time_ = ros::Time();
     return;
   }
-  if (vla_swarm_scan_yaw_reached_time_.isZero()) {
-    vla_swarm_scan_yaw_reached_time_ = ros::Time::now();
+  if (vla_search_scan_yaw_reached_time_.isZero()) {
+    vla_search_scan_yaw_reached_time_ = ros::Time::now();
     return;
   }
-  if ((ros::Time::now() - vla_swarm_scan_yaw_reached_time_).toSec() <
-      vla_swarm_scan_settle_time_) {
+  if ((ros::Time::now() - vla_search_scan_yaw_reached_time_).toSec() <
+      vla_search_scan_settle_time_) {
     return;
   }
 
   sensor_msgs::CompressedImageConstPtr camera_image;
   ros::Time camera_receive_time;
   {
-    std::lock_guard<std::mutex> lock(vla_swarm_camera_mutex_);
-    camera_image = vla_swarm_latest_camera_image_;
-    camera_receive_time = vla_swarm_latest_camera_receive_time_;
+    std::lock_guard<std::mutex> lock(vla_search_camera_mutex_);
+    camera_image = vla_search_latest_camera_image_;
+    camera_receive_time = vla_search_latest_camera_receive_time_;
   }
   if (camera_image == nullptr) {
     return;
@@ -1391,20 +1391,20 @@ void MissionFSM::handleVlaSwarmYaw()
       camera_image->header.stamp.isZero()
           ? camera_receive_time
           : camera_image->header.stamp;
-  if (image_stamp <= vla_swarm_scan_yaw_reached_time_) {
+  if (image_stamp <= vla_search_scan_yaw_reached_time_) {
     return;
   }
 
-  scene_graph::VLASwarmObservation observation;
+  scene_graph::VLASearchObservation observation;
   observation.header.stamp = image_stamp;
   observation.header.frame_id =
       camera_image->header.frame_id.empty()
           ? std::string("camera")
           : camera_image->header.frame_id;
-  observation.task_session_id = vla_swarm_session_id_;
-  observation.observation_batch_id = vla_swarm_observation_batch_id_;
+  observation.task_session_id = vla_search_session_id_;
+  observation.observation_batch_id = vla_search_observation_batch_id_;
   observation.observation_index =
-      static_cast<uint8_t>(vla_swarm_scan_index_);
+      static_cast<uint8_t>(vla_search_scan_index_);
   observation.body_yaw = fd_->odom_yaw_;
   observation.odom_pose.position.x = fd_->odom_pos_.x();
   observation.odom_pose.position.y = fd_->odom_pos_.y();
@@ -1415,8 +1415,8 @@ void MissionFSM::handleVlaSwarmYaw()
   observation.odom_pose.orientation.z = fd_->odom_orient_.z();
   observation.image = *camera_image;
   observation.image.header.stamp = image_stamp;
-  vla_swarm_observation_pub_.publish(observation);
-  vla_swarm_observation_stamp_ = observation.header.stamp;
+  vla_search_observation_pub_.publish(observation);
+  vla_search_observation_stamp_ = observation.header.stamp;
 
   static const std::array<uint8_t, 4> prompt_types{{
       scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A,
@@ -1424,77 +1424,77 @@ void MissionFSM::handleVlaSwarmYaw()
       scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A2,
       scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A3,
   }};
-  if (vla_swarm_scan_index_ >= vla_swarm_scan_yaw_offsets_.size()) {
-    vla_swarm_finish_reason_ = "yaw_scan_configuration_invalid";
-    vla_swarm_finish_detail_ =
+  if (vla_search_scan_index_ >= vla_search_scan_yaw_offsets_.size()) {
+    vla_search_finish_reason_ = "yaw_scan_configuration_invalid";
+    vla_search_finish_detail_ =
         "Scan index exceeds configured observation count";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm scan configuration invalid");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search scan configuration invalid");
     return;
   }
 
-  vla_swarm_prompt_type_ =
-      prompt_types[vla_swarm_scan_index_ % prompt_types.size()];
-  vla_swarm_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
+  vla_search_prompt_type_ =
+      prompt_types[vla_search_scan_index_ % prompt_types.size()];
+  vla_search_prompt_id_ = scene_graph_->getCurPromptIdAndPlusOne();
   nlohmann::json visual_context;
-  visual_context["observation_index"] = vla_swarm_scan_index_;
-  visual_context["preferred_door_id"] = vla_swarm_explore_area_id_;
+  visual_context["observation_index"] = vla_search_scan_index_;
+  visual_context["preferred_door_id"] = vla_search_explore_area_id_;
   std::string prompt;
-  if (!scene_graph_->vlaSwarmPromptGen(
-          vla_swarm_prompt_type_, vla_swarm_command_,
-          vla_swarm_session_id_, vla_swarm_observation_batch_id_,
+  if (!scene_graph_->vlaSearchPromptGen(
+          vla_search_prompt_type_, vla_search_command_,
+          vla_search_session_id_, vla_search_observation_batch_id_,
           visual_context, prompt)) {
-    vla_swarm_finish_reason_ = "prompt_generation_failed";
-    vla_swarm_finish_detail_ =
+    vla_search_finish_reason_ = "prompt_generation_failed";
+    vla_search_finish_detail_ =
         "Failed to generate visual observation prompt";
     transitState(
-        MISSION_FSM_STATE::VLA_SWARM_RECOVERY,
-        "VLA_Swarm visual prompt generation failed");
+        MISSION_FSM_STATE::VLA_SEARCH_RECOVERY,
+        "VLA_Search visual prompt generation failed");
     return;
   }
 
   const int timeout_seconds =
-      std::max(1, static_cast<int>(std::ceil(vla_swarm_prompt_timeout_)));
+      std::max(1, static_cast<int>(std::ceil(vla_search_prompt_timeout_)));
   scene_graph_->sendPrompt(
-      vla_swarm_prompt_id_, vla_swarm_prompt_type_, prompt,
+      vla_search_prompt_id_, vla_search_prompt_type_, prompt,
       std::chrono::seconds(timeout_seconds),
-      std::max(1, vla_swarm_max_plan_retries_));
-  vla_swarm_prompt_pending_ = true;
-  vla_swarm_prompt_start_time_ = ros::Time::now();
+      std::max(1, vla_search_max_plan_retries_));
+  vla_search_prompt_pending_ = true;
+  vla_search_prompt_start_time_ = ros::Time::now();
   transitState(
-      MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM,
-      "VLA_Swarm visual observation prompt sent");
+      MISSION_FSM_STATE::VLA_SEARCH_WAIT_LLM,
+      "VLA_Search visual observation prompt sent");
 }
 
-void MissionFSM::handleVlaSwarmRecovery()
+void MissionFSM::handleVlaSearchRecovery()
 {
-  if (vla_swarm_finish_reason_.empty()) {
-    vla_swarm_finish_reason_ = "internal_error";
-    vla_swarm_finish_detail_ = "VLA_Swarm recovery has no failure reason";
+  if (vla_search_finish_reason_.empty()) {
+    vla_search_finish_reason_ = "internal_error";
+    vla_search_finish_detail_ = "VLA_Search recovery has no failure reason";
   }
   stopMotion();
-  transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "VLA_Swarm recovery");
+  transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "VLA_Search recovery");
 }
 
-void MissionFSM::handleVlaSwarmFinish()
+void MissionFSM::handleVlaSearchFinish()
 {
-  if (!vla_swarm_active_) {
-    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm finish inactive");
+  if (!vla_search_active_) {
+    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Search finish inactive");
     return;
   }
 
-  publishVlaSwarmResult(vla_swarm_success_, vla_swarm_finish_reason_, vla_swarm_finish_detail_);
-  vla_swarm_active_ = false;
-  transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm finish");
+  publishVlaSearchResult(vla_search_success_, vla_search_finish_reason_, vla_search_finish_detail_);
+  vla_search_active_ = false;
+  transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Search finish");
 }
 
 void MissionFSM::emergencyStopCallback(const std_msgs::Empty::ConstPtr&)
 {
-  if (!vla_swarm_active_) {
+  if (!vla_search_active_) {
     return;
   }
-  cancelVlaSwarmTask("task_cancelled", "received /command/emergency_stop");
+  cancelVlaSearchTask("task_cancelled", "received /command/emergency_stop");
 }
 
 void MissionFSM::triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
@@ -1544,7 +1544,7 @@ void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& g
                                               const std::string& source,
                                               const ros::Time& stamp,
                                               const std::string& frame_id) {
-  expl_manager_->vis_ptr_->visualize_a_ball(fd_->track_pos_, 0.35, "track_pos", visualization::Color::blue);
+  expl_manager_->vis_ptr_->visualize_a_ball(fd_->track_pos_, 0.35, "track_pos", expl_vis::Color::blue);
   if (global_poses.empty()) return;
 
   const auto& first_pose = global_poses.front();
@@ -1721,20 +1721,20 @@ void MissionFSM::targetCallbackReal(const quadrotor_msgs::DetectOut::ConstPtr& m
   handleTrackingTarget(msg->global_poses, "trackTargetUpdate", msg->header.stamp, msg->header.frame_id);
 }
 
-void MissionFSM::vlaSwarmTargetCallback(
-    const quadrotor_msgs::VLASwarmTarget::ConstPtr& msg)
+void MissionFSM::vlaSearchTargetCallback(
+    const quadrotor_msgs::VLASearchTarget::ConstPtr& msg)
 {
   std::lock_guard<std::mutex> lock(mtx_);
-  if (!vla_swarm_active_ || !vla_swarm_target_pending_) {
+  if (!vla_search_active_ || !vla_search_target_pending_) {
     return;
   }
-  if (msg->task_session_id != vla_swarm_session_id_ ||
-      msg->observation_batch_id != vla_swarm_observation_batch_id_ ||
-      msg->request_id != vla_swarm_target_request_id_ ||
-      msg->observation_index != vla_swarm_target_observation_index_) {
+  if (msg->task_session_id != vla_search_session_id_ ||
+      msg->observation_batch_id != vla_search_observation_batch_id_ ||
+      msg->request_id != vla_search_target_request_id_ ||
+      msg->observation_index != vla_search_target_observation_index_) {
     ROS_WARN_STREAM_THROTTLE(
         1.0,
-        "[VLA_SWARM] Ignore stale target result: session="
+        "[VLA_SEARCH] Ignore stale target result: session="
             << msg->task_session_id
             << ", batch=" << msg->observation_batch_id
             << ", request=" << msg->request_id
@@ -1742,30 +1742,30 @@ void MissionFSM::vlaSwarmTargetCallback(
     return;
   }
 
-  vla_swarm_target_received_ = true;
-  vla_swarm_target_success_ = msg->success;
-  vla_swarm_target_source_ = msg->source;
-  vla_swarm_target_error_ = msg->error;
+  vla_search_target_received_ = true;
+  vla_search_target_success_ = msg->success;
+  vla_search_target_source_ = msg->source;
+  vla_search_target_error_ = msg->error;
   if (msg->success) {
-    vla_swarm_target_position_ = Eigen::Vector3d(
+    vla_search_target_position_ = Eigen::Vector3d(
         msg->pose.position.x,
         msg->pose.position.y,
         msg->pose.position.z);
   }
 }
 
-void MissionFSM::vlaSwarmCameraCallback(
+void MissionFSM::vlaSearchCameraCallback(
     const sensor_msgs::CompressedImageConstPtr& msg)
 {
-  std::lock_guard<std::mutex> lock(vla_swarm_camera_mutex_);
-  vla_swarm_latest_camera_image_ = msg;
-  vla_swarm_latest_camera_receive_time_ = ros::Time::now();
+  std::lock_guard<std::mutex> lock(vla_search_camera_mutex_);
+  vla_search_latest_camera_image_ = msg;
+  vla_search_latest_camera_receive_time_ = ros::Time::now();
 }
 
-void MissionFSM::vlaSwarmEgoStateTriggerCallback(
+void MissionFSM::vlaSearchEgoStateTriggerCallback(
     const quadrotor_msgs::EgoStateTrigger::ConstPtr& msg)
 {
-  vla_swarm_ego_stable_ = msg->data;
+  vla_search_ego_stable_ = msg->data;
 }
 
 bool MissionFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* reason) const {
@@ -2720,38 +2720,38 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
       break;
     }
 
-    case VLA_SWARM_PLAN_LOCAL: {
-      handleVlaSwarmPlanLocal();
+    case VLA_SEARCH_PLAN_LOCAL: {
+      handleVlaSearchPlanLocal();
       break;
     }
 
-    case VLA_SWARM_WAIT_LLM: {
-      handleVlaSwarmWaitLLM();
+    case VLA_SEARCH_WAIT_LLM: {
+      handleVlaSearchWaitLLM();
       break;
     }
 
-    case VLA_SWARM_WAIT_TARGET: {
-      handleVlaSwarmWaitTarget();
+    case VLA_SEARCH_WAIT_TARGET: {
+      handleVlaSearchWaitTarget();
       break;
     }
 
-    case VLA_SWARM_APPROACH: {
-      handleVlaSwarmApproach();
+    case VLA_SEARCH_APPROACH: {
+      handleVlaSearchApproach();
       break;
     }
 
-    case VLA_SWARM_YAW_HANDLE: {
-      handleVlaSwarmYaw();
+    case VLA_SEARCH_YAW_HANDLE: {
+      handleVlaSearchYaw();
       break;
     }
 
-    case VLA_SWARM_RECOVERY: {
-      handleVlaSwarmRecovery();
+    case VLA_SEARCH_RECOVERY: {
+      handleVlaSearchRecovery();
       break;
     }
 
-    case VLA_SWARM_FINISH: {
-      handleVlaSwarmFinish();
+    case VLA_SEARCH_FINISH: {
+      handleVlaSearchFinish();
       break;
     }
 
@@ -3426,15 +3426,15 @@ int MissionFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim
   return res;
 }
 
-void MissionFSM::vlaSwarmMapCallback(const ros::TimerEvent&)
+void MissionFSM::vlaSearchMapCallback(const ros::TimerEvent&)
 {
-  if (!vla_swarm_enabled_ || !fd_->have_odom_ || vla_swarm_map_ == nullptr) {
+  if (!vla_search_enabled_ || !fd_->have_odom_ || vla_search_map_ == nullptr) {
     return;
   }
 
   // SmallMap 独立于单次任务持续更新，使 PLACE 和 LOCAL_PLAN 使用同一帧地图语义。
-  if (!vla_swarm_map_->update(fd_->odom_pos_)) {
-    ROS_WARN_THROTTLE(5.0, "[VLA_SWARM] SmallMap is waiting for an initialized occupancy map.");
+  if (!vla_search_map_->update(fd_->odom_pos_)) {
+    ROS_WARN_THROTTLE(5.0, "[VLA_SEARCH] SmallMap is waiting for an initialized occupancy map.");
   }
 }
 
@@ -3570,12 +3570,12 @@ void MissionFSM::egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstP
 
   // EGO 结果消息没有会话字段，只在 VLA 当前局部目标坐标匹配时消费，
   // 避免前一任务或 stopMotion 的迟到回调推进本次路径。
-  if (vla_swarm_active_ &&
-      md_->mission_state_ == MISSION_FSM_STATE::VLA_SWARM_APPROACH &&
-      vla_swarm_waypoint_published_ &&
+  if (vla_search_active_ &&
+      md_->mission_state_ == MISSION_FSM_STATE::VLA_SEARCH_APPROACH &&
+      vla_search_waypoint_published_ &&
       (fd_->ego_local_goal_ - fd_->local_aim_pos_).norm() <= 0.25) {
-    vla_swarm_plan_feedback_received_ = true;
-    vla_swarm_plan_feedback_success_ = msg->plan_status;
+    vla_search_plan_feedback_received_ = true;
+    vla_search_plan_feedback_success_ = msg->plan_status;
     if (msg->plan_status) {
       fd_->ego_exec_finished_ = false;
     }
@@ -3594,7 +3594,7 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_TRACKING ||
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_OBJECT_NAV ||
       msg->instruction_type == quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION ||
-      msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SWARM ||
+      msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SEARCH ||
       msg->instruction_type == quadrotor_msgs::Instruction::REQUEST_ALL_AREA_AND_OBJS;
   if (ic_first_recv_flag){
     ic_first_recv_flag = false;
@@ -3609,17 +3609,17 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
   }else
     ic_last_recv_time = ros::Time::now();
 
-  if (vla_swarm_active_) {
-    const bool same_vla_swarm_session =
-        msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SWARM &&
-        msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_VLA_SWARM &&
-        msg->task_session_id == vla_swarm_session_id_;
-    if (same_vla_swarm_session) {
-      ROS_WARN_STREAM("[VLA_SWARM] Ignore duplicated Instruction for active session="
-                      << vla_swarm_session_id_);
+  if (vla_search_active_) {
+    const bool same_vla_search_session =
+        msg->instruction_type == quadrotor_msgs::Instruction::TURN_VLA_SEARCH &&
+        msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_VLA_SEARCH &&
+        msg->task_session_id == vla_search_session_id_;
+    if (same_vla_search_session) {
+      ROS_WARN_STREAM("[VLA_SEARCH] Ignore duplicated Instruction for active session="
+                      << vla_search_session_id_);
       return;
     }
-    cancelVlaSwarmTask("replaced_by_new_task", "received a new Instruction");
+    cancelVlaSearchTask("replaced_by_new_task", "received a new Instruction");
   }
 
   md_->instruction_ = msg->instruction_type;
@@ -3692,29 +3692,29 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
 
   switch (msg->instruction_type)
   {
-    case quadrotor_msgs::Instruction::TURN_VLA_SWARM:
-      resetVlaSwarmContext();
-      vla_swarm_active_ = true;
-      vla_swarm_session_id_ = msg->task_session_id;
-      vla_swarm_command_ = msg->command;
-      if (!vla_swarm_enabled_) {
-        vla_swarm_finish_reason_ = "disabled";
-        vla_swarm_finish_detail_ = "vla_swarm/enable is false";
-        transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "instructionCallback:vla_swarm_disabled");
-      } else if (msg->source_task_id != quadrotor_msgs::Instruction::SOURCE_TASK_VLA_SWARM) {
-        vla_swarm_finish_reason_ = "invalid_source_task";
-        vla_swarm_finish_detail_ = "TURN_VLA_SWARM requires SOURCE_TASK_VLA_SWARM";
-        transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "instructionCallback:vla_swarm_invalid_source");
+    case quadrotor_msgs::Instruction::TURN_VLA_SEARCH:
+      resetVlaSearchContext();
+      vla_search_active_ = true;
+      vla_search_session_id_ = msg->task_session_id;
+      vla_search_command_ = msg->command;
+      if (!vla_search_enabled_) {
+        vla_search_finish_reason_ = "disabled";
+        vla_search_finish_detail_ = "vla_search/enable is false";
+        transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "instructionCallback:vla_search_disabled");
+      } else if (msg->source_task_id != quadrotor_msgs::Instruction::SOURCE_TASK_VLA_SEARCH) {
+        vla_search_finish_reason_ = "invalid_source_task";
+        vla_search_finish_detail_ = "TURN_VLA_SEARCH requires SOURCE_TASK_VLA_SEARCH";
+        transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "instructionCallback:vla_search_invalid_source");
       } else if (msg->task_session_id == 0) {
-        vla_swarm_finish_reason_ = "invalid_session";
-        vla_swarm_finish_detail_ = "TURN_VLA_SWARM requires non-zero task_session_id";
-        transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "instructionCallback:vla_swarm_invalid_session");
+        vla_search_finish_reason_ = "invalid_session";
+        vla_search_finish_detail_ = "TURN_VLA_SEARCH requires non-zero task_session_id";
+        transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "instructionCallback:vla_search_invalid_session");
       } else if (msg->command.empty()) {
-        vla_swarm_finish_reason_ = "invalid_command";
-        vla_swarm_finish_detail_ = "TURN_VLA_SWARM requires a non-empty command";
-        transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "instructionCallback:vla_swarm_invalid_command");
+        vla_search_finish_reason_ = "invalid_command";
+        vla_search_finish_detail_ = "TURN_VLA_SEARCH requires a non-empty command";
+        transitState(MISSION_FSM_STATE::VLA_SEARCH_FINISH, "instructionCallback:vla_search_invalid_command");
       } else {
-        startVlaSwarmTask(msg);
+        startVlaSearchTask(msg);
       }
       break;
 
@@ -4029,13 +4029,13 @@ void MissionFSM::displayMissionState()
     case GO_TARGET_OBJECT: text+="Go-Obj"; break;
     case GO_TARGET_WITH_WAYPOINT: text+="Go-Wpt"; break;
     case DF_DEMO: text+="DFDemo"; break;
-    case VLA_SWARM_PLAN_LOCAL: text+="VSwarm-Plan"; break;
-    case VLA_SWARM_WAIT_LLM: text+="VSwarm-LLM"; break;
-    case VLA_SWARM_WAIT_TARGET: text+="VSwarm-Target"; break;
-    case VLA_SWARM_APPROACH: text+="VSwarm-Approach"; break;
-    case VLA_SWARM_YAW_HANDLE: text+="VSwarm-Yaw"; break;
-    case VLA_SWARM_RECOVERY: text+="VSwarm-Recovery"; break;
-    case VLA_SWARM_FINISH: text+="VSwarm-Finish"; break;
+    case VLA_SEARCH_PLAN_LOCAL: text+="VSwarm-Plan"; break;
+    case VLA_SEARCH_WAIT_LLM: text+="VSwarm-LLM"; break;
+    case VLA_SEARCH_WAIT_TARGET: text+="VSwarm-Target"; break;
+    case VLA_SEARCH_APPROACH: text+="VSwarm-Approach"; break;
+    case VLA_SEARCH_YAW_HANDLE: text+="VSwarm-Yaw"; break;
+    case VLA_SEARCH_RECOVERY: text+="VSwarm-Recovery"; break;
+    case VLA_SEARCH_FINISH: text+="VSwarm-Finish"; break;
     default: text += "Unknown"; break;
   }
 

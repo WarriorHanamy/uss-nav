@@ -16,10 +16,10 @@ from cv_bridge import CvBridge
 from loguru import logger
 from openai import OpenAI
 from rospkg import RosPack
-from scene_graph.msg import PromptMsg, VLASwarmObservation
+from scene_graph.msg import PromptMsg, VLASearchObservation
 from sensor_msgs.msg import Image
 
-from vla_swarm_prompt_router import (
+from vla_search_prompt_router import (
     create_answer,
     load_prompt_specs,
     resolve_prompt_request,
@@ -29,8 +29,8 @@ from vla_swarm_prompt_router import (
 
 PROMPT_TOPIC = "/scene_graph/prompt"
 RESULT_TOPIC = "/scene_graph/llm_ans"
-SMALL_MAP_TOPIC = "/vla_swarm/small_map"
-OBSERVATION_TOPIC = "/vla_swarm/observation"
+SMALL_MAP_TOPIC = "/vla_search/small_map"
+OBSERVATION_TOPIC = "/vla_search/observation"
 NODE_NAME = "LLM_LOCAL_API_NODE"
 
 # 普通 SceneGraph 与 VLA-Swarm 文本 Prompt 默认使用 2233。
@@ -474,7 +474,7 @@ def main():
     )
     rospy.Subscriber(
         OBSERVATION_TOPIC,
-        VLASwarmObservation,
+        VLASearchObservation,
         observation_callback,
         queue_size=10,
         buff_size=2**24,
