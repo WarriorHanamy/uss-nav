@@ -1,0 +1,138 @@
+metadata:
+  project: uss-nav
+  workspace: /home/rec/uss-nav/ws_main/src
+  analyzed_at: "2026-07-14T12:49:54+08:00"
+  analyzer: ros-deps-analyzer v1.0.0
+  packages_found: 1
+  dependencies_total: 24
+
+catalog:
+  ros:
+    roscpp: { version: any, type: ros }
+    rospy: { version: any, type: ros }
+    roslib: { version: any, type: ros }
+    std_msgs: { version: any, type: ros }
+    sensor_msgs: { version: any, type: ros }
+    geometry_msgs: { version: any, type: ros }
+    nav_msgs: { version: any, type: ros }
+    cv_bridge: { version: any, type: ros }
+    tf: { version: any, type: ros }
+    message_generation: { version: any, type: ros }
+    message_runtime: { version: any, type: ros }
+    catkin: { version: ">=0.7", type: ros, role: buildtool }
+
+  system:
+    libeigen3-dev: { version: ">=3.3", type: system, cmake: Eigen3 }
+    libpcl-dev: { version: ">=1.8", type: system, cmake: PCL }
+    libopencv-dev: { version: ">=4.0", type: system, cmake: OpenCV }
+    libomp-dev: { version: any, type: system, cmake: OpenMP }
+
+  third_party:
+    igraph: { version: ">=0.10", type: cmake, source: external, cmake: igraph }
+    libleidenalg: { version: embedded, type: static, source: libs/libleidenalg }
+    quickhull: { version: embedded, type: header, source: libs/quickhull }
+    nlohmann-json: { version: embedded, type: header, source: include/nlohmann }
+
+  internal:
+    map_interface: { type: catkin, path: planners/ego_planner/map_interface }
+    quadrotor_msgs: { type: catkin, path: utils/quadrotor_msgs }
+
+packages:
+  scene_graph:
+    path: perception/scene_graph
+    type: catkin
+    format: 2
+    version: 0.0.0
+    messages:
+      - WordVector.msg
+      - EncodeMask.msg
+      - PromptMsg.msg
+      - VLASwarmObservation.msg
+    targets:
+      library: scene_graph
+      executables:
+        - yolo_recv_test
+        - undistort_node
+        - cloud_fov_limit
+    build:
+      buildtool:
+        ros: [catkin]
+      build_depend:
+        ros: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs, cv_bridge, tf, message_generation, message_runtime]
+        internal: [map_interface, quadrotor_msgs]
+      build_export_depend:
+        ros: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs, cv_bridge, tf, message_runtime]
+        internal: [map_interface, quadrotor_msgs]
+      find_package:
+        system: [Eigen3, PCL, OpenMP, OpenCV]
+        third_party: [igraph, libleidenalg]
+    exec:
+      ros: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs, cv_bridge, tf, message_runtime]
+      system: [libeigen3-dev, libpcl-dev, libopencv-dev, libomp-dev]
+      third_party: [igraph, libleidenalg, quickhull, nlohmann-json]
+      internal: [map_interface, quadrotor_msgs]
+    link:
+      catkin_LIBRARIES: [roscpp, roslib, std_msgs, geometry_msgs, nav_msgs, sensor_msgs, cv_bridge, map_interface, quadrotor_msgs, tf, message_runtime]
+      PCL_LIBRARIES: true
+      libleidenalg: true
+      OpenMP_CXX_LIBRARIES: conditional
+      OpenCV_LIBRARIES: true
+
+layers:
+  - name: "L0: Messages & Utilities"
+    packages: [quadrotor_msgs, traj_utils]
+    description: "Message definitions and utility libraries with no workspace deps"
+  - name: "L1: Core Libraries"
+    packages: [map_interface]
+    description: "Map interface used by perception and planning layers"
+  - name: "L2: Perception"
+    packages: [scene_graph]
+    description: "Scene graph construction, skeleton generation, clustering"
+  - name: "L3: Planning"
+    packages: [exploration, mission_executive]
+    description: "Exploration and mission executive depend on scene_graph"
+
+build_order:
+  - [catkin]
+  - [quadrotor_msgs]
+  - [map_interface]
+  - [igraph, libleidenalg]     # third-party built before catkin packages
+  - [scene_graph]
+
+dependency_graph:
+  scene_graph:
+    depends_on:
+      buildtool: [catkin]
+      build: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs, cv_bridge, tf, message_generation, message_runtime, map_interface, quadrotor_msgs]
+      system: [Eigen3, PCL, OpenMP, OpenCV]
+      third_party: [igraph, libleidenalg, quickhull, nlohmann-json]
+    depended_by: []         # no package in workspace depends on scene_graph
+
+missing:
+  ros: []
+  system: []
+  third_party: []
+
+docker_mapping:
+  apt_packages:
+    - ros-noetic-roscpp
+    - ros-noetic-rospy
+    - ros-noetic-roslib
+    - ros-noetic-std-msgs
+    - ros-noetic-sensor-msgs
+    - ros-noetic-geometry-msgs
+    - ros-noetic-nav-msgs
+    - ros-noetic-cv-bridge
+    - ros-noetic-tf
+    - ros-noetic-message-generation
+    - ros-noetic-message-runtime
+    - libeigen3-dev
+    - libpcl-dev
+    - libopencv-dev
+    - libomp-dev
+    - libigraph-dev
+  pre_compiled:
+    - libleidenalg.a     # built from libs/libleidenalg
+    - quickhull          # header-only, embedded in libs/quickhull
+  embedded_headers:
+    - nlohmann/json.hpp  # single-header in include/nlohmann

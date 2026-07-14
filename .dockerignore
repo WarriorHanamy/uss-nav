@@ -48,5 +48,8 @@ bun.lock
 tsconfig.json
 vite.config.ts
 
+# Web tools and caches (not needed for ROS build)
+tools/
+
 # Keep only the core workspace
 # ws_main/src/planner/ to copy selectively

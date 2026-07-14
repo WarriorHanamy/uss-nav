@@ -1,4 +1,4 @@
-# USS-NAV Docker Compose — devel / build / test lifecycle
+# USS-NAV Docker Compose — devel / build / test / release lifecycle
 # Container naming: uss-nav-{phase}-{GIT_SHA:-local}
 
 services:
@@ -79,3 +79,35 @@ services:
         source: ./.artifacts
         target: /workspace/.artifacts
     entrypoint: ["/entrypoint-test.sh"]
+
+  release:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.release
+    image: ego-planner-release
+    container_name: uss-nav-release-${GIT_SHA:-local}
+    stdin_open: true
+    tty: true
+    network_mode: host
+    ipc: host
+    environment:
+      - DISPLAY=${DISPLAY:-:99}
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - type: bind
+        source: ./ws_main/src
+        target: /workspace/src
+        read_only: true
+      - type: bind
+        source: ./bringup_test
+        target: /workspace/src/bringup_test
+        read_only: true
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - type: bind
+        source: ./.pretrained
+        target: /workspace/.pretrained
+    entrypoint: ["/entrypoint-release.sh"]

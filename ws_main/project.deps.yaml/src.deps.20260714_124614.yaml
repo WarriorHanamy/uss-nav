@@ -1,0 +1,812 @@
+# ============================================================================
+# ROS Package Dependency Manifest
+# Generated: 2026-07-14T12:46:14+08:00
+# Project: uss-nav
+# Workspace: /home/rec/uss-nav/ws_main/src
+# ============================================================================
+
+metadata:
+  project: uss-nav
+  workspace: /home/rec/uss-nav/ws_main/src
+  analyzed_at: "2026-07-14T12:46:14+08:00"
+  analyzer_version: "1.0.0"
+  analysis_depth: 2
+  total_packages: 31
+  build_system: catkin
+
+# ============================================================================
+# GLOBAL CATALOG — All unique dependencies with classification
+# ============================================================================
+catalog:
+  # --- ROS Distribution Packages ---
+  ros:
+    roscpp:           { type: ros, desc: "ROS C++ client library" }
+    rospy:            { type: ros, desc: "ROS Python client library" }
+    roslib:           { type: ros, desc: "ROS base library" }
+    std_msgs:         { type: ros, desc: "Standard ROS message types" }
+    sensor_msgs:      { type: ros, desc: "Sensor message types" }
+    geometry_msgs:    { type: ros, desc: "Geometry message types" }
+    nav_msgs:         { type: ros, desc: "Navigation message types" }
+    visualization_msgs: { type: ros, desc: "Visualization marker messages" }
+    cv_bridge:        { type: ros, desc: "ROS-OpenCV bridge" }
+    tf:               { type: ros, desc: "Transform library" }
+    message_generation: { type: ros, desc: "ROS message code generation" }
+    message_runtime:  { type: ros, desc: "ROS message runtime" }
+    message_filters:  { type: ros, desc: "ROS message filter synchronization" }
+    mavros:           { type: ros, desc: "MAVLink-to-ROS bridge" }
+    pcl_ros:          { type: ros, desc: "PCL-ROS bridge" }
+    pcl_conversions:  { type: ros, desc: "PCL-ROS conversion utilities" }
+    nodelet:          { type: ros, desc: "ROS nodelet infrastructure" }
+    cmake_modules:    { type: ros, desc: "CMake find-modules for ROS" }
+    cmake_utils:      { type: ros, desc: "CMake utility macros" }
+    image_transport:  { type: ros, desc: "Image transport library" }
+    dynamic_reconfigure: { type: ros, desc: "Dynamic reconfiguration" }
+    eigen:            { type: ros, desc: "ROS Eigen wrapper (libeigen3-dev)" }
+    svo_msgs:         { type: ros, desc: "SVO semi-direct VO messages" }
+    vikit_ros:        { type: ros, desc: "Vikit ROS utilities" }
+
+  # --- System Libraries (apt/pacman) ---
+  system:
+    libeigen3-dev:    { type: system, apt: libeigen3-dev, cmake: Eigen3 }
+    libopencv-dev:    { type: system, apt: libopencv-dev, cmake: OpenCV }
+    libpcl-dev:       { type: system, apt: libpcl-dev, cmake: PCL }
+    libboost-all-dev: { type: system, apt: libboost-all-dev, cmake: Boost }
+    libglew-dev:      { type: system, apt: libglew-dev, cmake: GLEW }
+    libglfw3-dev:     { type: system, apt: libglfw3-dev, cmake: glfw3 }
+    libgl1-mesa-dev:  { type: system, apt: libgl1-mesa-dev, cmake: OpenGL }
+    libarmadillo-dev: { type: system, apt: libarmadillo-dev, cmake: Armadillo }
+    libomp-dev:       { type: system, apt: libomp-dev, cmake: OpenMP }
+    pangolin:         { type: system, apt: libpangolin-dev, cmake: Pangolin }
+    python3-numpy:    { type: system, apt: python3-numpy }
+
+  # --- Third-party / Built from Source ---
+  third_party:
+    libleidenalg:     { type: static, source: local, path: perception/scene_graph/libs/libleidenalg }
+    igraph:           { type: static, source: local, path: unknown, cmake: igraph }
+    nlohmann-json:    { type: header-only, source: embedded, path: perception/scene_graph/include/nlohmann }
+    quickhull:        { type: header-only, source: embedded, path: perception/scene_graph/libs/quickhull }
+
+  # --- Internal (Workspace) Packages ---
+  internal:
+    quadrotor_msgs:       { type: catkin, path: utils/quadrotor_msgs }
+    traj_utils:           { type: catkin, path: utils/traj_utils }
+    lkh_tsp_solver:       { type: catkin, path: utils/lkh_tsp_solver }
+    box_odom_estimator:   { type: catkin, path: utils/box_odom_estimator }
+    plan_env:             { type: catkin, path: planners/ego_planner/plan_env }
+    path_searching:       { type: catkin, path: planners/ego_planner/path_searching }
+    map_interface:        { type: catkin, path: planners/ego_planner/map_interface }
+    traj_opt:             { type: catkin, path: planners/ego_planner/traj_opt }
+    ego_planner:          { type: catkin, path: planners/ego_planner/plan_manage }
+    camera_fov:           { type: catkin, path: perception/camera_fov }
+    scene_graph:          { type: catkin, path: perception/scene_graph }
+    exploration:          { type: catkin, path: planners/exploration }
+    mission_executive:    { type: catkin, path: mission_executive }
+    object_detection_msgs: { type: catkin, path: planners/tracker/detection/object_detection_msgs }
+    target_ekf:           { type: catkin, path: planners/tracker/detection/target_ekf }
+    mapping:              { type: catkin, path: planners/tracker/mapping }
+    planning:             { type: catkin, path: planners/tracker/planning }
+    poscmd_2_odom:        { type: catkin, path: uav_simulator/fake_drone }
+    so3_controller:       { type: catkin, path: uav_simulator/fake_so3_controller }
+    so3_quadrotor:        { type: catkin, path: uav_simulator/fake_so3_quadrotor }
+    decomp_ros_msgs:      { type: catkin, path: uav_simulator/fake_target/DecompROS/decomp_ros_msgs }
+    decomp_ros_utils:     { type: catkin, path: uav_simulator/fake_target/DecompROS/decomp_ros_utils }
+    fake_mapping:         { type: catkin, path: uav_simulator/fake_target/fake_mapping }
+    fake_planning:        { type: catkin, path: uav_simulator/fake_target/fake_target_planning }
+    fake_traj_opt:        { type: catkin, path: uav_simulator/fake_target/fake_traj_opt }
+    local_sensing_node:   { type: catkin, path: uav_simulator/local_sensing }
+    map_generator:        { type: catkin, path: uav_simulator/map_generator }
+    mockamap:             { type: catkin, path: uav_simulator/mockamap }
+    so3_control:          { type: catkin, path: uav_simulator/so3_control }
+    so3_quadrotor_simulator: { type: catkin, path: uav_simulator/so3_quadrotor_simulator }
+    uav_simulator:        { type: catkin, path: uav_simulator/uav_simulator }
+
+# ============================================================================
+# PER-PACKAGE DEPENDENCY GRAPH
+# ============================================================================
+packages:
+  # --------------------------------------------------------------------------
+  # L0: Messages & Foundation Libraries
+  # --------------------------------------------------------------------------
+  quadrotor_msgs:
+    path: utils/quadrotor_msgs
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [std_msgs, geometry_msgs, nav_msgs, sensor_msgs, message_generation, cmake_utils, roscpp]
+      system: [libeigen3-dev]
+    exec:
+      ros: [std_msgs, geometry_msgs, nav_msgs, sensor_msgs, message_runtime, cmake_utils]
+    test: []
+    has_msgs: true
+    libraries: [decode_msgs, encode_msgs]
+
+  traj_utils:
+    path: utils/traj_utils
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, std_msgs, geometry_msgs, message_generation]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, std_msgs, message_runtime]
+      system: []
+    test: []
+    has_msgs: true
+
+  lkh_tsp_solver:
+    path: utils/lkh_tsp_solver
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp]
+      system: [libm]  # -lm (math library)
+    exec:
+      ros: [roscpp]
+    test: []
+    has_msgs: false
+
+  box_odom_estimator:
+    path: utils/box_odom_estimator
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [nav_msgs, quadrotor_msgs, roscpp, scene_graph, sensor_msgs, rospy]
+      system: [libeigen3-dev]
+    exec:
+      ros: [cv_bridge]
+      system: [python3-numpy]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, scene_graph]
+
+  object_detection_msgs:
+    path: planners/tracker/detection/object_detection_msgs
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [std_msgs, message_generation]
+    exec:
+      ros: [message_runtime, std_msgs, message_generation]
+    test: []
+    has_msgs: true
+
+  decomp_ros_msgs:
+    path: uav_simulator/fake_target/DecompROS/decomp_ros_msgs
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nav_msgs, geometry_msgs, message_generation, std_msgs]
+    exec:
+      ros: [message_runtime]
+    test: []
+    has_msgs: true
+
+  camera_fov:
+    path: perception/camera_fov
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, std_msgs, visualization_msgs]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, std_msgs]
+    test: []
+    has_msgs: false
+
+  plan_env:
+    path: planners/ego_planner/plan_env
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, visualization_msgs, cv_bridge, message_filters]
+      system: [libeigen3-dev, libopencv-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, rospy, std_msgs]
+    test: []
+    has_msgs: false
+
+  uav_simulator:
+    path: uav_simulator/uav_simulator
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: []
+      system: []
+    exec:
+      ros: []
+    test: []
+    has_msgs: false
+    notes: "Metapackage with no dependencies"
+
+  map_generator:
+    path: uav_simulator/map_generator
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, geometry_msgs, pcl_conversions]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, std_msgs]
+    test: []
+    has_msgs: false
+
+  mockamap:
+    path: uav_simulator/mockamap
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, pcl_ros, pcl_conversions]
+    exec:
+      ros: [roscpp, pcl_ros, pcl_conversions]
+    test: []
+    has_msgs: false
+
+  poscmd_2_odom:
+    path: uav_simulator/fake_drone
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, nav_msgs, quadrotor_msgs]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nav_msgs, quadrotor_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  # --------------------------------------------------------------------------
+  # L1: Core Libraries
+  # --------------------------------------------------------------------------
+  path_searching:
+    path: planners/ego_planner/path_searching
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, visualization_msgs, plan_env, cv_bridge]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, rospy, std_msgs, plan_env]
+    test: []
+    has_msgs: false
+    internal_build: [plan_env]
+
+  map_interface:
+    path: planners/ego_planner/map_interface
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, visualization_msgs, plan_env]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, rospy, std_msgs, plan_env, path_searching]
+    test: []
+    has_msgs: false
+    internal_build: [plan_env, path_searching]
+
+  traj_opt:
+    path: planners/ego_planner/traj_opt
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, visualization_msgs, plan_env, cv_bridge, traj_utils, path_searching]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, rospy, std_msgs, plan_env, path_searching, traj_utils]
+    test: []
+    has_msgs: false
+    internal_build: [plan_env, path_searching, traj_utils]
+
+  decomp_ros_utils:
+    path: uav_simulator/fake_target/DecompROS/decomp_ros_utils
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, sensor_msgs, nav_msgs, geometry_msgs, decomp_ros_msgs, eigen]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, sensor_msgs, nav_msgs, geometry_msgs, decomp_ros_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [decomp_ros_msgs]
+
+  so3_control:
+    path: uav_simulator/so3_control
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nav_msgs, quadrotor_msgs, tf, nodelet, cmake_utils]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nav_msgs, quadrotor_msgs, tf, nodelet, cmake_utils]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  so3_quadrotor_simulator:
+    path: uav_simulator/so3_quadrotor_simulator
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, quadrotor_msgs, cmake_utils]
+      system: [libeigen3-dev, libarmadillo-dev]
+    exec:
+      ros: [roscpp, quadrotor_msgs, cmake_utils]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  so3_quadrotor:
+    path: uav_simulator/fake_so3_quadrotor
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [quadrotor_msgs, roscpp, nodelet, tf]
+      system: [libeigen3-dev]
+    exec:
+      ros: [quadrotor_msgs, roscpp, nodelet, tf]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  so3_controller:
+    path: uav_simulator/fake_so3_controller
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [quadrotor_msgs, roscpp, nodelet]
+      system: [libeigen3-dev]
+    exec:
+      ros: [quadrotor_msgs, roscpp, nodelet]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  fake_traj_opt:
+    path: uav_simulator/fake_target/fake_traj_opt
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, pcl_ros, pcl_conversions]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, pcl_ros, pcl_conversions]
+    test: []
+    has_msgs: false
+
+  target_ekf:
+    path: planners/tracker/detection/target_ekf
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, object_detection_msgs, message_filters, nav_msgs]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, object_detection_msgs, message_filters, nav_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [object_detection_msgs]
+
+  # --------------------------------------------------------------------------
+  # L2: Perception & Mapping
+  # --------------------------------------------------------------------------
+  scene_graph:
+    path: perception/scene_graph
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs,
+            cv_bridge, map_interface, quadrotor_msgs, tf, message_generation, message_runtime]
+      system: [libeigen3-dev, libpcl-dev, libomp-dev]
+      third_party: [libleidenalg, igraph, nlohmann-json, quickhull]
+    exec:
+      ros: [roscpp, rospy, roslib, std_msgs, sensor_msgs, geometry_msgs, nav_msgs,
+            cv_bridge, map_interface, quadrotor_msgs, tf, message_runtime]
+    test: []
+    has_msgs: true
+    internal_build: [map_interface, quadrotor_msgs]
+    libraries: [scene_graph]
+
+  mapping:
+    path: planners/tracker/mapping
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nodelet, quadrotor_msgs, cv_bridge, tf, pcl_ros, pcl_conversions, object_detection_msgs]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nodelet, quadrotor_msgs, cv_bridge, tf, pcl_ros, pcl_conversions, object_detection_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, object_detection_msgs]
+    libraries: [mapping]
+
+  fake_mapping:
+    path: uav_simulator/fake_target/fake_mapping
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nodelet, quadrotor_msgs, cv_bridge, tf, pcl_ros, pcl_conversions, object_detection_msgs]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nodelet, quadrotor_msgs, cv_bridge, tf, pcl_ros, pcl_conversions, object_detection_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, object_detection_msgs]
+    libraries: [fake_mapping]
+
+  local_sensing_node:
+    path: uav_simulator/local_sensing
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [cmake_modules, roscpp, roslib, svo_msgs, cv_bridge, image_transport,
+            vikit_ros, pcl_ros, dynamic_reconfigure, quadrotor_msgs]
+      system: [libeigen3-dev, libopencv-dev, libglew-dev, libglfw3-dev,
+               libgl1-mesa-dev, libboost-all-dev, pangolin]
+    exec:
+      ros: [roscpp, roslib, svo_msgs, cv_bridge, image_transport,
+            vikit_ros, pcl_ros, dynamic_reconfigure, quadrotor_msgs]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs]
+
+  # --------------------------------------------------------------------------
+  # L3: Planning
+  # --------------------------------------------------------------------------
+  ego_planner:
+    path: planners/ego_planner/plan_manage
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, std_msgs, geometry_msgs, quadrotor_msgs, plan_env, path_searching,
+            traj_opt, traj_utils, message_generation, cv_bridge, camera_fov, tf, scene_graph]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, plan_env, std_msgs, message_runtime, traj_utils, traj_opt,
+            path_searching, camera_fov, scene_graph, tf]
+    test: []
+    has_msgs: false
+    internal_build: [plan_env, path_searching, traj_opt, traj_utils, camera_fov, scene_graph, quadrotor_msgs]
+    libraries: [ego_planner]
+
+  exploration:
+    path: planners/exploration
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, rospy, std_msgs, quadrotor_msgs, visualization_msgs, plan_env,
+            map_interface, scene_graph, path_searching, cv_bridge, traj_utils,
+            lkh_tsp_solver, camera_fov]
+      system: [libeigen3-dev, libpcl-dev]
+    exec:
+      ros: [roscpp, rospy, std_msgs, quadrotor_msgs, plan_env, map_interface,
+            path_searching, traj_utils, lkh_tsp_solver, camera_fov, scene_graph]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, plan_env, map_interface, path_searching,
+                     traj_utils, lkh_tsp_solver, camera_fov, scene_graph]
+    libraries: [exploration]
+
+  planning:
+    path: planners/tracker/planning
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nodelet, quadrotor_msgs, mapping, traj_opt, decomp_ros_utils]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nodelet, quadrotor_msgs, mapping, traj_opt, decomp_ros_utils]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, mapping, traj_opt, decomp_ros_utils]
+    libraries: [planning]
+
+  fake_planning:
+    path: uav_simulator/fake_target/fake_target_planning
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, nodelet, quadrotor_msgs, fake_traj_opt, fake_mapping, decomp_ros_utils]
+      system: [libeigen3-dev]
+    exec:
+      ros: [roscpp, nodelet, quadrotor_msgs, fake_mapping, fake_traj_opt, decomp_ros_utils]
+    test: []
+    has_msgs: false
+    internal_build: [quadrotor_msgs, fake_traj_opt, fake_mapping, decomp_ros_utils]
+    libraries: [fake_planning]
+
+  # --------------------------------------------------------------------------
+  # L4: Mission Control
+  # --------------------------------------------------------------------------
+  mission_executive:
+    path: mission_executive
+    type: catkin
+    build_system: catkin
+    buildtool: [catkin]
+    build:
+      ros: [roscpp, std_msgs, sensor_msgs, geometry_msgs, scene_graph, cv_bridge,
+            exploration, traj_utils, quadrotor_msgs, ego_planner, mavros]
+      system: [libpcl-dev, libeigen3-dev, libopencv-dev]
+    exec:
+      ros: [roscpp, std_msgs, sensor_msgs, geometry_msgs, scene_graph, cv_bridge,
+            mavros, exploration, traj_utils, quadrotor_msgs, ego_planner]
+    test: []
+    has_msgs: false
+    internal_build: [scene_graph, exploration, traj_utils, quadrotor_msgs, ego_planner]
+
+# ============================================================================
+# TOPOLOGICAL LAYERS
+# ============================================================================
+layers:
+  - name: "L0: Messages & Foundation Libraries"
+    description: "Message packages, header-only utilities, and base libraries with no internal dependencies"
+    packages:
+      - quadrotor_msgs       # Messages used by almost all packages
+      - traj_utils           # Trajectory utility messages
+      - object_detection_msgs # Bounding box detection messages
+      - decomp_ros_msgs      # Decomp geometry messages
+      - camera_fov           # Camera FOV geometry (header-only-ish)
+      - plan_env             # Planning environment (grid map, raycast)
+      - lkh_tsp_solver       # LKH TSP solver library
+      - map_generator        # Random forest map generation
+      - mockamap             # Mock map node
+      - uav_simulator        # Metapackage (empty)
+      - poscmd_2_odom        # Position command to odometry converter
+
+  - name: "L1: Core Libraries & Search"
+    description: "Path searching, trajectory optimization, and shared map interfaces"
+    packages:
+      - path_searching        # A* path searching (depends on plan_env)
+      - map_interface         # Map interface layer (depends on plan_env, path_searching)
+      - traj_opt              # Trajectory optimization (depends on plan_env, path_searching, traj_utils)
+      - decomp_ros_utils      # Decomp ROS conversion utilities (depends on decomp_ros_msgs)
+      - so3_control           # SO3 attitude control (depends on quadrotor_msgs)
+      - so3_quadrotor_simulator # Quadrotor dynamics simulator (depends on quadrotor_msgs)
+      - so3_quadrotor         # SO3 quadrotor nodelet (depends on quadrotor_msgs)
+      - so3_controller        # SO3 controller nodelet (depends on quadrotor_msgs)
+      - fake_traj_opt         # Fake trajectory optimization for simulation
+      - target_ekf            # Target tracking EKF (depends on object_detection_msgs)
+      - decomp_ros_utils      # Decomp utilities (depends on decomp_ros_msgs)
+
+  - name: "L2: Perception & Mapping"
+    description: "Scene understanding, semantic mapping, and local map builders"
+    packages:
+      - scene_graph           # Scene graph with AI perception (depends on map_interface, quadrotor_msgs)
+      - mapping               # Target mapping nodelet (depends on quadrotor_msgs, object_detection_msgs)
+      - fake_mapping          # Fake mapping for simulation (depends on quadrotor_msgs, object_detection_msgs)
+      - local_sensing_node    # Local sensing with OpenGL/PCL rendering (depends on quadrotor_msgs)
+
+  - name: "L3: Planning"
+    description: "Trajectory and exploration planners"
+    packages:
+      - ego_planner           # EGO replanning FSM (depends on plan_env, path_searching, traj_opt, scene_graph, etc.)
+      - exploration           # Autonomous exploration (depends on plan_env, map_interface, scene_graph, etc.)
+      - planning              # Tracker planning (depends on mapping, traj_opt, decomp_ros_utils)
+      - fake_planning         # Fake planning for simulation (depends on fake_mapping, fake_traj_opt, decomp_ros_utils)
+
+  - name: "L4: Mission Control"
+    description: "High-level mission executive orchestrating all subsystems"
+    packages:
+      - mission_executive     # Mission control (depends on scene_graph, exploration, ego_planner, traj_utils)
+      - box_odom_estimator    # LiDAR target estimator with MoGe fallback (depends on scene_graph, quadrotor_msgs)
+
+# ============================================================================
+# BUILD ORDER (catkin build sequence, parallelizable groups)
+# ============================================================================
+build_order:
+  - group: 0
+    packages: [quadrotor_msgs, traj_utils, object_detection_msgs, decomp_ros_msgs,
+               camera_fov, plan_env, lkh_tsp_solver, map_generator, mockamap,
+               uav_simulator, poscmd_2_odom]
+  - group: 1
+    packages: [path_searching, map_interface, traj_opt, decomp_ros_utils,
+               so3_control, so3_quadrotor_simulator, so3_quadrotor, so3_controller,
+               fake_traj_opt, target_ekf]
+  - group: 2
+    packages: [scene_graph, mapping, fake_mapping, local_sensing_node]
+  - group: 3
+    packages: [ego_planner, exploration, planning, fake_planning]
+  - group: 4
+    packages: [mission_executive, box_odom_estimator]
+
+# ============================================================================
+# MISSING DEPENDENCIES (not found in workspace)
+# ============================================================================
+missing:
+  ros:
+    roscpp:           { install: apt install ros-${ROS_DISTRO}-roscpp }
+    rospy:            { install: apt install ros-${ROS_DISTRO}-rospy }
+    roslib:           { install: apt install ros-${ROS_DISTRO}-roslib }
+    std_msgs:         { install: apt install ros-${ROS_DISTRO}-std-msgs }
+    sensor_msgs:      { install: apt install ros-${ROS_DISTRO}-sensor-msgs }
+    geometry_msgs:    { install: apt install ros-${ROS_DISTRO}-geometry-msgs }
+    nav_msgs:         { install: apt install ros-${ROS_DISTRO}-nav-msgs }
+    visualization_msgs: { install: apt install ros-${ROS_DISTRO}-visualization-msgs }
+    cv_bridge:        { install: apt install ros-${ROS_DISTRO}-cv-bridge }
+    tf:               { install: apt install ros-${ROS_DISTRO}-tf }
+    message_generation: { install: apt install ros-${ROS_DISTRO}-message-generation }
+    message_runtime:  { install: apt install ros-${ROS_DISTRO}-message-runtime }
+    message_filters:  { install: apt install ros-${ROS_DISTRO}-message-filters }
+    mavros:           { install: apt install ros-${ROS_DISTRO}-mavros }
+    pcl_ros:          { install: apt install ros-${ROS_DISTRO}-pcl-ros }
+    pcl_conversions:  { install: apt install ros-${ROS_DISTRO}-pcl-conversions }
+    nodelet:          { install: apt install ros-${ROS_DISTRO}-nodelet }
+    cmake_modules:    { install: apt install ros-${ROS_DISTRO}-cmake-modules }
+    cmake_utils:      { install: apt install ros-${ROS_DISTRO}-cmake-utils }
+    image_transport:  { install: apt install ros-${ROS_DISTRO}-image-transport }
+    dynamic_reconfigure: { install: apt install ros-${ROS_DISTRO}-dynamic-reconfigure }
+    eigen:            { install: apt install ros-${ROS_DISTRO}-eigen-conversions }
+    svo_msgs:         { install: Source build required (SVO) }
+    vikit_ros:        { install: Source build required (Vikit ROS) }
+
+  system:
+    libeigen3-dev:              { install: apt install libeigen3-dev }
+    libopencv-dev:              { install: apt install libopencv-dev }
+    libpcl-dev:                 { install: apt install libpcl-dev }
+    libboost-all-dev:           { install: apt install libboost-all-dev }
+    libglew-dev:                { install: apt install libglew-dev }
+    libglfw3-dev:               { install: apt install libglfw3-dev }
+    libgl1-mesa-dev:            { install: apt install libgl1-mesa-dev }
+    libarmadillo-dev:           { install: apt install libarmadillo-dev }
+    libomp-dev:                 { install: apt install libomp-dev }
+    python3-numpy:              { install: apt install python3-numpy }
+    pangolin:                   { install: apt install libpangolin-dev || build from source }
+
+  third_party:
+    igraph:                     { install: apt install libigraph-dev || build from source (v0.10+) }
+    libleidenalg:               { install: Built from source at perception/scene_graph/libs/libleidenalg }
+    nlohmann-json:              { install: Header-only, embedded in scene_graph/include/nlohmann/ }
+    quickhull:                  { install: Header-only, embedded in scene_graph/libs/quickhull/ }
+
+# ============================================================================
+# DOCKER MAPPING (Dockerfile instructions)
+# ============================================================================
+docker_mapping:
+  base_image: "ros:noetic-ros-base-focal"
+
+  apt_prerequisites:
+    - build-essential
+    - cmake
+    - git
+    - python3-catkin-tools
+
+  apt_ros_deps:
+    - ros-noetic-roscpp
+    - ros-noetic-rospy
+    - ros-noetic-roslib
+    - ros-noetic-std-msgs
+    - ros-noetic-sensor-msgs
+    - ros-noetic-geometry-msgs
+    - ros-noetic-nav-msgs
+    - ros-noetic-visualization-msgs
+    - ros-noetic-cv-bridge
+    - ros-noetic-tf
+    - ros-noetic-message-generation
+    - ros-noetic-message-runtime
+    - ros-noetic-message-filters
+    - ros-noetic-mavros
+    - ros-noetic-mavros-extras
+    - ros-noetic-pcl-ros
+    - ros-noetic-pcl-conversions
+    - ros-noetic-nodelet
+    - ros-noetic-cmake-modules
+    - ros-noetic-image-transport
+    - ros-noetic-dynamic-reconfigure
+
+  apt_system_deps:
+    - libeigen3-dev
+    - libopencv-dev
+    - libpcl-dev
+    - libboost-all-dev
+    - libglew-dev
+    - libglfw3-dev
+    - libgl1-mesa-dev
+    - libarmadillo-dev
+    - libomp-dev
+    - python3-numpy
+    - libpangolin-dev
+
+  source_builds:
+    - name: igraph
+      repo: https://github.com/igraph/igraph
+      version: ">=0.10"
+      cmake_flags: "-DCMAKE_BUILD_TYPE=Release"
+    - name: libleidenalg
+      path: perception/scene_graph/libs/libleidenalg
+      cmake_flags: "-DCMAKE_BUILD_TYPE=Release"
+    - name: SVO (svo_msgs, vikit_ros)
+      repo: https://github.com/uzh-rpg/rpg_svo
+      notes: "Required by local_sensing_node only; optional if not using local sensing"
+
+  dockerfile_instructions:
+    - "FROM ros:noetic-ros-base-focal AS deps"
+    - "RUN apt-get update && apt-get install -y --no-install-recommends \\"
+    - "    build-essential cmake git python3-catkin-tools \\"
+    - "    # ROS packages \\"
+    - "    ros-noetic-{roscpp,rospy,roslib,std-msgs,sensor-msgs,geometry-msgs} \\"
+    - "    ros-noetic-{nav-msgs,visualization-msgs,cv-bridge,tf} \\"
+    - "    ros-noetic-{message-generation,message-runtime,message-filters} \\"
+    - "    ros-noetic-{mavros,mavros-extras,pcl-ros,pcl-conversions,nodelet} \\"
+    - "    ros-noetic-{cmake-modules,image-transport,dynamic-reconfigure} \\"
+    - "    # System libraries \\"
+    - "    {libeigen3-dev,libopencv-dev,libpcl-dev,libboost-all-dev} \\"
+    - "    {libglew-dev,libglfw3-dev,libgl1-mesa-dev,libarmadillo-dev} \\"
+    - "    {libomp-dev,python3-numpy,libpangolin-dev} \\"
+    - "    && rm -rf /var/lib/apt/lists/*"
+    - ""
+    - "# Build igraph from source"
+    - "RUN git clone --depth 1 -b 0.10 https://github.com/igraph/igraph /tmp/igraph \\"
+    - "    && cmake -S /tmp/igraph -B /tmp/igraph/build -DCMAKE_BUILD_TYPE=Release \\"
+    - "    && cmake --build /tmp/igraph/build -j$(nproc) \\"
+    - "    && cmake --install /tmp/igraph/build"
+    - ""
+    - "# Build libleidenalg if not pre-compiled"
+    - "RUN mkdir -p /ws/src && ln -s /ws/src/perception/scene_graph/libs/libleidenalg /tmp/libleidenalg \\"
+    - "    && cmake -S /tmp/libleidenalg -B /tmp/libleidenalg/build -DCMAKE_BUILD_TYPE=Release \\"
+    - "    && cmake --build /tmp/libleidenalg/build -j$(nproc) \\"
+    - "    && cmake --install /tmp/libleidenalg/build"
+
+# ============================================================================
+# DEPENDENCY GRAPH (DOT format)
+# ============================================================================
+dot_graph: |
+  digraph deps {
+    rankdir=LR;
+    splines=ortho;
+    node [shape=box, style=rounded];
+
+    # Messages & Foundation L0
+    quadrotor_msgs -> {std_msgs geometry_msgs nav_msgs sensor_msgs message_generation};
+    traj_utils -> {roscpp std_msgs geometry_msgs message_generation};
+    plan_env -> {roscpp rospy std_msgs cv_bridge message_filters Eigen3 OpenCV PCL};
+    camera_fov -> {roscpp std_msgs Eigen3};
+
+    # Core Libraries L1
+    path_searching -> {plan_env Eigen3 PCL};
+    map_interface -> {plan_env path_searching Eigen3 PCL};
+    traj_opt -> {plan_env traj_utils path_searching Eigen3 PCL};
+    decomp_ros_utils -> {decomp_ros_msgs Eigen3};
+
+    # Perception L2
+    scene_graph -> {map_interface quadrotor_msgs Eigen3 PCL libleidenalg igraph OpenMP};
+    mapping -> {quadrotor_msgs object_detection_msgs Eigen3 pcl_ros};
+
+    # Planning L3
+    ego_planner -> {plan_env path_searching traj_opt traj_utils camera_fov scene_graph quadrotor_msgs};
+    exploration -> {plan_env map_interface path_searching traj_utils lkh_tsp_solver camera_fov scene_graph quadrotor_msgs};
+    planning -> {mapping traj_opt decomp_ros_utils quadrotor_msgs};
+
+    # Mission L4
+    mission_executive -> {scene_graph exploration traj_utils quadrotor_msgs ego_planner mavros OpenCV};
+    box_odom_estimator -> {scene_graph quadrotor_msgs};
+  }

@@ -1,0 +1,8 @@
+# YOLOE pretrained model weight paths.
+# Load with: rosparam load <file> [namespace]
+# For Docker: paths use /workspace/.pretrained/
+# For host: override via ROS params at launch or rosparam set
+model_path: /workspace/.pretrained/yoloe-11m-seg-pf.pt
+prompt_model_path: /workspace/.pretrained/yoloe-11m-seg.pt
+prompt_file_path: /workspace/src/perception/yoloe/prompt/prompt.txt
+clip_model_path: /workspace/.pretrained/mobileclip_blt.pt
