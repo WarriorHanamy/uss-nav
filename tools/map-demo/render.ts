@@ -450,7 +450,7 @@ canvas{display:block}
 <tr><td>2 MapManager</td><td>MapInterface</td><td>Indirect (via GridMap)</td><td>No (unique owner)</td><td>MapInterface</td></tr>
 <tr><td>3 MapInterface</td><td>exploration_node</td><td>Indirect (via MapManager -> GridMap)</td><td><b>Yes — std::shared_ptr, zero-copy, same process</b></td><td>SceneGraph, FrontierFinder, EGOPlanner, ViewNode</td></tr>
 <tr><td>4 Polyhedron</td><td>SkeletonGenerator</td><td>No (queries MapInterface only)</td><td>No (unique owner)</td><td>SceneGraph, LLM</td></tr>
-<tr><td>5 UniformGrid</td><td>FrontierFinder / HGrid</td><td>No (queries MapInterface only)</td><td>No (unique owner)</td><td>FastExplorationFSM</td></tr>
+<tr><td>5 UniformGrid</td><td>FrontierFinder / HGrid</td><td>No (queries MapInterface only)</td><td>No (unique owner)</td><td>MissionFSM</td></tr>
 </tbody>
 </table>
 </div>

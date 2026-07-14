@@ -67,7 +67,7 @@ std::string jsonEscape(const std::string& value) {
 }
 }  // namespace
 
-void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
+void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
 {
   md_ = std::make_shared<MissionData>();
   fp_ = std::make_shared<FSMParam>();
@@ -269,52 +269,51 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   fd_->warmup_start_time_ = ros::Time(0);
 
   /* Ros sub, pub and timer */
-  exec_timer_      = nh.createTimer(ros::Duration(0.1), &FastExplorationFSM::FSMCallback, this);
-  frontier_timer_  = nh.createTimer(ros::Duration(fp_->frontier_update_dt_), &FastExplorationFSM::frontierCallback, this);
+  exec_timer_      = nh.createTimer(ros::Duration(0.1), &MissionFSM::FSMCallback, this);
+  frontier_timer_  = nh.createTimer(ros::Duration(fp_->frontier_update_dt_), &MissionFSM::frontierCallback, this);
   vla_swarm_map_timer_ = nh.createTimer(
       ros::Duration(vla_swarm_map_update_period_),
-      &FastExplorationFSM::vlaSwarmMapCallback, this);
+      &MissionFSM::vlaSwarmMapCallback, this);
 
-  // vis_timer_       = nh.createTimer(ros::Duration(0.2), &FastExplorationFSM::visualize, this); // [gwq] has thread problem! Don't turn on!
+  // vis_timer_       = nh.createTimer(ros::Duration(0.2), &MissionFSM::visualize, this); // [gwq] has thread problem! Don't turn on!
 
-  instruction_sub_ = nh.subscribe("/bridge/Instruct", 10, &FastExplorationFSM::instructionCallback, this, ros::TransportHints().tcpNoDelay());
-  odom_sub_        = nh.subscribe("odom_world",  1, &FastExplorationFSM::odometryCallback, this, ros::TransportHints().tcpNoDelay());
-  battery_sub_     = nh.subscribe("/mavros/battery", 10, &FastExplorationFSM::batteryCallBack, this, ros::TransportHints().tcpNoDelay());
-  ego_plan_res_sub_= nh.subscribe("/planning/ego_plan_result", 100, &FastExplorationFSM::egoPlanResCallback, this, ros::TransportHints().tcpNoDelay());
-  trigger_sub_     = nh.subscribe("/move_base_simple/goal", 2, &FastExplorationFSM::triggerCallback, this, ros::TransportHints().tcpNoDelay());
-  egoplanner_goal_sub_ = nh.subscribe("/goal_with_id_from_station", 2, &FastExplorationFSM::egoPlannerGoalCallback, this, ros::TransportHints().tcpNoDelay());
-  ego_exec_finish_sub_ = nh.subscribe("exec_finish_trigger", 10, &FastExplorationFSM::egoExecFinishCallback, this, ros::TransportHints().tcpNoDelay());
-  track_command_sub_ = nh.subscribe("/planning/track_command", 2, &FastExplorationFSM::trackCommandCallback, this,
+  instruction_sub_ = nh.subscribe("/bridge/Instruct", 10, &MissionFSM::instructionCallback, this, ros::TransportHints().tcpNoDelay());
+  odom_sub_        = nh.subscribe("odom_world",  1, &MissionFSM::odometryCallback, this, ros::TransportHints().tcpNoDelay());
+  battery_sub_     = nh.subscribe("/mavros/battery", 10, &MissionFSM::batteryCallBack, this, ros::TransportHints().tcpNoDelay());
+  ego_plan_res_sub_= nh.subscribe("/planning/ego_plan_result", 100, &MissionFSM::egoPlanResCallback, this, ros::TransportHints().tcpNoDelay());
+  trigger_sub_     = nh.subscribe("/move_base_simple/goal", 2, &MissionFSM::triggerCallback, this, ros::TransportHints().tcpNoDelay());
+  ego_exec_finish_sub_ = nh.subscribe("exec_finish_trigger", 10, &MissionFSM::egoExecFinishCallback, this, ros::TransportHints().tcpNoDelay());
+  track_command_sub_ = nh.subscribe("/planning/track_command", 2, &MissionFSM::trackCommandCallback, this,
                                     ros::TransportHints().tcpNoDelay());
-  target_sub_ = nh.subscribe("/tracking_target", 2, &FastExplorationFSM::targetCallbackReal, this,
+  target_sub_ = nh.subscribe("/tracking_target", 2, &MissionFSM::targetCallbackReal, this,
                              ros::TransportHints().tcpNoDelay());
   elastic_tracking_finish_sub_ = nh.subscribe(fp_->elastic_tracker_finish_topic_, 10,
-                                              &FastExplorationFSM::elasticTrackingFinishCallback, this,
+                                              &MissionFSM::elasticTrackingFinishCallback, this,
                                               ros::TransportHints().tcpNoDelay());
   elastic_tracker_replan_state_sub_ = nh.subscribe(fp_->elastic_tracker_replan_state_topic_, 10,
-                                                   &FastExplorationFSM::elasticTrackerReplanStateCallback, this,
+                                                   &MissionFSM::elasticTrackerReplanStateCallback, this,
                                                    ros::TransportHints().tcpNoDelay());
   emergency_stop_sub_ = nh.subscribe("/command/emergency_stop", 10,
-                                     &FastExplorationFSM::emergencyStopCallback, this,
+                                     &MissionFSM::emergencyStopCallback, this,
                                      ros::TransportHints().tcpNoDelay());
   vla_swarm_target_sub_ = nh.subscribe(
       vla_swarm_target_topic_, 10,
-      &FastExplorationFSM::vlaSwarmTargetCallback, this,
+      &MissionFSM::vlaSwarmTargetCallback, this,
       ros::TransportHints().tcpNoDelay());
   vla_swarm_camera_sub_ = nh.subscribe(
       vla_swarm_camera_topic_, 2,
-      &FastExplorationFSM::vlaSwarmCameraCallback, this,
+      &MissionFSM::vlaSwarmCameraCallback, this,
       ros::TransportHints().tcpNoDelay());
   vla_swarm_ego_state_trigger_sub_ = nh.subscribe(
       "/planning/ego_state_trigger", 10,
-      &FastExplorationFSM::vlaSwarmEgoStateTriggerCallback, this,
+      &MissionFSM::vlaSwarmEgoStateTriggerCallback, this,
       ros::TransportHints().tcpNoDelay());
   object_id_nav_replan_sub_ = nh.subscribe("/object_id_nav_replan", 10,
-      &FastExplorationFSM::objectIdNavReplanCallback, this,
+      &MissionFSM::objectIdNavReplanCallback, this,
       ros::TransportHints().tcpNoDelay());
 
   ego_goal_pub_         = nh.advertise<quadrotor_msgs::EgoGoalSet>("local_goal", 10);
-  goal_from_station_pub_ = nh.advertise<quadrotor_msgs::GoalSet>("/goal_with_id_from_station", 10);
+
   vis_marker_pub_       = nh.advertise<visualization_msgs::Marker>("planning/fsm_vis", 10);
   vis_path_pub_         = nh.advertise<visualization_msgs::MarkerArray>("planning/fsm_path", 10);
   perception_data_pub_  = nh.advertise<quadrotor_msgs::PerceptionMsg>("/perception_data_to_bridge", 10);
@@ -337,7 +336,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   switchPlannerCmdMuxToEgo("fsm_init");
 }
 
-void FastExplorationFSM::applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg)
+void MissionFSM::applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg)
 {
   std::vector<Eigen::Vector3d> polygon;
   if (msg->has_exploration_region && msg->exploration_region.size() >= 3) {
@@ -351,7 +350,7 @@ void FastExplorationFSM::applyExplorationRegionFromInstruction(const quadrotor_m
   expl_manager_->setExplorationRegion(polygon, false);
 }
 
-void FastExplorationFSM::publishExplorationResult(bool success, const std::string& reason,
+void MissionFSM::publishExplorationResult(bool success, const std::string& reason,
                                                   const std::string& message)
 {
   // Counting 专用对象图必须先冻结并发布，确保上层收到 exploration finished 时
@@ -377,7 +376,7 @@ void FastExplorationFSM::publishExplorationResult(bool success, const std::strin
   exploration_result_pub_.publish(msg);
 }
 
-bool FastExplorationFSM::isVlaSwarmState(MISSION_FSM_STATE state) const
+bool MissionFSM::isVlaSwarmState(MISSION_FSM_STATE state) const
 {
   return state == MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL ||
          state == MISSION_FSM_STATE::VLA_SWARM_WAIT_LLM ||
@@ -388,7 +387,7 @@ bool FastExplorationFSM::isVlaSwarmState(MISSION_FSM_STATE state) const
          state == MISSION_FSM_STATE::VLA_SWARM_FINISH;
 }
 
-void FastExplorationFSM::resetVlaSwarmContext()
+void MissionFSM::resetVlaSwarmContext()
 {
   if (vla_swarm_prompt_pending_ && scene_graph_ != nullptr) {
     scene_graph_->clearPromptData(vla_swarm_prompt_id_);
@@ -440,7 +439,7 @@ void FastExplorationFSM::resetVlaSwarmContext()
   // room_descriptions_ 不在此清理 —— 同一 session 内跨轮复用
 }
 
-void FastExplorationFSM::publishVlaSwarmResult(bool success, const std::string& reason,
+void MissionFSM::publishVlaSwarmResult(bool success, const std::string& reason,
                                                const std::string& detail)
 {
   if (!vla_swarm_active_ || vla_swarm_result_published_) {
@@ -463,7 +462,7 @@ void FastExplorationFSM::publishVlaSwarmResult(bool success, const std::string& 
   vla_swarm_result_published_ = true;
 }
 
-void FastExplorationFSM::startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg)
+void MissionFSM::startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg)
 {
   resetVlaSwarmContext();
   vla_swarm_room_descriptions_.clear();
@@ -482,7 +481,7 @@ void FastExplorationFSM::startVlaSwarmTask(const quadrotor_msgs::InstructionCons
   transitState(MISSION_FSM_STATE::VLA_SWARM_PLAN_LOCAL, "startVlaSwarmTask");
 }
 
-bool FastExplorationFSM::startVlaSwarmTargetRequest(
+bool MissionFSM::startVlaSwarmTargetRequest(
     const nlohmann::json& payload)
 {
   if (!payload.contains("bounding_box") ||
@@ -557,7 +556,7 @@ bool FastExplorationFSM::startVlaSwarmTargetRequest(
   return true;
 }
 
-bool FastExplorationFSM::prepareVlaSwarmPath(
+bool MissionFSM::prepareVlaSwarmPath(
     const Eigen::Vector3d& requested_goal, bool reaches_task_target,
     int door_id)
 {
@@ -669,7 +668,7 @@ bool FastExplorationFSM::prepareVlaSwarmPath(
   return true;
 }
 
-bool FastExplorationFSM::publishNextVlaSwarmWaypoint()
+bool MissionFSM::publishNextVlaSwarmWaypoint()
 {
   if (vla_swarm_path_.size() < 2) {
     return false;
@@ -689,7 +688,7 @@ bool FastExplorationFSM::publishNextVlaSwarmWaypoint()
   return true;
 }
 
-void FastExplorationFSM::retryVlaSwarmWaypoint(
+void MissionFSM::retryVlaSwarmWaypoint(
     const std::string& failure_reason)
 {
   if (vla_swarm_waypoint_retry_count_ >=
@@ -715,7 +714,7 @@ void FastExplorationFSM::retryVlaSwarmWaypoint(
       << ", reason=" << failure_reason);
 }
 
-void FastExplorationFSM::cancelVlaSwarmTask(const std::string& reason, const std::string& detail)
+void MissionFSM::cancelVlaSwarmTask(const std::string& reason, const std::string& detail)
 {
   if (!vla_swarm_active_) {
     return;
@@ -728,7 +727,7 @@ void FastExplorationFSM::cancelVlaSwarmTask(const std::string& reason, const std
   handleVlaSwarmFinish();
 }
 
-void FastExplorationFSM::handleVlaSwarmPlanLocal()
+void MissionFSM::handleVlaSwarmPlanLocal()
 {
   if (!vla_swarm_active_) {
     transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm inactive");
@@ -836,7 +835,7 @@ void FastExplorationFSM::handleVlaSwarmPlanLocal()
           : "VLA_Swarm PLACE prompt sent");
 }
 
-void FastExplorationFSM::handleVlaSwarmWaitLLM()
+void MissionFSM::handleVlaSwarmWaitLLM()
 {
   if (!vla_swarm_active_ || !vla_swarm_prompt_pending_) {
     vla_swarm_finish_reason_ = "prompt_state_invalid";
@@ -1113,7 +1112,7 @@ void FastExplorationFSM::handleVlaSwarmWaitLLM()
   transitState(MISSION_FSM_STATE::VLA_SWARM_RECOVERY, "VLA_Swarm unexpected prompt type");
 }
 
-void FastExplorationFSM::handleVlaSwarmWaitTarget()
+void MissionFSM::handleVlaSwarmWaitTarget()
 {
   if (!vla_swarm_active_ || !vla_swarm_target_pending_) {
     vla_swarm_finish_reason_ = "target_state_invalid";
@@ -1157,7 +1156,7 @@ void FastExplorationFSM::handleVlaSwarmWaitTarget()
   }
 }
 
-void FastExplorationFSM::handleVlaSwarmApproach()
+void MissionFSM::handleVlaSwarmApproach()
 {
   if (!vla_swarm_active_ || vla_swarm_path_.size() < 2) {
     vla_swarm_finish_reason_ = "approach_state_invalid";
@@ -1271,7 +1270,7 @@ void FastExplorationFSM::handleVlaSwarmApproach()
       "VLA_Swarm exploration waypoint reached, start visual scan");
 }
 
-void FastExplorationFSM::handleVlaSwarmYaw()
+void MissionFSM::handleVlaSwarmYaw()
 {
   if (!vla_swarm_active_ || vla_swarm_scan_yaw_offsets_.empty()) {
     vla_swarm_finish_reason_ = "yaw_state_invalid";
@@ -1468,7 +1467,7 @@ void FastExplorationFSM::handleVlaSwarmYaw()
       "VLA_Swarm visual observation prompt sent");
 }
 
-void FastExplorationFSM::handleVlaSwarmRecovery()
+void MissionFSM::handleVlaSwarmRecovery()
 {
   if (vla_swarm_finish_reason_.empty()) {
     vla_swarm_finish_reason_ = "internal_error";
@@ -1478,7 +1477,7 @@ void FastExplorationFSM::handleVlaSwarmRecovery()
   transitState(MISSION_FSM_STATE::VLA_SWARM_FINISH, "VLA_Swarm recovery");
 }
 
-void FastExplorationFSM::handleVlaSwarmFinish()
+void MissionFSM::handleVlaSwarmFinish()
 {
   if (!vla_swarm_active_) {
     transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm finish inactive");
@@ -1490,7 +1489,7 @@ void FastExplorationFSM::handleVlaSwarmFinish()
   transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "VLA_Swarm finish");
 }
 
-void FastExplorationFSM::emergencyStopCallback(const std_msgs::Empty::ConstPtr&)
+void MissionFSM::emergencyStopCallback(const std_msgs::Empty::ConstPtr&)
 {
   if (!vla_swarm_active_) {
     return;
@@ -1498,11 +1497,11 @@ void FastExplorationFSM::emergencyStopCallback(const std_msgs::Empty::ConstPtr&)
   cancelVlaSwarmTask("task_cancelled", "received /command/emergency_stop");
 }
 
-void FastExplorationFSM::triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
+void MissionFSM::triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
   fd_->trigger_ = true;
 }
 
-void FastExplorationFSM::handleGoalInstruction(const std::vector<geometry_msgs::Point>& goals,
+void MissionFSM::handleGoalInstruction(const std::vector<geometry_msgs::Point>& goals,
                                                const std::vector<float>& yaws,
                                                bool look_forward,
                                                const std::string& source) {
@@ -1541,7 +1540,7 @@ void FastExplorationFSM::handleGoalInstruction(const std::vector<geometry_msgs::
       quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
 }
 
-void FastExplorationFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,
+void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,
                                               const std::string& source,
                                               const ros::Time& stamp,
                                               const std::string& frame_id) {
@@ -1604,16 +1603,12 @@ void FastExplorationFSM::handleTrackingTarget(const std::vector<geometry_msgs::P
   }
 }
 
-void FastExplorationFSM::egoPlannerGoalCallback(const quadrotor_msgs::GoalSet::ConstPtr &msg) {
-  handleGoalInstruction(msg->goal, msg->yaw, msg->look_forward, "goalFromStation");
-}
-
-void FastExplorationFSM::egoExecFinishCallback(const std_msgs::Bool::ConstPtr &msg) {
+void MissionFSM::egoExecFinishCallback(const std_msgs::Bool::ConstPtr &msg) {
   fd_->ego_exec_finished_ = msg->data;
   INFO_MSG_GREEN("--------- [FSM] EGO-Planner Execution Finished -----------");
 }
 
-void FastExplorationFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstPtr& msg) {
+void MissionFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstPtr& msg) {
   if (msg->robot_id != md_->drone_id_) return;
 
   std::unique_lock<std::mutex> lck(mtx_);
@@ -1673,7 +1668,7 @@ void FastExplorationFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand
   transitState(MISSION_FSM_STATE::PLAN_TRACK, "trackCommand:enable");
 }
 
-void FastExplorationFSM::elasticTrackingFinishCallback(const std_msgs::Bool::ConstPtr& msg) {
+void MissionFSM::elasticTrackingFinishCallback(const std_msgs::Bool::ConstPtr& msg) {
   if (!msg->data || !useElasticTrackerBackend()) {
     return;
   }
@@ -1696,7 +1691,7 @@ void FastExplorationFSM::elasticTrackingFinishCallback(const std_msgs::Bool::Con
   }
 }
 
-void FastExplorationFSM::elasticTrackerReplanStateCallback(const quadrotor_msgs::ReplanStateConstPtr& msg) {
+void MissionFSM::elasticTrackerReplanStateCallback(const quadrotor_msgs::ReplanStateConstPtr& msg) {
   if (!useElasticTrackerBackend()) {
     return;
   }
@@ -1721,12 +1716,12 @@ void FastExplorationFSM::elasticTrackerReplanStateCallback(const quadrotor_msgs:
   }
 }
 
-void FastExplorationFSM::targetCallbackReal(const quadrotor_msgs::DetectOut::ConstPtr& msg)
+void MissionFSM::targetCallbackReal(const quadrotor_msgs::DetectOut::ConstPtr& msg)
 {
   handleTrackingTarget(msg->global_poses, "trackTargetUpdate", msg->header.stamp, msg->header.frame_id);
 }
 
-void FastExplorationFSM::vlaSwarmTargetCallback(
+void MissionFSM::vlaSwarmTargetCallback(
     const quadrotor_msgs::VLASwarmTarget::ConstPtr& msg)
 {
   std::lock_guard<std::mutex> lock(mtx_);
@@ -1759,7 +1754,7 @@ void FastExplorationFSM::vlaSwarmTargetCallback(
   }
 }
 
-void FastExplorationFSM::vlaSwarmCameraCallback(
+void MissionFSM::vlaSwarmCameraCallback(
     const sensor_msgs::CompressedImageConstPtr& msg)
 {
   std::lock_guard<std::mutex> lock(vla_swarm_camera_mutex_);
@@ -1767,13 +1762,13 @@ void FastExplorationFSM::vlaSwarmCameraCallback(
   vla_swarm_latest_camera_receive_time_ = ros::Time::now();
 }
 
-void FastExplorationFSM::vlaSwarmEgoStateTriggerCallback(
+void MissionFSM::vlaSwarmEgoStateTriggerCallback(
     const quadrotor_msgs::EgoStateTrigger::ConstPtr& msg)
 {
   vla_swarm_ego_stable_ = msg->data;
 }
 
-bool FastExplorationFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* reason) const {
+bool MissionFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* reason) const {
   init_seed = fd_->odom_pos_;
   init_seed.x() += fp_->scene_graph_init_forward_dist_ * std::cos(fd_->odom_yaw_);
   init_seed.y() += fp_->scene_graph_init_forward_dist_ * std::sin(fd_->odom_yaw_);
@@ -1796,7 +1791,7 @@ bool FastExplorationFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::
   return true;
 }
 
-void FastExplorationFSM::handelThingkingProcess() {
+void MissionFSM::handelThingkingProcess() {
   double t_cur = ros::Time::now().toSec() - think_start_time_;
   if (stash_state_ == MISSION_FSM_STATE::THINKING && md_->mission_state_ != MISSION_FSM_STATE::WAIT_TRIGGER && !fd_->df_demo_mode_) {
     transitState(LLM_PLAN_EXPLORE, "** fsm RECOVER !!!!!!!");
@@ -1849,7 +1844,7 @@ void FastExplorationFSM::handelThingkingProcess() {
   }
 }
 
-void FastExplorationFSM::planLLMExplore() {
+void MissionFSM::planLLMExplore() {
   ROS_INFO("\033[1;31m\n\n ============== [Plan LLM Explore] ==============\033[0m");
 
   if (waitForFreshMapAfterReset())
@@ -1989,7 +1984,7 @@ void FastExplorationFSM::planLLMExplore() {
   }
 }
 
-void FastExplorationFSM::planRegularExplore() {
+void MissionFSM::planRegularExplore() {
   ROS_INFO("\033[1;31mPlan Regular Explore!\033[0m");  //红
 
   if (waitForFreshMapAfterReset())
@@ -2068,7 +2063,7 @@ void FastExplorationFSM::planRegularExplore() {
   expl_manager_->visualize(fd_->odom_pos_);
 }
 
-void FastExplorationFSM::approachRegularExplore() {
+void MissionFSM::approachRegularExplore() {
 
   double dis_2_aim       = (fd_->aim_pos_       - fd_->odom_pos_).norm();
   double dis_2_aim_2d    = (fd_->aim_pos_       - fd_->odom_pos_).head(2).norm();
@@ -2160,7 +2155,7 @@ void FastExplorationFSM::approachRegularExplore() {
   }
 }
 
-void FastExplorationFSM::resetTrackingFinishCandidate() {
+void MissionFSM::resetTrackingFinishCandidate() {
   fd_->track_finish_candidate_active_ = false;
   fd_->track_finish_candidate_start_time_ = ros::Time(0);
   fd_->track_finish_last_pos_ = fd_->odom_pos_;
@@ -2169,7 +2164,7 @@ void FastExplorationFSM::resetTrackingFinishCandidate() {
   fd_->track_finish_yaw_acc_ = 0.0;
 }
 
-bool FastExplorationFSM::updateTrackingFinishCandidate(double dis_2_aim, double angle_2_aim) {
+bool MissionFSM::updateTrackingFinishCandidate(double dis_2_aim, double angle_2_aim) {
   const bool near_aim = dis_2_aim < fp_->arrive_dis_thr_;
   const bool yaw_ok = angle_2_aim < expl_manager_->ep_->track_yaw_thr_;
   if (!near_aim || !yaw_ok || fd_->track_finish_sent_) {
@@ -2215,7 +2210,7 @@ bool FastExplorationFSM::updateTrackingFinishCandidate(double dis_2_aim, double 
   return true;
 }
 
-void FastExplorationFSM::publishTrackingFinish() {
+void MissionFSM::publishTrackingFinish() {
   if (fd_->track_finish_sent_) {
     return;
   }
@@ -2227,12 +2222,12 @@ void FastExplorationFSM::publishTrackingFinish() {
   ROS_INFO("[TRACK] publish /tracking_finish=true");
 }
 
-bool FastExplorationFSM::useElasticTrackerBackend() const {
+bool MissionFSM::useElasticTrackerBackend() const {
   return fp_->tracking_backend_ == "elastic_tracker" ||
          fp_->tracking_backend_ == "tracker";
 }
 
-void FastExplorationFSM::publishPlannerCmdMuxMode(const std::string& mode,
+void MissionFSM::publishPlannerCmdMuxMode(const std::string& mode,
                                                   const std::string& source) {
   std_msgs::String msg;
   msg.data = mode;
@@ -2241,15 +2236,15 @@ void FastExplorationFSM::publishPlannerCmdMuxMode(const std::string& mode,
                            << " from " << source);
 }
 
-void FastExplorationFSM::switchPlannerCmdMuxToEgo(const std::string& source) {
+void MissionFSM::switchPlannerCmdMuxToEgo(const std::string& source) {
   publishPlannerCmdMuxMode(fp_->planner_cmd_mux_ego_mode_, source);
 }
 
-void FastExplorationFSM::switchPlannerCmdMuxToElastic(const std::string& source) {
+void MissionFSM::switchPlannerCmdMuxToElastic(const std::string& source) {
   publishPlannerCmdMuxMode(fp_->planner_cmd_mux_elastic_mode_, source);
 }
 
-void FastExplorationFSM::publishElasticTrackerTrigger(const ros::Time& stamp,
+void MissionFSM::publishElasticTrackerTrigger(const ros::Time& stamp,
                                                       const std::string& frame_id) {
   geometry_msgs::PoseStamped trigger;
   trigger.header.stamp = stamp.isZero() ? ros::Time::now() : stamp;
@@ -2263,7 +2258,7 @@ void FastExplorationFSM::publishElasticTrackerTrigger(const ros::Time& stamp,
                            << fp_->elastic_tracker_trigger_topic_);
 }
 
-void FastExplorationFSM::stopElasticTracker(const std::string& source) {
+void MissionFSM::stopElasticTracker(const std::string& source) {
   if (!useElasticTrackerBackend()) {
     return;
   }
@@ -2273,7 +2268,7 @@ void FastExplorationFSM::stopElasticTracker(const std::string& source) {
                   << fp_->elastic_tracker_stop_topic_ << " from " << source);
 }
 
-void FastExplorationFSM::publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
+void MissionFSM::publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
                                                    const ros::Time& stamp,
                                                    const std::string& frame_id) {
   nav_msgs::Odometry target_odom;
@@ -2293,7 +2288,7 @@ void FastExplorationFSM::publishTrackingTargetOdom(const Eigen::Vector3d& target
                            << fp_->tracking_target_odom_topic_);
 }
 
-void FastExplorationFSM::planTrack() {
+void MissionFSM::planTrack() {
   ROS_INFO("\033[1;31mPlan TRACK!\033[0m");
 
   if (!fd_->track_trigger_) {
@@ -2372,7 +2367,7 @@ void FastExplorationFSM::planTrack() {
   transitState(MISSION_FSM_STATE::APPROACH_TRACK, "planTrack");
 }
 
-void FastExplorationFSM::approachTrack() {
+void MissionFSM::approachTrack() {
   ROS_INFO_STREAM_THROTTLE(0.5, "\033[1;33mApproach TRACK...\033[0m");
 
   if (!fd_->track_trigger_) {
@@ -2449,7 +2444,7 @@ void FastExplorationFSM::approachTrack() {
   }
 }
 
-void FastExplorationFSM::startPanoramaRotation() {
+void MissionFSM::startPanoramaRotation() {
   // 全景旋转固定沿yaw正方向执行，odometry增量负责记录真实累计转角。
   panorama_last_odom_yaw_ = fd_->odom_yaw_;
   panorama_start_yaw_ = fd_->odom_yaw_;
@@ -2464,7 +2459,7 @@ void FastExplorationFSM::startPanoramaRotation() {
            panorama_unwrapped_yaw_ * 180.0 / M_PI);
 }
 
-bool FastExplorationFSM::waitForFreshMapAfterReset() {
+bool MissionFSM::waitForFreshMapAfterReset() {
   if (!wait_fresh_map_after_reset_)
     return false;
 
@@ -2480,7 +2475,7 @@ bool FastExplorationFSM::waitForFreshMapAfterReset() {
   return false;
 }
 
-void FastExplorationFSM::handlePanoramaYaw() {
+void MissionFSM::handlePanoramaYaw() {
   constexpr double TOTAL_ANGLE = 2.0 * M_PI;
   constexpr double FINISH_TOLERANCE = 2.0 * M_PI / 180.0;
   constexpr double TARGET_SETTLE_TOLERANCE = 1.0 * M_PI / 180.0;
@@ -2521,7 +2516,7 @@ void FastExplorationFSM::handlePanoramaYaw() {
   panorama_command_active_ = true;
 }
 
-void FastExplorationFSM::handleYawChange() {
+void MissionFSM::handleYawChange() {
   // 依次转向原始朝向+45°、-45°，最终回到原始朝向。
   if (!enable_yaw_scan_) {
     need_rotate_yaw_ = false;
@@ -2575,7 +2570,7 @@ void FastExplorationFSM::handleYawChange() {
   transitState(stash_state_, "Yaw Handle Done");
 }
 
-void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e)
+void MissionFSM::FSMCallback(const ros::TimerEvent& e)
 {
   // ROS_INFO_STREAM_THROTTLE(10.0, "** [EXP-FSM]: state: " << md_->state_str_[md_->mission_state_]);
   CALL_EVERY_N_TIMES(displayMissionState, 5);
@@ -2767,7 +2762,7 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e)
   }
 }
 
-void FastExplorationFSM::goTargetObject() {
+void MissionFSM::goTargetObject() {
   if (fd_->go_object_process_phase == 0) {
     scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
     if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_, fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
@@ -3007,7 +3002,7 @@ void FastExplorationFSM::goTargetObject() {
 }
 
 
-void FastExplorationFSM::goTargetWithWaypoint() {
+void MissionFSM::goTargetWithWaypoint() {
   if (fd_->go_waypoint_process_phase == 0) {
     scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
 
@@ -3117,7 +3112,7 @@ void FastExplorationFSM::goTargetWithWaypoint() {
   }
 }
 
-void FastExplorationFSM::execDFDemo() {
+void MissionFSM::execDFDemo() {
   if(fd_->df_demo_phase_ == 0){
 
     if (fd_->df_demo_target_id_ >= 0){
@@ -3165,7 +3160,7 @@ void FastExplorationFSM::execDFDemo() {
   }
 }
 
-void FastExplorationFSM::findTerminateTarget(){
+void MissionFSM::findTerminateTarget(){
   fd_->go_object_process_phase    = 0;
   fd_->find_terminate_target_mode_ = true;
 
@@ -3180,7 +3175,7 @@ void FastExplorationFSM::findTerminateTarget(){
   return ;
 }
 
-double FastExplorationFSM::adjustTerminateHeightFindingObject(ObjectNode::Ptr target_obj, Eigen::Vector3d init_pos, bool final_point){
+double MissionFSM::adjustTerminateHeightFindingObject(ObjectNode::Ptr target_obj, Eigen::Vector3d init_pos, bool final_point){
   // 根据物体的高度，飞机观测物体的xy坐标以及理想观测角度来确定终止高度，并通过安全性检查对高度进行上下微调
   double obj_height             = target_obj->pos.z();
   double observe_angle          = 0.0f / 180.0f * M_PI; // radians
@@ -3219,7 +3214,7 @@ double FastExplorationFSM::adjustTerminateHeightFindingObject(ObjectNode::Ptr ta
   }
 }
 
-double FastExplorationFSM::adjustTerminateHeightNormal(const Eigen::Vector3d& next_aim_raw){
+double MissionFSM::adjustTerminateHeightNormal(const Eigen::Vector3d& next_aim_raw){
   double ideal_terminate_height = fd_->odom_pos_.z();
   double adjusted_height        = ideal_terminate_height;
   double height_step            = 0.2;
@@ -3236,7 +3231,7 @@ double FastExplorationFSM::adjustTerminateHeightNormal(const Eigen::Vector3d& ne
  * @param[in]     aim_yaw      Target yaw when look_forward is false [rad]
  * @return True if a valid aim point was published
  */
-bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
+bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                                               const bool look_forward, const double aim_yaw) {
   auto getLocalAim = [&](vector<Eigen::Vector3d>& path_res, int& path_inx, Eigen::Vector3d& local_goal) -> bool
   {
@@ -3376,7 +3371,7 @@ bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
   }
 }
 
-void FastExplorationFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw,
+void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw,
                                       const bool look_forward, const uint8_t yaw_mode,
                                       const uint8_t yaw_path_mode)
 {
@@ -3399,7 +3394,7 @@ void FastExplorationFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const do
 }
 
 // return aim_pose aim_vel, aim_yaw and path_res
-int FastExplorationFSM::callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw, vector<Eigen::Vector3d>& path_res)
+int MissionFSM::callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw, vector<Eigen::Vector3d>& path_res)
 {
   // mode 1在TSP前同步消费累计雷达更新盒，完成新frontier生成。
   expl_manager_->updateFrontiersForPlanning(fd_->odom_pos_, fd_->odom_yaw_);
@@ -3414,13 +3409,13 @@ int FastExplorationFSM::callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen:
   return res;
 }
 
-int FastExplorationFSM::callExplorationLLMPlanner(Eigen::Vector3d &aim_pose, Eigen::Vector3d &aim_vel, double &aim_yaw, vector<Eigen::Vector3d> &path_res) {
+int MissionFSM::callExplorationLLMPlanner(Eigen::Vector3d &aim_pose, Eigen::Vector3d &aim_vel, double &aim_yaw, vector<Eigen::Vector3d> &path_res) {
   int res = expl_manager_->planLLMExploration(expl_area_id_, fd_->odom_pos_, fd_->odom_vel_, fd_->odom_yaw_,
                                               scene_graph_->getCurPoly(), aim_pose, aim_yaw, aim_vel, path_res);
   return res;
 }
 
-int FastExplorationFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel,
+int MissionFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel,
                                          double& aim_yaw, vector<Eigen::Vector3d>& path_res)
 {
   (void)aim_vel;
@@ -3431,7 +3426,7 @@ int FastExplorationFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vecto
   return res;
 }
 
-void FastExplorationFSM::vlaSwarmMapCallback(const ros::TimerEvent&)
+void MissionFSM::vlaSwarmMapCallback(const ros::TimerEvent&)
 {
   if (!vla_swarm_enabled_ || !fd_->have_odom_ || vla_swarm_map_ == nullptr) {
     return;
@@ -3443,7 +3438,7 @@ void FastExplorationFSM::vlaSwarmMapCallback(const ros::TimerEvent&)
   }
 }
 
-void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
+void MissionFSM::frontierCallback(const ros::TimerEvent& e) {
   static int delay = 0;
   if (!scene_graph_->skeleton_gen_->ready()) {
     ROS_WARN_THROTTLE(2.0, "[ExploreFSM] | skeleton has not been generated, skip once!");
@@ -3531,7 +3526,7 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
     ROS_WARN_STREAM("[FtrCallback] : Update time: " << perception_time << " + Vis spend time : " << vis_time << "ms");
 }
 
-void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg) {
+void MissionFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg) {
   fd_->odom_pos_(0) = msg->pose.pose.position.x;
   fd_->odom_pos_(1) = msg->pose.pose.position.y;
   fd_->odom_pos_(2) = msg->pose.pose.position.z;
@@ -3565,7 +3560,7 @@ void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   fd_->have_odom_ = true;
 }
 
-void FastExplorationFSM::egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstPtr &msg) {
+void MissionFSM::egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstPtr &msg) {
   fd_->ego_local_goal_.x() = msg->planner_goal.x;
   fd_->ego_local_goal_.y() = msg->planner_goal.y;
   fd_->ego_local_goal_.z() = msg->planner_goal.z;
@@ -3587,7 +3582,7 @@ void FastExplorationFSM::egoPlanResCallback(const quadrotor_msgs::EgoPlannerResu
   }
 }
 
-void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& msg)
+void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& msg)
 {
   if (msg->robot_id != md_->drone_id_) return;
   // check recv time frequncy
@@ -3906,7 +3901,7 @@ void FastExplorationFSM::instructionCallback(const quadrotor_msgs::InstructionCo
   }
 }
 
-void FastExplorationFSM::triggerObjectIdNavReplan(const std::string& reason) {
+void MissionFSM::triggerObjectIdNavReplan(const std::string& reason) {
   if (!fd_->has_stored_object_id_nav_instruction_) {
     ROS_WARN("[ObjIdNavReplan] No stored instruction, cannot replan");
     transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "replan_no_stored_instruction");
@@ -3932,7 +3927,7 @@ void FastExplorationFSM::triggerObjectIdNavReplan(const std::string& reason) {
   transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "object_id_nav_replan:" + reason);
 }
 
-void FastExplorationFSM::objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg) {
+void MissionFSM::objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg) {
   if (!fp_->object_id_nav_replan_enable_) {
     return;  // 功能未启用, 忽略
   }
@@ -3942,7 +3937,7 @@ void FastExplorationFSM::objectIdNavReplanCallback(const std_msgs::Bool::ConstPt
   }
 }
 
-void FastExplorationFSM::batteryCallBack(const sensor_msgs::BatteryState msg) {
+void MissionFSM::batteryCallBack(const sensor_msgs::BatteryState msg) {
   static int trigger_time = 0;
   ROS_INFO_STREAM_THROTTLE(2.0, "[FSM] voltage: " << msg.voltage);
   if (msg.voltage < fp_->battery_thr_)
@@ -3955,12 +3950,12 @@ void FastExplorationFSM::batteryCallBack(const sensor_msgs::BatteryState msg) {
   return;
 }
 
-void FastExplorationFSM::stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called) {
+void MissionFSM::stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called) {
   stash_state_ = md_->mission_state_;
   transitState(new_state, who_called);
 }
 
-void FastExplorationFSM::transitState(MISSION_FSM_STATE new_state, string pos_call)
+void MissionFSM::transitState(MISSION_FSM_STATE new_state, string pos_call)
 {
   MISSION_FSM_STATE pre_s = md_->mission_state_;
   md_->mission_state_ = new_state;
@@ -3969,7 +3964,7 @@ void FastExplorationFSM::transitState(MISSION_FSM_STATE new_state, string pos_ca
                       << " to " << md_->state_str_[md_->mission_state_] << "\033[0m"); // 青色
 }
 
-void FastExplorationFSM::displayPath() {
+void MissionFSM::displayPath() {
   visualization_msgs::MarkerArray marker_array;
   visualization_msgs::Marker marker;
   marker.header.frame_id = "world";
@@ -3994,7 +3989,7 @@ void FastExplorationFSM::displayPath() {
   vis_path_pub_.publish(marker_array);
 }
 
-void FastExplorationFSM::displayLocalAim() {
+void MissionFSM::displayLocalAim() {
   // 橙色SPHERE标记当前local_aim导航点, 尺寸大于路径marker(0.5m > 0.3m)
   visualization_msgs::Marker marker;
   marker.header.frame_id = "world";
@@ -4015,7 +4010,7 @@ void FastExplorationFSM::displayLocalAim() {
   vis_marker_pub_.publish(marker);
 }
 
-void FastExplorationFSM::displayMissionState()
+void MissionFSM::displayMissionState()
 {
   std::string text;
   text = "[S] ";
@@ -4065,18 +4060,18 @@ void FastExplorationFSM::displayMissionState()
   vis_marker_pub_.publish(marker);
 }
 
-void FastExplorationFSM::visualize(const ros::TimerEvent& e)
+void MissionFSM::visualize(const ros::TimerEvent& e)
 {
   displayMissionState();
   expl_manager_->visHgrid(fd_->odom_pos_);
 }
 
-void FastExplorationFSM::stopMotion()
+void MissionFSM::stopMotion()
 {
   pubLocalGoal(fd_->odom_pos_, fd_->odom_yaw_, true);
 }
 
-void FastExplorationFSM::hardResetExploreArea(bool clear_occupancy, bool clear_posegraph) {
+void MissionFSM::hardResetExploreArea(bool clear_occupancy, bool clear_posegraph) {
   (void)clear_posegraph;
   if (clear_occupancy)
     map_->resetOccupancyToUnknown();
@@ -4117,18 +4112,18 @@ void FastExplorationFSM::hardResetExploreArea(bool clear_occupancy, bool clear_p
   INFO_MSG_GREEN("=================================");
 }
 
-inline void FastExplorationFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in, Eigen::Vector3d &p_out) {
+inline void MissionFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in, Eigen::Vector3d &p_out) {
   p_out.x() = p_in.x; p_out.y() = p_in.y; p_out.z() = p_in.z;
 }
-inline void FastExplorationFSM::vec3d2GeoPt(const Eigen::Vector3d &p_in, geometry_msgs::Point &p_out) {
+inline void MissionFSM::vec3d2GeoPt(const Eigen::Vector3d &p_in, geometry_msgs::Point &p_out) {
   p_out.x = p_in.x(); p_out.y = p_in.y(); p_out.z = p_in.z();
 }
-inline geometry_msgs::Point FastExplorationFSM::vec3d2GeoPt(const Eigen::Vector3d &p_in) {
+inline geometry_msgs::Point MissionFSM::vec3d2GeoPt(const Eigen::Vector3d &p_in) {
   geometry_msgs::Point p_out;
   p_out.x = p_in.x(); p_out.y = p_in.y(); p_out.z = p_in.z();
   return p_out;
 }
-inline Eigen::Vector3d FastExplorationFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in) {
+inline Eigen::Vector3d MissionFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in) {
   Eigen::Vector3d p_out;
   p_out.x() = p_in.x; p_out.y() = p_in.y; p_out.z() = p_in.z;
   return p_out;

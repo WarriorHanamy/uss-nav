@@ -145,7 +145,7 @@ ObjectMap + Free Space → SkeletonGenerator → Polyhedron Graph
 
 ### Layer 3: Planning & Control
 ```
-Instruction (/bridge/Instruct) → FastExplorationFSM → FrontierManager
+Instruction (/bridge/Instruct) → MissionFSM → FrontierManager
                                       ↓
                               EGOReplanFSM → EGOPlannerManager
                                       ↓
@@ -158,7 +158,7 @@ Instruction (/bridge/Instruct) → FastExplorationFSM → FrontierManager
 
 | Component                | Role                                                                  | Location                                    |
 | ------------------------ | --------------------------------------------------------------------- | ------------------------------------------- |
-| `FastExplorationFSM`     | Top-level mission orchestrator, 25+ FSM states                        | `exploration/exploration_manager/`           |
+| `MissionFSM`     | Top-level mission orchestrator, 25+ FSM states                        | `exploration/exploration_manager/`           |
 | `EGOReplanFSM`           | Low-level trajectory execution, 12 FSM states                         | `ego_plannerv3/plan_manage/`                 |
 | `EGOPlannerManager`      | Gradient-based trajectory optimization (L-BFGS + MINCO)               | `ego_plannerv3/plan_manage/`                 |
 | `SceneGraph`             | Scene construction, LLM prompt generation, path-to-object queries     | `planner/scene_graph/`                       |
@@ -169,7 +169,7 @@ Instruction (/bridge/Instruct) → FastExplorationFSM → FrontierManager
 | `SwarmRosBridge`         | Multi-drone ROS topic/service/image forwarding via ZMQ                | `network/NetBridgeForSwarm/`                 |
 
 ### Two-Level Hierarchical FSM
-1. **Outer FSM** (`FastExplorationFSM`): High-level mission states — initiate, explore, track, LLM-guided explore, VLA swarm, terminate
+1. **Outer FSM** (`MissionFSM`): High-level mission states — initiate, explore, track, LLM-guided explore, VLA swarm, terminate
 2. **Inner FSM** (`EGOReplanFSM`): Low-level trajectory execution — wait target, generate new traj, replan, exec, emergency stop
 
 ---
@@ -205,7 +205,7 @@ Camera → EncodeMask → ObjectFactory → ObjectNode → SceneGraph
                                                        ↓
                                              LLM Prompt → Answer
                                                        ↓
-                                          FastExplorationFSM → Goal → Trajectory → Controller
+                                          MissionFSM → Goal → Trajectory → Controller
 ```
 
 ---

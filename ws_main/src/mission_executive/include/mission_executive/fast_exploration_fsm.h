@@ -1,5 +1,5 @@
-#ifndef _FAST_EXPLORATION_FSM_H_
-#define _FAST_EXPLORATION_FSM_H_
+#ifndef _MISSION_FSM_H_
+#define _MISSION_FSM_H_
 
 #include <Eigen/Eigen>
 
@@ -19,7 +19,6 @@
 #include <quadrotor_msgs/PerceptionMsg.h>
 #include <quadrotor_msgs/EgoGoalSet.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
-#include <quadrotor_msgs/GoalSet.h>
 #include <quadrotor_msgs/DetectOut.h>
 #include <quadrotor_msgs/TrackCommand.h>
 #include <quadrotor_msgs/VLASwarmBBox.h>
@@ -61,7 +60,7 @@ class EkfEstimator;
 class PerceptionDataMsgFactory;
 
 
-class FastExplorationFSM {
+class MissionFSM {
 private:
   /* planning utils */
   MapInterface::Ptr                                 map_;
@@ -82,14 +81,14 @@ private:
   /* ROS utils */
   ros::NodeHandle node_;
   ros::Timer exec_timer_, frontier_timer_, vla_swarm_map_timer_;
-  ros::Subscriber trigger_sub_, odom_sub_, goal_from_station_sub_, egoplanner_goal_sub_, ego_exec_finish_sub_;
+  ros::Subscriber trigger_sub_, odom_sub_, ego_exec_finish_sub_;
   ros::Subscriber track_command_sub_, target_sub_, elastic_tracking_finish_sub_;
   ros::Subscriber elastic_tracker_replan_state_sub_;
   ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
   ros::Subscriber vla_swarm_target_sub_, vla_swarm_camera_sub_;
   ros::Subscriber vla_swarm_ego_state_trigger_sub_;
   ros::Subscriber object_id_nav_replan_sub_;    // 订阅 /object_id_nav_replan
-  ros::Publisher ego_goal_pub_, goal_from_station_pub_, perception_data_pub_, instruction_resp_pub_;
+  ros::Publisher ego_goal_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
   ros::Publisher fsm_state_pub_;
   ros::Publisher tracking_finish_pub_;
@@ -462,12 +461,6 @@ private:
    */
   void triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
   /**
-   * Callback for EGO planner goal set message.
-   *
-   * @param[in] msg  Goal set message
-   */
-  void egoPlannerGoalCallback(const quadrotor_msgs::GoalSet::ConstPtr& msg);
-  /**
    * Callback for EGO planner execution finish signal.
    *
    * @param[in] msg  Bool indicating execution complete
@@ -747,12 +740,12 @@ public:
   /**
    * Default constructor.
    */
-  FastExplorationFSM(/* args */) {
+  MissionFSM(/* args */) {
   }
   /**
    * Destructor — stops the object factory module.
    */
-  ~FastExplorationFSM() {
+  ~MissionFSM() {
       scene_graph_->object_factory_->stopThisModule();
   }
 

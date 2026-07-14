@@ -1,6 +1,6 @@
 #include "ros/ros.h"
 #include <sensor_msgs/Joy.h>
-#include <quadrotor_msgs/GoalSet.h>
+#include <quadrotor_msgs/EgoGoalSet.h>
 #include <nav_msgs/Odometry.h>
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -22,19 +22,19 @@ void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg)
 }
 
 /**
- * Publish a position command as a GoalSet message.
+ * Publish a position command as an EgoGoalSet message.
  *
  * @param[in] pos  Target position [m]
  * @param[in] yaw  Target yaw [rad]
  */
 void pubCmd(const Eigen::Vector3d& pos, const double yaw) 
 {
-  quadrotor_msgs::GoalSet goal_msg;
-  geometry_msgs::Point pt;
-  pt.x = pos.x(); pt.y = pos.y(); pt.z = pos.z();
-  goal_msg.to_drone_ids.push_back(drone_id_);
-  goal_msg.goal.push_back(pt);
-  goal_msg.yaw.push_back(yaw);
+  quadrotor_msgs::EgoGoalSet goal_msg;
+  goal_msg.drone_id = drone_id_;
+  goal_msg.goal[0] = pos.x();
+  goal_msg.goal[1] = pos.y();
+  goal_msg.goal[2] = pos.z();
+  goal_msg.yaw = yaw;
   goal_msg.look_forward = false;
   goal_msg.goal_to_follower = false;
   goal_pub_.publish(goal_msg);
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
   odom_sub = nh.subscribe("odometry", 1, odometryCallback);
   move_command_sub = nh.subscribe("/bridge/move_command", 1, moveCommandCallback);
 
-  goal_pub_ = nh.advertise<quadrotor_msgs::GoalSet>("/bridge/goal_user2brig", 1);
+  goal_pub_ = nh.advertise<quadrotor_msgs::EgoGoalSet>("/bridge/goal_user2brig", 1);
 
   ros::spin();
 

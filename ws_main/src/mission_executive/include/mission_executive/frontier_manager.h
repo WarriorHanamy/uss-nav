@@ -11,7 +11,6 @@
 #include <exploration/graph_search.h>
 #include <exploration/frontier_finder.h>
 #include <mission_executive/expl_data.h>
-#include <quadrotor_msgs/GoalSet.h>
 #include <nav_msgs/Odometry.h>
 #include <exploration/hgrid.h>
 #include <scene_graph/scene_graph.h>

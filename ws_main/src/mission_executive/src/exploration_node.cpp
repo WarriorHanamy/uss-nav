@@ -27,7 +27,7 @@ int main(int argc, char **argv)
   MapInterface::Ptr map_;
   map_ = std::make_shared<MapInterface>(nh, rebo_replan.getMapPtr());
 
-  FastExplorationFSM expl_fsm;
+  MissionFSM expl_fsm;
   expl_fsm.init(nh, map_);
 
   ros::spin();

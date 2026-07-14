@@ -16,7 +16,7 @@
                             ▼ 同进程 MapInterface::Ptr / ROS topic
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 1: MISSION EXECUTIVE                                      │
-│  FastExplorationFSM (25+ 状态) + SceneGraph                      │
+│  MissionFSM (25+ 状态) + SceneGraph                      │
 │  「该做什么」 — 去哪里、探索/追踪、LLM 语义决策                    │
 │  输入: /bridge/Instruct, GridMap, SceneGraph                      │
 │  输出: local_goal(EgoGoalSet), /triger, /planner_mux/mode          │
@@ -60,7 +60,7 @@
 ```
 方式 A: 同进程 shared_ptr (EGO 路径)
   GridMap (plan_env) → MapInterface::Ptr → 零拷贝共享给:
-    ├─ FastExplorationFSM  (frontier 检测, 探索决策)
+    ├─ MissionFSM  (frontier 检测, 探索决策)
     ├─ EGOReplanFSM        (A* 搜索, ESDF 碰撞梯度)
     ├─ SceneGraph          (骨架生成: 自由空间 → 多面体)
     └─ FrontierFinder      (HGrid → UniformGrid, 前沿点视点评估)
@@ -132,7 +132,7 @@ graph TB
     MAP["GridMap (plan_env)<br/>体素占据 + ESDF 距离场"]
 
     subgraph "Mission Executive 层面的消费"
-        FSM["FastExplorationFSM"]
+        FSM["MissionFSM"]
         FRONTIER["FrontierFinder<br/>HGrid → UniformGrid"]
         SG["SceneGraph<br/>SkeletonGenerator"]
         FSM -->|"前沿检测"| FRONTIER
@@ -160,7 +160,7 @@ graph TB
 |--------|---------|------|
 | `AStar` | `getOcc()` | 路径搜索碰撞检查 |
 | `EGOReplanFSM` | `getDistancePessi()` ESDF 距离 | 梯度优化碰撞代价 |
-| `FastExplorationFSM` | `getInflateOcc()` | 飞行路径安全校验 |
+| `MissionFSM` | `getInflateOcc()` | 飞行路径安全校验 |
 | `FrontierFinder` | `getOccupancy()` + `frontierDensity()` | 前沿点检测、覆盖评估 |
 | `SceneGraph / SkeletonGenerator` | `raycast()` + 自由空间 | 自由空间多面体分解 |
 
@@ -176,7 +176,7 @@ graph TB
    Camera → YOLOE → EncodeMask → SceneGraph → ObjectMap
                                ↓
 2. MISSION EXECUTIVE
-   FastExplorationFSM: frontier 检测 → 选目标
+   MissionFSM: frontier 检测 → 选目标
    SceneGraph: 可选 LLM 场景分析 → 区域推荐
                                ↓
    EgoGoalSet { goal[3], yaw, source_task_id: EXPLORATION }
@@ -190,7 +190,7 @@ graph TB
 4. CONTROLLER
    PX4 位置/速度/加速度跟踪 → 电机控制 → UAV 移动
                                ↓
-   反馈闭环: exec_finish_trigger(true) → FastExplorationFSM
+   反馈闭环: exec_finish_trigger(true) → MissionFSM
    → 选择下一个目标 → 循环
 ```
 

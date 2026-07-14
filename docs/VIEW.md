@@ -54,7 +54,7 @@ graph TB
         ASTR["dyn_a_star::AStar"]
 
         EGO["EGOReplanFSM<br/>路径搜索 + 轨迹优化"]
-        FSM["FastExplorationFSM<br/>探索决策"]
+        FSM["MissionFSM<br/>探索决策"]
         SG["SceneGraph<br/>└ SkeletonGenerator"]
         FF["FrontierFinder<br/>└ HGrid → UniformGrid"]
         VN["ViewNode::map_<br/>(static 成员)"]
@@ -86,7 +86,7 @@ graph TB
 | `/skeleton/cluster_vis` | MarkerArray | 区域聚类可视化 |
 | `/object_all_vis` | MarkerArray | 全部物体的 OBB+label 可视化 |
 
-**核心产出** → `FastExplorationFSM::pubLocalGoal()` → `EgoGoalSet` → `local_goal` topic → EGOReplanFSM
+**核心产出** → `MissionFSM::pubLocalGoal()` → `EgoGoalSet` → `local_goal` topic → EGOReplanFSM
 
 ```yaml
 # EgoGoalSet 字段
@@ -111,7 +111,7 @@ uint8      yaw_mode         # NORMAL(0)/LOW_SPEED(1)/PANORAMA(2)
 ### 与 EGO 的 API 对齐
 
 ```
-FastExplorationFSM                    EGOReplanFSM
+MissionFSM                    EGOReplanFSM
        │                                   │
        │ pubLocalGoal(EgoGoalSet)          │
        │──────────────────────────────────►│
@@ -133,7 +133,7 @@ FastExplorationFSM                    EGOReplanFSM
 
 ## EGO Planner — 实时轨迹优化
 
-EGO-Planner 是底层轨迹规划器，将 FastExplorationFSM 下发的导航目标转换为可执行的平滑轨迹。
+EGO-Planner 是底层轨迹规划器，将 MissionFSM 下发的导航目标转换为可执行的平滑轨迹。
 
 ### 12 状态 FSM
 
@@ -162,7 +162,7 @@ INIT → WAIT_TARGET → GEN_NEW_TRAJ → REPLAN_TRAJ → EXEC_TRAJ → EMERGENC
 
 ### 与 SceneGraph 的集成
 
-- **同一进程**：FastExplorationFSM + SceneGraph + EGOReplanFSM 在 `exploration_node` 中（详见上方 Mermaid 图）
+- **同一进程**：MissionFSM + SceneGraph + EGOReplanFSM 在 `exploration_node` 中（详见上方 Mermaid 图）
 - **同一地图**：共享 `MapInterface::Ptr` → 相同的 GridMap + ESDF
 - **目标契约**：仅消费 `EgoGoalSet.goal[3]` + `yaw`，不感知 SceneGraph 语义
 

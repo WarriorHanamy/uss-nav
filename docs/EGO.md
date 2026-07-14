@@ -1,19 +1,19 @@
 # EGO-Planner — 实时轨迹优化
 
-> EGO-Planner（Edge-based Gradient Optimization Planner）是 USS-NAV 的**底层轨迹规划器**，负责将 FastExplorationFSM 下发的导航目标转换为可执行的平滑轨迹。
+> EGO-Planner（Edge-based Gradient Optimization Planner）是 USS-NAV 的**底层轨迹规划器**，负责将 MissionFSM 下发的导航目标转换为可执行的平滑轨迹。
 
 ---
 
 ## 概述
 
-EGO-Planner 位于规划栈的最底层，接收来自 `FastExplorationFSM` 的 `EgoGoalSet` 目标消息，通过 A\* 路径搜索 + MINCO 轨迹优化，生成满足动力学约束的无碰撞轨迹，最终以 `PositionCommand` 形式下发至 PX4 飞控。
+EGO-Planner 位于规划栈的最底层，接收来自 `MissionFSM` 的 `EgoGoalSet` 目标消息，通过 A\* 路径搜索 + MINCO 轨迹优化，生成满足动力学约束的无碰撞轨迹，最终以 `PositionCommand` 形式下发至 PX4 飞控。
 
 系统位于 `planner/ego_plannerv3/plan_manage/` 目录，与 `map_interface/`（共享地图接口）、`plan_env/`（占用网格+ESDF）、`path_searching/`（A\*）、`traj_opt/`（MINCO+L-BFGS）协同工作。
 
 ### 在系统中的位置
 
 ```
-FastExplorationFSM (UAV 任务调度)
+MissionFSM (UAV 任务调度)
        │
        │ EgoGoalSet (/local_goal)
        ▼
@@ -76,8 +76,8 @@ flowchart TB
     subgraph Feedback
         TS --> FINISH["exec_finish_trigger"]
         FSM --> RESULT["ego_plan_result"]
-        FINISH --> FastExplorationFSM
-        RESULT --> FastExplorationFSM
+        FINISH --> MissionFSM
+        RESULT --> MissionFSM
     end
 
     subgraph SharedMap
@@ -92,7 +92,7 @@ EGOReplanFSM 包含 12 个执行状态：
 | 状态 | 说明 |
 |------|------|
 | `INIT` | 初始化，等待触发 |
-| `WAIT_TARGET` | 等待 FastExplorationFSM 下发目标 |
+| `WAIT_TARGET` | 等待 MissionFSM 下发目标 |
 | `HANDLE_YAW` | 偏航处理模式 |
 | `GEN_NEW_TRAJ` | 生成全新轨迹（首次规划） |
 | `REPLAN_TRAJ` | 重规划（障碍物避让） |
@@ -171,7 +171,7 @@ else
 
 | 话题 | 类型 | 方向 | 频率 | 说明 |
 |------|------|------|------|------|
-| 订阅：`local_goal` | `quadrotor_msgs/EgoGoalSet` | 输入 | 按需 | FastExplorationFSM 下发的目标 |
+| 订阅：`local_goal` | `quadrotor_msgs/EgoGoalSet` | 输入 | 按需 | MissionFSM 下发的目标 |
 | 订阅：`odom_world` | `nav_msgs/Odometry` | 输入 | 100Hz | 无人机里程计 |
 | 订阅：`mandatory_stop` | `std_msgs/Empty` | 输入 | - | 紧急停止指令 |
 | 订阅：`if_handle_yaw` | `std_msgs/Bool` | 输入 | 按需 | 偏航处理开关 |
@@ -203,7 +203,7 @@ int8    command_id        # 命令 ID
 
 ```
 exploration_node (同一进程)
-├── FastExplorationFSM
+├── MissionFSM
 │   ├── SceneGraph
 │   │   ├── SkeletonGenerator
 │   │   └── ObjectFactory
@@ -221,7 +221,7 @@ exploration_node (同一进程)
 
 | SceneGraph 层 | Ego Planner 层 | 中介 |
 |---------------|----------------|------|
-| 拓扑骨架推理 | 不感知 | FastExplorationFSM 翻译为位置目标 |
+| 拓扑骨架推理 | 不感知 | MissionFSM 翻译为位置目标 |
 | 语义区域决策 | 不感知 | LLM → 目标区域 → EgoGoalSet |
 | 物体 ID 导航 | 仅消费 3D 位置 | getPathToObjectWithId → pubLocalGoal |
 | 占用网格 + ESDF | 碰撞检查 + ESDF 梯度 | MapInterface 指针共享 |
@@ -233,7 +233,7 @@ exploration_node (同一进程)
 消息定义：`quadrotor_msgs/EgoGoalSet`，发布在 `/local_goal` topic。
 
 ```
-FastExplorationFSM → EGOReplanFSM (local_goal):
+MissionFSM → EGOReplanFSM (local_goal):
   uint8      drone_id           # 目标无人机 ID（蜂群路由过滤）
   uint8      source_task_id     # 任务来源: EXPLORATION(2) / COUNTING(8) / VLA_SWARM(9)
   float32[3] goal               # 3D 目标世界坐标 [m]
@@ -262,7 +262,7 @@ FastExplorationFSM → EGOReplanFSM (local_goal):
 #### EgoPlannerResult（EGO → 上游）
 
 ```
-EGOReplanFSM → FastExplorationFSM (/planning/ego_plan_result):
+EGOReplanFSM → MissionFSM (/planning/ego_plan_result):
   geometry_msgs/Vector3 planner_goal  # 实际规划的目标点
   int16                  plan_times   # 规划尝试次数
   bool                   plan_status  # 规划是否成功
@@ -321,5 +321,5 @@ ws_main/src/planner/ego_plannerv3/
 │
 └── map_interface/            # 共享地图接口
     └── include/map_interface/
-        └── map_interface.hpp  # 隔离层，FastExplorationFSM + EGO 共用
+        └── map_interface.hpp  # 隔离层，MissionFSM + EGO 共用
 ```

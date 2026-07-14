@@ -112,7 +112,7 @@ flowchart TB
     end
 
     subgraph Output["下游 — 规划 & 控制"]
-        DECISION --> FSM["FastExplorationFSM"]
+        DECISION --> FSM["MissionFSM"]
         FSM --> |"pubLocalGoal"| GOAL["EgoGoalSet"]
         GOAL --> |"local_goal topic"| EGO["EGOReplanFSM"]
         EGO --> |"A* + MINCO"| TJ["PositionCommand"]
@@ -319,12 +319,12 @@ SceneGraph 的 LLM 接口处理 21 种 prompt 类型，以下列出直接产生�
 
 ### 架构集成模式
 
-`SceneGraph` 和 `EGOReplanFSM` **不直接耦合**——它们通过 `FastExplorationFSM` 中介连接。
+`SceneGraph` 和 `EGOReplanFSM` **不直接耦合**——它们通过 `MissionFSM` 中介连接。
 
 ```mermaid
 sequenceDiagram
     participant GCS as "/bridge/Instruct"
-    participant FSM as FastExplorationFSM
+    participant FSM as MissionFSM
     participant SG as SceneGraph
     participant LLM as LLM API
     participant EGO as EGOReplanFSM
@@ -364,9 +364,9 @@ sequenceDiagram
 | 集成点 | 方式 | 数据 | 方向 |
 |--------|------|------|------|
 | **共享地图** | `MapInterface::Ptr`（同一进程指针） | 占用网格 + ESDF | SceneGraph ↔ EgoPlanner |
-| **目标下发** | ROS Topic `local_goal` | `EgoGoalSet` | FastExplorationFSM → EGOReplanFSM |
-| **规划结果反馈** | ROS Topic `/planning/ego_plan_result` | `EgoPlannerResult` | EGOReplanFSM → FastExplorationFSM |
-| **执行完成通知** | ROS Topic `exec_finish_trigger` | `std_msgs/Bool` | EGOReplanFSM → FastExplorationFSM |
+| **目标下发** | ROS Topic `local_goal` | `EgoGoalSet` | MissionFSM → EGOReplanFSM |
+| **规划结果反馈** | ROS Topic `/planning/ego_plan_result` | `EgoPlannerResult` | EGOReplanFSM → MissionFSM |
+| **执行完成通知** | ROS Topic `exec_finish_trigger` | `std_msgs/Bool` | EGOReplanFSM → MissionFSM |
 
 ### 共享地图接口
 
@@ -389,7 +389,7 @@ class MapInterface {
 ### 目标下发协议
 
 ```
-FastExplorationFSM                    EGOReplanFSM
+MissionFSM                    EGOReplanFSM
        │                                   │
        │ pubLocalGoal(goal, yaw,           │
        │   look_forward, yaw_mode)          │
@@ -417,7 +417,7 @@ FastExplorationFSM                    EGOReplanFSM
 
 ### FSM 状态对齐
 
-| SceneGraph/FSM 决策 | FastExplorationFSM 状态 | EGOReplanFSM 状态 | EgoGoalSet source_task_id |
+| SceneGraph/FSM 决策 | MissionFSM 状态 | EGOReplanFSM 状态 | EgoGoalSet source_task_id |
 |---------------------|----------------------|-------------------|--------------------------|
 | LLM 选择探索区域 | `LLM_PLAN_EXPLORE` | `GEN_NEW_TRAJ` | `SOURCE_TASK_EXPLORATION` (2) |
 | 前往目标物体 | `GO_TARGET_OBJECT` | `GEN_NEW_TRAJ` | `SOURCE_TASK_EXPLORATION` (2) |
@@ -642,7 +642,7 @@ LiDAR/Camera → PointCloud → ikd-Tree → Polyhedron → PolyhedronCluster(Ar
 
 ```
 exploration_node (进程)
-├── FastExplorationFSM
+├── MissionFSM
 │   ├── SceneGraph
 │   │   ├── SkeletonGenerator ← MapInterface
 │   │   ├── ObjectFactory ← MapInterface + 传感器话题
@@ -714,7 +714,7 @@ ws_main/src/planner/scene_graph/
 3. 在 `scene_graph.cpp` 中实现 prompt 生成逻辑
 4. 在 `scene_graph.h` 中添加 `handle*Result()` 声明
 5. 在 `scene_graph.cpp` 中实现结果解析逻辑
-6. 在 `FastExplorationFSM` 中添加对应的 FSM 状态处理
+6. 在 `MissionFSM` 中添加对应的 FSM 状态处理
 
 ---
 
