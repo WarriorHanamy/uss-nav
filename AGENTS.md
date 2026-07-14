@@ -42,7 +42,7 @@ docker build -t ego-planner-sim -f docker/Dockerfile.devel .
 
 | 阶段 | Compose 服务 | 镜像 | 说明 |
 |------|-------------|------|------|
-| devel | `devel` | `ego-planner-sim` | 模拟运行镜像，含 ROS 仿真 + RViz |
+| devel | `devel` | `ego-planner-sim` | 模拟运行镜像，含 ROS 仿真（**不含 rviz**） |
 | build | `build` | `ego-planner-sim` | 热重载编译（源码变更后重新 catkin build） |
 | test | `test` | `ego-planner-sim` | 无头测试，含 MQTT 遥测桥接 |
 
@@ -132,26 +132,68 @@ docker compose exec devel bash -c "source /opt/ros/noetic/setup.bash && source /
 
 - `docker/Dockerfile.test` 是一个**非规范辅助文件**（历史遗留），不再用于规范测试验证。规范测试验证始终通过 `docker compose run --rm test` 运行 devel 镜像。
 - `docker-image-naming` skill 中提到的 `ego-planner-test` 镜像名已不再使用，属于历史记录。
-- `tools/infra.ts` 是非 Compose 的替代入口，仅用于 `bun run tools/infra.ts docker:run` 快速启动。
 
-## Web 可视化工具
+## 数据契约
 
-| 工具 | 路径 | 技术栈 | 说明 |
-|------|------|--------|------|
-| `md2html` | `tools/md2html/` | Bun + marked + highlight.js + Katex + Mermaid | Markdown → HTML 文档渲染 |
-| `map-demo` | `tools/map-demo/` | Bun + Three.js + OrbitControls | 3D 地图可视化：占据网格、未知空间、ESDF 热力图、多面体骨架、UniformGrid 前沿单元，含交互式图层切换 |
-| Docker 容器 | `tools/infra.ts` | Bun + Docker | `ego-planner-sim` 容器管理脚本（构建、运行、日志、清理），在容器中启动 RViz |
-| WebSocket 服务 | `ws_main/src/script/tcp.py` | Python + websockets | 远程无人机控制服务，监听 `192.168.100.124:8080`，支持启停、起飞、降落、探索等命令 |
+### `.pretrained/` — 预训练模型权重
 
-## Web 可视化使用方式
+预训练模型权重（YOLOE、MobileCLIP）遵循与 `.artifacts/` 相同的 dot-prefix 约定，但语义分离：
+
+| 目录 | 用途 | 生命周期 |
+|------|------|----------|
+| `.pretrained/` | 预下载输入模型权重 | 手动触发下载，跨容器复用 |
+| `.artifacts/` | 运行时产出（PCD/CSV） | 每次测试自动生成 |
+
+#### 路径映射
+
+| 主机路径 | 容器路径 | 类型 | 说明 |
+|---------|---------|------|------|
+| `./.pretrained/` | `/workspace/.pretrained/` | bind | YOLOE / MobileCLIP 权重文件 |
+
+#### 下载
 
 ```bash
-# 渲染文档为 HTML，用浏览器打开
-cd tools/md2html && bun render.ts ../docs/EGO.md && xdg-open ../docs/EGO.html
+./docker/download-models.sh          # → ./.pretrained/
+```
 
-# 启动 3D 地图可视化
-cd tools/map-demo && bun render.ts && xdg-open ../_site/map-demo/index.html
+#### ROS 参数配置
 
-# 启动 Docker 仿真 RViz
-bun run tools/infra.ts docker:run
+`bringup_test/params/yoloe_pretrained.yaml` 定义了容器内权重路径的 ROS 参数映射，通过 `rosparam load` 或 launch 文件 `<rosparam>` 引入。
+
+```yaml
+model_path: /workspace/.pretrained/yoloe-11m-seg-pf.pt
+prompt_model_path: /workspace/.pretrained/yoloe-11m-seg.pt
+clip_model_path: /workspace/.pretrained/mobileclip_blt.pt
+prompt_file_path: /workspace/src/perception/yoloe/prompt/prompt.txt
+```
+
+#### 启动模式
+
+`entrypoint-release.sh` 通过 `REAL_YOLOE` 环境变量切换：
+
+```bash
+# 默认：fake YOLOE（无需权重，用于仿真测试）
+docker compose run --rm release
+
+# 实时推理模式（需要 GPU + 相机话题）
+REAL_YOLOE=1 docker compose run --rm release
+```
+
+当 `REAL_YOLOE=1` 且 `/workspace/.pretrained/yoloe-11m-seg-pf.pt` 存在时，自动启动 `predict_realtime_cam_sim.py`；否则回退到 `fake_realtime_cam_sim.py`。
+
+## 可视化
+
+devel 镜像基于 `ros:noetic-ros-base`，**不含 rviz**。仿真启动后所有节点正常运行（地图生成、四旋翼动力学、EGO 规划器），但无内置可视化输出。
+
+可视化由 `~/rviz_ws` 提供。该工作区基于 `osrf/ros:noetic-desktop-full`（含完整 ROS 桌面 + rviz），
+包含自定义 RViz 插件（PolyhedronArray / EllipsoidArray / ProbMap 等）和 EGO Planner 场景的配置。
+
+启动流程：
+
+```bash
+# 终端 1：启动 uss-nav 仿真
+cd ~/uss-nav && docker compose run --rm devel
+
+# 终端 2：启动 RViz（共享 ROS master，network_mode: host）
+cd ~/rviz_ws && ./start_uss_nav.sh
 ```

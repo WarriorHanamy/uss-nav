@@ -21,7 +21,6 @@ devel-host (x86_64 Arch Linux)
     │
     ├── TypeScript CLI (bun src/cli/)
     ├── Bun Server (:3000) — data collection + WebSocket
-    ├── Vite Dev Server (:5173) — frontend
     ├── Mosquitto MQTT (:1883) — data bus
     │
     └── devel-docker
@@ -42,7 +41,7 @@ devel-host (x86_64 Arch Linux)
 | Network              | Direct internet + LAN               | Docker bridge (`host.docker.internal` → host) |
 | Filesystem           | Full project tree                   | `/catkin_ws/` (image) + bind-mounts           |
 | Display              | Wayland (Hyprland)                  | Xvfb :99 (headless)                           |
-| Visualization        | Three.js web frontend (:5173)       | None (telemetry only via MQTT)                |
+| Visualization        | None (RViz via ~/rviz_ws Docker)    | None (telemetry only via MQTT)                |
 
 ## 2. Workspace Path
 
@@ -91,8 +90,6 @@ test-container → ROS topics
     ├── /drone_0_visual_slam/odom      → MQTT test/<id>/odom
     ├── /planning/ego_plan_result      → MQTT test/<id>/plan_result
     ├── /planning/data_display         → MQTT test/<id>/data_disp
-    │
-    └── MQTT → devel-host → Bun Server → WebSocket → Frontend 3D visualization
 ```
 
 ## 4. Container Runtime Configuration
@@ -175,6 +172,6 @@ _site/test-results/<scenario>/<config>.json
 
 3. **Data flows outward** — Containers never read from MQTT or the frontend. Data flows one direction: ROS → MQTT → Server → WebSocket → Frontend.
 
-4. **No RViz** — All visualization is through the web frontend (React + Three.js), served from devel-host via Vite dev server or built static files.
+4. **RViz in separate container** — Visualization via `~/rviz_ws` Docker container, connected to the shared ROS master on localhost:11311.
 
 5. **Test configs are code** — Test scenarios and parameter sweeps are defined in `src/cli/scenarios.ts`.
