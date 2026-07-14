@@ -38,12 +38,24 @@ using Eigen::Vector4d;
 
 namespace ego_planner {
 namespace {
+/**
+ * Normalize an angle to the range [-pi, pi].
+ *
+ * @param[in] angle  Input angle [rad]
+ * @return Normalized angle [rad]
+ */
 double normalizeAngle(double angle) {
   while (angle > M_PI) angle -= 2.0 * M_PI;
   while (angle < -M_PI) angle += 2.0 * M_PI;
   return angle;
 }
 
+/**
+ * Escape special characters (backslash and quote) in a JSON string value.
+ *
+ * @param[in] value  Raw string
+ * @return Escaped string safe for JSON insertion
+ */
 std::string jsonEscape(const std::string& value) {
   std::string out;
   out.reserve(value.size());
@@ -3217,16 +3229,13 @@ double FastExplorationFSM::adjustTerminateHeightNormal(const Eigen::Vector3d& ne
 }
 
 /**
-* @brief 从全局路径中智能地选取并发布一个最优的局部目标点，以供下层运动规划器执行。
-* * 该函数的核心优化策略有两点：
-* 1. 捷径优化：通过回溯检查路径，寻找当前位置可以直接无障碍到达的最远路径点，以跳过不必要的中间点。
-* 2. 前瞻距离保证：如果未找到捷径，则顺序选取下一个路径点，并确保该点与机器人当前位置有足够的安全距离，以保证运动规划的平滑性。
-* * @param[in]  path_res     机器人需要跟随的全局路径点向量。
-* @param[in]  look_forward 一个布尔标志，指示机器人是否应朝向最终目标点的姿态。在长路径导航中，此参数会被内部逻辑覆盖为true，强制朝向局部目标点。
-* @param[in]  aim_yaw      当look_forward为false时，指定的最终目标偏航角。
-* @return     bool         如果成功找到并发布了一个有效的局部目标点，则返回true；如果路径已执行完毕，则返回false。
-*/
-// get local aim from the path, path_inx++, if exceed path size, do nothing
+ * Select and publish the next local aim point from the global path with shortcut optimization.
+ *
+ * @param[in]     path_res     Global path points [m]
+ * @param[in]     look_forward Whether to face the final goal yaw
+ * @param[in]     aim_yaw      Target yaw when look_forward is false [rad]
+ * @return True if a valid aim point was published
+ */
 bool FastExplorationFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                                               const bool look_forward, const double aim_yaw) {
   auto getLocalAim = [&](vector<Eigen::Vector3d>& path_res, int& path_inx, Eigen::Vector3d& local_goal) -> bool

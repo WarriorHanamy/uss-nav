@@ -6,6 +6,11 @@
 
 class PlannerCmdMux {
 public:
+  /**
+   * Construct the planner command multiplexer.
+   *
+   * @param[in] nh  ROS node handle
+   */
   PlannerCmdMux()
       : nh_("~") {
     nh_.param("default_mode", active_mode_, std::string("ego"));
@@ -28,31 +33,57 @@ public:
   }
 
 private:
+  /**
+   * Check whether a mode string is recognized.
+   *
+   * @param[in] mode  Mode string
+   * @return True if mode is known
+   */
   bool isKnownMode(const std::string& mode) const {
     return mode == ego_mode_ || mode == elastic_mode_;
   }
 
+  /**
+   * Check whether a timestamp is within the input timeout window.
+   *
+   * @param[in] stamp  Message timestamp [s]
+   * @return True if the message is still fresh
+   */
   bool isFresh(const ros::Time& stamp) const {
-    // input_timeout<=0 表示不检查缓存指令的新鲜度，直接允许转发最后一帧。
     if (input_timeout_ <= 0.0) return true;
     if (stamp.isZero()) return false;
     return (ros::Time::now() - stamp).toSec() <= input_timeout_;
   }
 
+  /**
+   * Check whether the elastic tracker command is usable (fresh and from current session).
+   *
+   * @return True if elastic command can be forwarded
+   */
   bool isElasticCmdUsable() const {
     if (!has_elastic_cmd_ || !isFresh(elastic_cmd_stamp_)) return false;
-    // 切换到 elastic 后只能转发切换之后收到的新指令，避免上一轮 tracking 缓存被立即送给控制器。
     if (!elastic_mode_start_time_.isZero() && elastic_cmd_stamp_ < elastic_mode_start_time_) return false;
     if (blocked_elastic_traj_id_ >= 0 && last_elastic_cmd_.trajectory_id == blocked_elastic_traj_id_) return false;
     return true;
   }
 
+  /**
+   * Publish a command only if the given mode matches the active mode.
+   *
+   * @param[in] cmd         Position command to publish
+   * @param[in] source_mode Source mode identifier
+   */
   void publishIfActive(const quadrotor_msgs::PositionCommand& cmd,
                        const std::string& source_mode) {
     if (active_mode_ != source_mode) return;
     cmd_pub_.publish(cmd);
   }
 
+  /**
+   * Publish the last cached command for the currently active mode.
+   *
+   * @param[in] source  Caller identifier for logging
+   */
   void publishLastForMode(const std::string& source) {
     if (active_mode_ == ego_mode_) {
       if (has_ego_cmd_ && isFresh(ego_cmd_stamp_)) {
@@ -72,6 +103,11 @@ private:
     }
   }
 
+  /**
+   * Callback for mode switch messages.
+   *
+   * @param[in] msg  Mode string message
+   */
   void modeCallback(const std_msgs::String::ConstPtr& msg) {
     const std::string next_mode = msg->data;
     if (!isKnownMode(next_mode)) {
@@ -92,6 +128,11 @@ private:
     publishLastForMode("mode_callback");
   }
 
+  /**
+   * Callback for EGO planner position commands.
+   *
+   * @param[in] msg  Position command message
+   */
   void egoCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg) {
     last_ego_cmd_ = *msg;
     ego_cmd_stamp_ = ros::Time::now();
@@ -99,6 +140,11 @@ private:
     publishIfActive(last_ego_cmd_, ego_mode_);
   }
 
+  /**
+   * Callback for elastic tracker position commands.
+   *
+   * @param[in] msg  Position command message
+   */
   void elasticCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg) {
     if (active_mode_ == elastic_mode_ && blocked_elastic_traj_id_ >= 0) {
       if (msg->trajectory_id == blocked_elastic_traj_id_) {
@@ -135,6 +181,13 @@ private:
   quadrotor_msgs::PositionCommand last_elastic_cmd_;
 };
 
+/**
+ * ROS node entry point for planner command multiplexer.
+ *
+ * @param[in] argc  Argument count
+ * @param[in] argv  Argument vector
+ * @return Exit code
+ */
 int main(int argc, char** argv) {
   ros::init(argc, argv, "planner_cmd_mux");
   PlannerCmdMux mux;

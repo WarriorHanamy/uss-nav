@@ -11,6 +11,9 @@ using Eigen::Vector3d;
 
 namespace ego_planner {
 
+/**
+ * FSM states for the exploration mission executive.
+ */
 enum MISSION_FSM_STATE
 {
   INIT,
@@ -18,7 +21,7 @@ enum MISSION_FSM_STATE
   WARM_UP,
   PLAN_EXPLORE,
   LLM_PLAN_EXPLORE,
-  APPROACH_EXPLORE, //send goal frequently to followers
+  APPROACH_EXPLORE,
   PLAN_TRACK,
   APPROACH_TRACK,
   THINKING,
@@ -39,16 +42,18 @@ enum MISSION_FSM_STATE
   VLA_SWARM_FINISH
 };
 
+/**
+ * Mission data containing swarm identity and current mission state.
+ */
 struct MissionData 
 {
-  /*swarm info*/
   int                     drone_id_;
   int                     swarm_id_;
   vector<int>             swarm_mate_;
   bool                    is_leader_;
   bool                    is_follower_;
   bool                    is_initialized_;
-  /*mission info*/
+
   MISSION_FSM_STATE       mission_state_;
   int                     instruction_;
   unordered_map<MISSION_FSM_STATE, std::string> state_str_;

@@ -71,9 +71,22 @@ class Visualization {
 
  public:
 
+  /**
+   * Construct the visualization utility with a ROS node handle.
+   *
+   * @param[in] nh  ROS node handle
+   */
   Visualization(ros::NodeHandle &nh) : nh_(nh) {}
 
-  // CENTER: std::vector<Vector3d>
+  /**
+   * Visualize a single sphere marker at the given center.
+   *
+   * @param[in] c      Center position (array-like, [x y z]) [m]
+   * @param[in] r      Sphere radius [m]
+   * @param[in] topic  ROS topic name
+   * @param[in] color  Marker color enum
+   * @param[in] a      Alpha transparency
+   */
   template <class CENTER, class TOPIC>
   void visualize_a_ball(const CENTER& c, 
                         const double& r, 
@@ -96,8 +109,13 @@ class Visualization {
     publisher_map_[topic].publish(marker);
   }
 
-
-  // point_cloud: PointCloud<pcl::PointXYZ>
+  /**
+   * Visualize a real PCL point cloud.
+   *
+   * @param[in] pc       PCL point cloud
+   * @param[in] topic    ROS topic name
+   * @param[in] frame_id Reference frame
+   */
   void visualize_real_pointcloud(const pcl::PointCloud<pcl::PointXYZ> pc, std::string topic, std::string frame_id = "world") {
     auto got = publisher_map_.find(topic);
     if (got == publisher_map_.end()) {
@@ -105,9 +123,7 @@ class Visualization {
       publisher_map_[topic] = pub;
     }
     pcl::PointCloud<pcl::PointXYZ> point_cloud;
-    // point_cloud.reserve( pc.size() );
     for (const auto& pt : pc.points) {
-      // if(abs(pt.x)<100 && abs(pt.y)<100 &&abs(pt.z)<100)
         point_cloud.points.emplace_back(pt.x, pt.y, pt.z);
     }
     std::cout<<"pc size: "<<point_cloud.size()<<std::endl;
@@ -118,7 +134,13 @@ class Visualization {
     publisher_map_[topic].publish(point_cloud_msg);
   }
 
-  // pc: std::vector<Vector3d>
+  /**
+   * Visualize point cloud from a vector of 3D points.
+   *
+   * @param[in] pc       Point container (e.g. std::vector<Vector3d>)
+   * @param[in] topic    ROS topic name
+   * @param[in] frame_id Reference frame
+   */
   template <class PC, class TOPIC>
   void visualize_pointcloud(const PC& pc, const TOPIC& topic, std::string frame_id = "world") {
     auto got = publisher_map_.find(topic);
@@ -138,7 +160,12 @@ class Visualization {
     publisher_map_[topic].publish(point_cloud_msg);
   }
 
-  // pc: std::vector<Vector4d>
+  /**
+   * Visualize intensity point cloud from a vector of 4D points (x, y, z, intensity).
+   *
+   * @param[in] pc     Point container (e.g. std::vector<Vector4d>)
+   * @param[in] topic  ROS topic name
+   */
   template <class PCI, class TOPIC>
   void visualize_pointcloud_intensity(const PCI& pc, const TOPIC& topic) {
     auto got = publisher_map_.find(topic);
@@ -163,7 +190,12 @@ class Visualization {
     publisher_map_[topic].publish(point_cloud_msg);
   }
 
-  // path: std::vector<Vector3d>
+  /**
+   * Visualize a path as a nav_msgs/Path message.
+   *
+   * @param[in] path   Path container (e.g. std::vector<Vector3d>)
+   * @param[in] topic  ROS topic name
+   */
   template <class PATH, class TOPIC>
   void visualize_path(const PATH& path, const TOPIC& topic) {
     auto got = publisher_map_.find(topic);
@@ -185,6 +217,14 @@ class Visualization {
     publisher_map_[topic].publish(path_msg);
   }
 
+  /**
+   * Visualize multiple sphere markers as a MarkerArray.
+   *
+   * @param[in] balls  Ball container with .r (radius) and [x,y,z] access
+   * @param[in] topic  ROS topic name
+   * @param[in] color  Marker color enum
+   * @param[in] a      Alpha transparency
+   */
   template <class BALLS, class TOPIC>
   void visualize_balls(const BALLS& balls, 
                        const TOPIC& topic, 
@@ -216,7 +256,16 @@ class Visualization {
     publisher_map_[topic].publish(marker_array);
   }
 
-
+  /**
+   * Visualize text markers at given positions with prefix labels.
+   *
+   * @param[in] prefix  Label prefixes (one per text)
+   * @param[in] texts   Text positions (array-like, [x y z])
+   * @param[in] scale   Text scale [m]
+   * @param[in] topic   ROS topic name
+   * @param[in] color   Marker color enum
+   * @param[in] a       Alpha transparency
+   */
   template <class TEXT, class TOPIC>
   void visualize_texts(const vector<string> prefix, const TEXT& texts, 
                        const double scale, 
@@ -243,10 +292,6 @@ class Visualization {
     for (const auto& text : texts) {
       setMarkerPose(marker, text[0], text[1], text[2]);
       setMarkerScale(marker, scale, scale, scale);
-      // std::ostringstream str;
-      // str.precision(2);//覆盖默认精度
-      // str.setf(std::ios::fixed);//保留小数位
-      // str<<text[3];
       marker.text = prefix[i++];
       marker_array.markers.push_back(marker);
       marker.id ++;
@@ -255,8 +300,15 @@ class Visualization {
       publisher_map_[topic].publish(marker_array);
   }
 
+  /**
+   * Visualize pairs of points as line segments.
+   *
+   * @param[in] pairline  Vector of point pairs (std::pair<Vector3d, Vector3d>)
+   * @param[in] topic     ROS topic name
+   * @param[in] scale     Line width [m]
+   * @param[in] color     Marker color enum
+   */
   template <class PAIRLINE, class TOPIC>
-  // eg for PAIRLINE: std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>>
   void visualize_pairline(const PAIRLINE& pairline, const TOPIC& topic, const double scale = 0.02, const Color color = red) {
     auto got = publisher_map_.find(topic);
     if (got == publisher_map_.end()) {
@@ -282,8 +334,14 @@ class Visualization {
     publisher_map_[topic].publish(marker);
   }
 
+  /**
+   * Visualize arrows as a MarkerArray from a container of direction pairs.
+   *
+   * @param[in] arrows  Vector of (origin, direction) pairs
+   * @param[in] topic   ROS topic name
+   * @param[in] color   Marker color enum
+   */
   template <class ARROWS, class TOPIC>
-  // ARROWS: pair<Vector3d, Vector3d>
   void visualize_arrows(const ARROWS& arrows, const TOPIC& topic, const Color color = red) {
     auto got = publisher_map_.find(topic);
     if (got == publisher_map_.end()) {

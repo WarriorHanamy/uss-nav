@@ -203,106 +203,481 @@ private:
 
  private:
   /* helper functions */
+  /**
+   * Dispatch to exploration planner and compute the aim pose, velocity, yaw and path.
+   *
+   * @param[out] aim_pose  Target position [m]
+   * @param[out] aim_vel   Target velocity [m/s]
+   * @param[out] aim_yaw   Target yaw [rad]
+   * @param[out] path_res  Planned global path points
+   * @return 0 on success, non-zero on failure
+   */
   int callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
                              vector<Eigen::Vector3d>& path_res);
+  /**
+   * Dispatch to LLM-guided exploration planner.
+   *
+   * @param[out] aim_pose  Target position [m]
+   * @param[out] aim_vel   Target velocity [m/s]
+   * @param[out] aim_yaw   Target yaw [rad]
+   * @param[out] path_res  Planned global path points
+   * @return 0 on success, non-zero on failure
+   */
   int callExplorationLLMPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
                                 vector<Eigen::Vector3d>& path_res);
+  /**
+   * Dispatch to tracking planner for target following.
+   *
+   * @param[out] aim_pose  Target position [m]
+   * @param[out] aim_vel   Target velocity [m/s]
+   * @param[out] aim_yaw   Target yaw [rad]
+   * @param[out] path_res  Planned global path points
+   * @return 0 on success, non-zero on failure
+   */
   int callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
                        vector<Eigen::Vector3d>& path_res);
+  /**
+   * Reset the tracking finish candidate state.
+   */
   void resetTrackingFinishCandidate();
+  /**
+   * Update tracking finish candidate with current distance and angle to aim.
+   *
+   * @param[in] dis_2_aim    Distance to aim point [m]
+   * @param[in] angle_2_aim  Angle to aim point [rad]
+   * @return True if tracking finish condition is met
+   */
   bool updateTrackingFinishCandidate(double dis_2_aim, double angle_2_aim);
+  /**
+   * Publish tracking finish message.
+   */
   void publishTrackingFinish();
+  /**
+   * Check whether the elastic tracker backend is currently in use.
+   *
+   * @return True if elastic tracker backend is active
+   */
   bool useElasticTrackerBackend() const;
+  /**
+   * Publish planner command multiplexer mode.
+   *
+   * @param[in] mode    Mode name
+   * @param[in] source  Source identifier for logging
+   */
   void publishPlannerCmdMuxMode(const std::string& mode, const std::string& source);
+  /**
+   * Switch planner command mux to EGO planner mode.
+   *
+   * @param[in] source  Source identifier for logging
+   */
   void switchPlannerCmdMuxToEgo(const std::string& source);
+  /**
+   * Switch planner command mux to elastic tracker mode.
+   *
+   * @param[in] source  Source identifier for logging
+   */
   void switchPlannerCmdMuxToElastic(const std::string& source);
+  /**
+   * Publish elastic tracker trigger command.
+   *
+   * @param[in] stamp    Timestamp [s]
+   * @param[in] frame_id Reference frame
+   */
   void publishElasticTrackerTrigger(const ros::Time& stamp = ros::Time(),
                                     const std::string& frame_id = "world");
+  /**
+   * Stop elastic tracker and switch to EGO planner.
+   *
+   * @param[in] source  Source identifier for logging
+   */
   void stopElasticTracker(const std::string& source);
+  /**
+   * Publish tracking target as odometry message for the elastic tracker.
+   *
+   * @param[in] target_pos Target position [m]
+   * @param[in] stamp      Timestamp [s]
+   * @param[in] frame_id   Reference frame
+   */
   void publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
                                  const ros::Time& stamp = ros::Time(),
                                  const std::string& frame_id = "world");
+  /**
+   * Apply exploration region constraint from an instruction message.
+   *
+   * @param[in] msg  Instruction message containing region polygon
+   */
   void applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg);
+  /**
+   * Publish exploration result with status and message.
+   *
+   * @param[in] success Whether exploration completed successfully
+   * @param[in] reason  Reason string
+   * @param[in] message Detail message
+   */
   void publishExplorationResult(bool success, const std::string& reason,
                                 const std::string& message = "");
+  /**
+   * Check whether the given FSM state belongs to VLA swarm states.
+   *
+   * @param[in] state  FSM state to check
+   * @return True if state is a VLA swarm substate
+   */
   bool isVlaSwarmState(MISSION_FSM_STATE state) const;
+  /**
+   * Reset all VLA swarm task context variables.
+   */
   void resetVlaSwarmContext();
+  /**
+   * Start a new VLA swarm task from an instruction message.
+   *
+   * @param[in] msg  Instruction message with VLA swarm command
+   */
   void startVlaSwarmTask(const quadrotor_msgs::InstructionConstPtr& msg);
+  /**
+   * Cancel the current VLA swarm task.
+   *
+   * @param[in] reason  Cancellation reason
+   * @param[in] detail  Detail description
+   */
   void cancelVlaSwarmTask(const std::string& reason, const std::string& detail);
+  /**
+   * Publish VLA swarm task result.
+   *
+   * @param[in] success Whether the task succeeded
+   * @param[in] reason  Reason string
+   * @param[in] detail  Detail description
+   */
   void publishVlaSwarmResult(bool success, const std::string& reason,
                              const std::string& detail = "");
+  /**
+   * Start a VLA swarm target request via LLM.
+   *
+   * @param[in] payload  JSON payload for the LLM request
+   * @return True if request was sent successfully
+   */
   bool startVlaSwarmTargetRequest(const nlohmann::json& payload);
+  /**
+   * Prepare a global path to the requested VLA swarm goal.
+   *
+   * @param[in] requested_goal     Target position [m]
+   * @param[in] reaches_task_target Whether this goal completes the task
+   * @param[in] door_id            Door ID to traverse, -1 for direct path
+   * @return True if path was prepared successfully
+   */
   bool prepareVlaSwarmPath(const Eigen::Vector3d& requested_goal,
                            bool reaches_task_target, int door_id = -1);
+  /**
+   * Publish the next waypoint along the prepared VLA swarm path.
+   *
+   * @return True if a waypoint was published
+   */
   bool publishNextVlaSwarmWaypoint();
+  /**
+   * Retry the current VLA swarm waypoint due to planning failure.
+   *
+   * @param[in] failure_reason  Reason for the failure
+   */
   void retryVlaSwarmWaypoint(const std::string& failure_reason);
+  /**
+   * Handle VLA swarm PLAN_LOCAL FSM state.
+   */
   void handleVlaSwarmPlanLocal();
+  /**
+   * Handle VLA swarm WAIT_LLM FSM state.
+   */
   void handleVlaSwarmWaitLLM();
+  /**
+   * Handle VLA swarm WAIT_TARGET FSM state.
+   */
   void handleVlaSwarmWaitTarget();
+  /**
+   * Handle VLA swarm APPROACH FSM state.
+   */
   void handleVlaSwarmApproach();
+  /**
+   * Handle VLA swarm YAW FSM state (yaw scanning).
+   */
   void handleVlaSwarmYaw();
+  /**
+   * Handle VLA swarm RECOVERY FSM state.
+   */
   void handleVlaSwarmRecovery();
+  /**
+   * Handle VLA swarm FINISH FSM state.
+   */
   void handleVlaSwarmFinish();
   
+  /**
+   * Transition the FSM to a new state.
+   *
+   * @param[in] new_state  Target FSM state
+   * @param[in] pos_call   Caller identifier for logging
+   */
   void transitState(MISSION_FSM_STATE new_state, string pos_call);
+  /**
+   * Stash current state and transition to a temporary state.
+   *
+   * @param[in] new_state  Temporary FSM state
+   * @param[in] who_called Caller identifier for logging
+   */
   void stashCurStateAndTransit(MISSION_FSM_STATE new_state, string who_called);
-  void triggerObjectIdNavReplan(const std::string& reason);  // object-id-nav replan
+  /**
+   * Trigger object-id navigation replan.
+   *
+   * @param[in] reason  Replan reason
+   */
+  void triggerObjectIdNavReplan(const std::string& reason);
+  /**
+   * Get the initial seed position for scene graph initialization.
+   *
+   * @param[out] init_seed  Seed position [m]
+   * @param[out] reason     Optional failure reason
+   * @return True if seed position is valid
+   */
   bool getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* reason = nullptr) const;
 
   /* ROS functions */
+  /**
+   * Main FSM execution timer callback — drives state transitions each cycle.
+   *
+   * @param[in] e  Timer event
+   */
   void FSMCallback(const ros::TimerEvent& e);
+  /**
+   * Periodic frontier update timer callback.
+   *
+   * @param[in] e  Timer event
+   */
   void frontierCallback(const ros::TimerEvent& e);
+  /**
+   * Periodic VLA swarm map update timer callback.
+   *
+   * @param[in] e  Timer event
+   */
   void vlaSwarmMapCallback(const ros::TimerEvent& e);
+  /**
+   * Callback for external trigger pose (RViz click or station).
+   *
+   * @param[in] msg  Trigger pose
+   */
   void triggerCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
+  /**
+   * Callback for EGO planner goal set message.
+   *
+   * @param[in] msg  Goal set message
+   */
   void egoPlannerGoalCallback(const quadrotor_msgs::GoalSet::ConstPtr& msg);
+  /**
+   * Callback for EGO planner execution finish signal.
+   *
+   * @param[in] msg  Bool indicating execution complete
+   */
   void egoExecFinishCallback(const std_msgs::Bool::ConstPtr& msg);
+  /**
+   * Callback for target tracking command.
+   *
+   * @param[in] msg  Track command message
+   */
   void trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstPtr& msg);
+  /**
+   * Callback for elastic tracking finish signal.
+   *
+   * @param[in] msg  Bool indicating tracking finished
+   */
   void elasticTrackingFinishCallback(const std_msgs::Bool::ConstPtr& msg);
+  /**
+   * Callback for elastic tracker replan state updates.
+   *
+   * @param[in] msg  Replan state message
+   */
   void elasticTrackerReplanStateCallback(const quadrotor_msgs::ReplanStateConstPtr& msg);
+  /**
+   * Callback for real target detection output.
+   *
+   * @param[in] msg  Detection output message
+   */
   void targetCallbackReal(const quadrotor_msgs::DetectOut::ConstPtr& msg);
+  /**
+   * Callback for VLA swarm target waypoint from LLM.
+   *
+   * @param[in] msg  VLA swarm target message
+   */
   void vlaSwarmTargetCallback(
       const quadrotor_msgs::VLASwarmTarget::ConstPtr& msg);
+  /**
+   * Callback for VLA swarm camera image.
+   *
+   * @param[in] msg  Compressed camera image
+   */
   void vlaSwarmCameraCallback(
       const sensor_msgs::CompressedImageConstPtr& msg);
+  /**
+   * Callback for VLA swarm ego state trigger.
+   *
+   * @param[in] msg  Ego state trigger message
+   */
   void vlaSwarmEgoStateTriggerCallback(
       const quadrotor_msgs::EgoStateTrigger::ConstPtr& msg);
+  /**
+   * Callback for object-id navigation replan trigger.
+   *
+   * @param[in] msg  Bool message
+   */
   void objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg);
+  /**
+   * Handle goal instruction for exploration or object search.
+   *
+   * @param[in] goals        Goal positions [m]
+   * @param[in] yaws         Goal yaws [rad]
+   * @param[in] look_forward Whether to face forward toward goals
+   * @param[in] source       Source identifier
+   */
   void handleGoalInstruction(const std::vector<geometry_msgs::Point>& goals, const std::vector<float>& yaws,
                              bool look_forward, const std::string& source);
+  /**
+   * Handle tracking target command with global poses.
+   *
+   * @param[in] global_poses  Target positions in global frame [m]
+   * @param[in] source        Source identifier
+   * @param[in] stamp         Timestamp [s]
+   * @param[in] frame_id      Reference frame
+   */
   void handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,
                             const std::string& source,
                             const ros::Time& stamp = ros::Time(),
                             const std::string& frame_id = "world");
-
+  /**
+   * Callback for incoming instruction messages.
+   *
+   * @param[in] msg  Instruction message
+   */
   void instructionCallback(const quadrotor_msgs::InstructionConstPtr& msg);
+  /**
+   * Callback for emergency stop signal.
+   *
+   * @param[in] msg  Empty message
+   */
   void emergencyStopCallback(const std_msgs::Empty::ConstPtr& msg);
+  /**
+   * Callback for battery state updates.
+   *
+   * @param[in] msg  Battery state message
+   */
   void batteryCallBack(const sensor_msgs::BatteryState msg);
+  /**
+   * Callback for odometry updates.
+   *
+   * @param[in] msg  Odometry message
+   */
   void odometryCallback(const nav_msgs::OdometryConstPtr& msg);
+  /**
+   * Callback for EGO planner result feedback.
+   *
+   * @param[in] msg  Planner result message
+   */
   void egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstPtr& msg);
+  /**
+   * Select and publish the next local aim point from the global path with shortcut optimization.
+   *
+   * @param[in]     path_res     Global path points [m]
+   * @param[in]     look_forward Whether to face the final goal yaw
+   * @param[in]     aim_yaw      Target yaw when look_forward is false [rad]
+   * @return True if a valid aim point was published
+   */
   bool getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                               const bool look_forward = true, const double aim_yaw = 0.0);
+  /**
+   * Publish a local goal command to the low-level motion planner.
+   *
+   * @param[in] local_goal   Goal position [m]
+   * @param[in] yaw          Yaw angle [rad]
+   * @param[in] look_forward Whether to face forward
+   * @param[in] yaw_mode     Yaw mode enum
+   * @param[in] yaw_path_mode Yaw path mode enum
+   */
   void pubLocalGoal(
       const Eigen::Vector3d local_goal, const double yaw = 0.0, const bool look_forward = true,
       uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
       uint8_t yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+  /**
+   * Stop all robot motion by publishing a zero-velocity command.
+   */
   void stopMotion();
 
+  /**
+   * Handle the LLM thinking process before exploration planning.
+   */
   void handelThingkingProcess();
+  /**
+   * Plan exploration using LLM-guided scene graph.
+   */
   void planLLMExplore();
+  /**
+   * Plan regular exploration via frontier-based method.
+   */
   void planRegularExplore();
+  /**
+   * Approach the next frontier during regular exploration.
+   */
   void approachRegularExplore();
+  /**
+   * Plan the next target tracking path.
+   */
   void planTrack();
+  /**
+   * Approach the tracking target.
+   */
   void approachTrack();
-  void handleYawChange();                  // scan the area (Fov expand) and update the map
-  void startPanoramaRotation();            // EXPLORATION/COUNTING启动阶段360°全景旋转
-  void handlePanoramaYaw();                // 全景旋转状态处理
-  bool waitForFreshMapAfterReset();         // 清图后等待第一帧新地图，再开始全景旋转
+  /**
+   * Execute yaw scan sequence to expand field of view and update the map.
+   */
+  void handleYawChange();
+  /**
+   * Start 360-degree panorama rotation during EXPLORATION/COUNTING startup.
+   */
+  void startPanoramaRotation();
+  /**
+   * Handle the panorama yaw rotation state step.
+   */
+  void handlePanoramaYaw();
+  /**
+   * Wait for a fresh map frame after occupancy reset before starting panorama.
+   *
+   * @return True when a fresh map is available
+   */
+  bool waitForFreshMapAfterReset();
+  /**
+   * Navigate to the target object position.
+   */
   void goTargetObject();
+  /**
+   * Navigate to target using intermediate waypoints.
+   */
   void goTargetWithWaypoint();
+  /**
+   * Find and set the terminate target position.
+   */
   void findTerminateTarget();
+  /**
+   * Execute the demonstration flight (DF demo) routine.
+   */
   void execDFDemo();
 
+  /**
+   * Adjust the terminate height based on target object dimensions.
+   *
+   * @param[in] target_obj  Target object node
+   * @param[in] init_pos    Initial position [m]
+   * @param[in] final_point Whether this is the final approach point
+   * @return Adjusted height [m]
+   */
   double adjustTerminateHeightFindingObject(ObjectNode::Ptr target_obj, Eigen::Vector3d init_pos, bool final_point=false);
+  /**
+   * Adjust terminate height using default logic for non-object targets.
+   *
+   * @param[in] next_aim_raw  Raw next aim position [m]
+   * @return Adjusted height [m]
+   */
   double adjustTerminateHeightNormal(const Eigen::Vector3d& next_aim_raw);
 
   double yawhandle_yaw_raw;
@@ -311,26 +686,82 @@ private:
   bool   yawhandle_left_published, yawhandle_right_published, yawhandle_back_published;
   bool   yawhandle_left_ok, yawhandle_right_ok, yawhandle_back_ok;
 
+  /**
+   * Hard-reset the exploration area, optionally clearing occupancy and posegraph.
+   *
+   * @param[in] clear_occupancy Whether to clear occupancy grid
+   * @param[in] clear_posegraph Whether to clear posegraph
+   */
   void hardResetExploreArea(bool clear_occupancy, bool clear_posegraph);
 
+  /**
+   * Display current mission state via ROS logging.
+   */
   void displayMissionState();
+  /**
+   * Display the planned path via ROS logging.
+   */
   void displayPath();
-  void displayLocalAim();   // 当前导航点橙色marker可视化
+  /**
+   * Publish RViz marker for the current navigation aim point.
+   */
+  void displayLocalAim();
+  /**
+   * Publish all visualization markers (path, state, aim).
+   *
+   * @param[in] e  Timer event
+   */
   void visualize(const ros::TimerEvent& e);
 
   // TOOLS
+  /**
+   * Convert geometry_msgs::Point to Eigen::Vector3d.
+   *
+   * @param[in]  p_in  Input point [m]
+   * @param[out] p_out Output vector [m]
+   */
   void geoPt2Vec3d(const geometry_msgs::Point &p_in, Eigen::Vector3d &p_out);
+  /**
+   * Convert Eigen::Vector3d to geometry_msgs::Point.
+   *
+   * @param[in]  p_in  Input vector [m]
+   * @param[out] p_out Output point [m]
+   */
   void vec3d2GeoPt(const Eigen::Vector3d &p_in, geometry_msgs::Point &p_out);
+  /**
+   * Convert Eigen::Vector3d to geometry_msgs::Point (return-by-value).
+   *
+   * @param[in] p_in  Input vector [m]
+   * @return Output point [m]
+   */
   geometry_msgs::Point vec3d2GeoPt(const Eigen::Vector3d &p_in);
+  /**
+   * Convert geometry_msgs::Point to Eigen::Vector3d (return-by-value).
+   *
+   * @param[in] p_in  Input point [m]
+   * @return Output vector [m]
+   */
   Eigen::Vector3d geoPt2Vec3d(const geometry_msgs::Point &p_in);
 
 public:
+  /**
+   * Default constructor.
+   */
   FastExplorationFSM(/* args */) {
   }
+  /**
+   * Destructor — stops the object factory module.
+   */
   ~FastExplorationFSM() {
       scene_graph_->object_factory_->stopThisModule();
   }
 
+  /**
+   * Initialize the FSM with ROS node handle and map interface.
+   *
+   * @param[in] nh   ROS node handle
+   * @param[in] map  Map interface pointer
+   */
   void init(ros::NodeHandle& nh, const MapInterface::Ptr& map);
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

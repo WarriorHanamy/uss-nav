@@ -5,7 +5,6 @@ namespace ego_planner {
 RcReplanTrigger::RcReplanTrigger(ros::NodeHandle& nh) : nh_(nh) {
   nh_.param("rc_replan_trigger/hold_duration", hold_duration_, 0.0);
 
-  // 从参数加载通道列表, 为空则兜底为 {7, 8} (ch8 + ch9)
   XmlRpc::XmlRpcValue channel_param;
   if (nh_.getParam("rc_replan_trigger/channels", channel_param) &&
       channel_param.getType() == XmlRpc::XmlRpcValue::TypeArray) {
@@ -22,7 +21,6 @@ RcReplanTrigger::RcReplanTrigger(ros::NodeHandle& nh) : nh_(nh) {
       ros::TransportHints().tcpNoDelay());
   replan_pub_ = nh_.advertise<std_msgs::Bool>("/object_id_nav_replan", 10);
 
-  // 打印配置
   std::stringstream ss;
   for (size_t i = 0; i < channel_indices_.size(); ++i) {
     if (i > 0) ss << "+";
@@ -35,7 +33,6 @@ RcReplanTrigger::RcReplanTrigger(ros::NodeHandle& nh) : nh_(nh) {
 void RcReplanTrigger::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg) {
   int sz = static_cast<int>(msg->channels.size());
 
-  // 检查所有触发通道是否在范围内
   bool all_high = true, all_low = true;
   for (int idx : channel_indices_) {
     if (idx >= sz) {
@@ -50,14 +47,12 @@ void RcReplanTrigger::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg) {
   if (!locked_) {
     if (all_high) {
       if (hold_duration_ <= 0.0) {
-        // 即时触发(当前逻辑)
         std_msgs::Bool trigger;
         trigger.data = true;
         replan_pub_.publish(trigger);
         locked_ = true;
         ROS_INFO("[RcReplan] Triggered! Locked until release.");
       } else {
-        // 长按计时模式
         if (hold_begin_time_.isZero()) {
           hold_begin_time_ = ros::Time::now();
         }
@@ -67,12 +62,11 @@ void RcReplanTrigger::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg) {
           trigger.data = true;
           replan_pub_.publish(trigger);
           locked_ = true;
-          hold_begin_time_ = ros::Time();  // 重置计时器
+          hold_begin_time_ = ros::Time();
           ROS_INFO("[RcReplan] Hold-triggered (%.1fs)! Locked until release.", elapsed);
         }
       }
     } else {
-      // 未全按: 取消计时
       if (!hold_begin_time_.isZero()) {
         hold_begin_time_ = ros::Time();
       }
@@ -88,6 +82,13 @@ void RcReplanTrigger::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg) {
 
 }  // namespace ego_planner
 
+/**
+ * ROS node entry point for RC replan trigger.
+ *
+ * @param[in] argc  Argument count
+ * @param[in] argv  Argument vector
+ * @return Exit code
+ */
 int main(int argc, char** argv) {
   ros::init(argc, argv, "rc_replan_trigger");
   ros::NodeHandle nh("~");

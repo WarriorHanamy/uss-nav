@@ -11,10 +11,20 @@ namespace ego_planner {
 
 class RcReplanTrigger {
 public:
+  /**
+   * Construct the RC replan trigger with configurable channels and hold duration.
+   *
+   * @param[in] nh  ROS node handle
+   */
   RcReplanTrigger(ros::NodeHandle& nh);
   ~RcReplanTrigger() = default;
 
 private:
+  /**
+   * Callback for RC input — triggers replan on configured channel combination.
+   *
+   * @param[in] msg  RC input message
+   */
   void rcCallback(const mavros_msgs::RCIn::ConstPtr& msg);
 
   ros::NodeHandle nh_;

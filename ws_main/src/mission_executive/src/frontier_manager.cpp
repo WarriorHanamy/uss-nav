@@ -387,16 +387,14 @@ int FrontierManager::planTrackGoal(const Vector3d& pos, const Vector3d& vel,
 }
 
 /**
- * @brief 智能地规划一条到下一个前沿目标点的路径。
- * * 该函数采用分层策略：首先尝试最高效的直接连接；如果失败，则在局部地图内使用A*算法进行可达性验证；
- * 如果目标仍不可达或太远，则回退到最低效但最可靠的全局拓扑路径规划。
- * 最终，函数还会对生成的路径进行“捷径”优化，以提高执行效率。
- * * @param[in]  pos                  机器人当前的位置。
- * @param[in]  next_ftr             目标前沿点的完整对象，主要用于获取其拓扑信息。
- * @param[in]  aim_pos              本次规划需要到达的具体目标视点位置。
- * @param[out] path_res             用于存储最终生成的、经过优化的路径点集。
- * @param[in]  force_direct_egoplan 一个布尔标志，若为true，则强制生成一条直线路径，忽略所有中间逻辑。
- * @return     bool                 如果成功规划出一条有效路径，则返回true；否则返回false。
+ * Plan a path to the next frontier target with multi-layer fallback.
+ *
+ * @param[in]  pos                Current position [m]
+ * @param[in]  next_ftr           Target frontier
+ * @param[out] aim_pos            Aim position [m]
+ * @param[out] path_res           Planned path [m]
+ * @param[in]  force_direct_egoplan Force direct straight-line path
+ * @return True if a valid path was found
  */
 bool FrontierManager::planNextFtr(const Vector3d& pos, const Frontier& next_ftr, Vector3d& aim_pos, vector<Eigen::Vector3d>& path_res, bool force_direct_egoplan)
 {
@@ -888,20 +886,16 @@ void FrontierManager::findGlobalTour(
 }
 
 /**
-* @brief 通过构建和搜索一个分层的视点图，从未经筛选的多个局部前沿的候选视点中，提炼出一条最优的局部巡游路径。
-* * 该函数将机器人的当前状态作为起点，将每个前沿的多个候选视点作为图中的节点层。
-* 它构建一个从前一层的所有节点到后一层所有节点的有向图，然后使用Dijkstra算法
-* 搜索从起点到终点（最后一个前沿的代表性视点）的最短路径。
-* 这条最短路径所经过的节点序列，即为成本最低的精炼局部旅程。
-* * @param[in]  cur_pos      机器人当前的位置。
-* @param[in]  cur_vel      机器人当前的速度。
-* @param[in]  cur_yaw      机器人当前的偏航角。
-* @param[in]  n_points     一个嵌套向量，包含了多个局部前沿的候选视点位置。
-* 外层vector的每个元素代表一个前沿，内层vector包含了该前沿的所有候选视点。
-* @param[in]  n_yaws       一个嵌套向量，结构与n_points对应，存储了每个候选视点的期望偏航角。
-* @param[out] refined_pts  用于存储最终计算出的最优路径点序列（不包含当前位置）。
-* @param[out] refined_yaws 用于存储与最优路径点对应的偏航角序列。
-*/
+ * Refine local tour by building a layered viewpose graph and finding the shortest path via Dijkstra.
+ *
+ * @param[in]  cur_pos      Current position [m]
+ * @param[in]  cur_vel      Current velocity [m/s]
+ * @param[in]  cur_yaw      Current yaw [rad]
+ * @param[in]  n_points     Candidate viewpoints per frontier [m]
+ * @param[in]  n_yaws       Candidate yaws per frontier [rad]
+ * @param[out] refined_pts  Refined path points [m]
+ * @param[out] refined_yaws Refined yaws [rad]
+ */
 void FrontierManager::refineLocalTour(
     const Vector3d& cur_pos, const Vector3d& cur_vel, const double& cur_yaw,
     const vector<vector<Vector3d>>& n_points, const vector<vector<double>>& n_yaws,

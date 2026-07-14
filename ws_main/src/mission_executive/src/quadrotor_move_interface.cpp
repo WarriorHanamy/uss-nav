@@ -11,12 +11,22 @@ ros::Subscriber move_command_sub;
 nav_msgs::Odometry _odom_msg;
 int drone_id_;
 
+/**
+ * Callback for odometry updates.
+ *
+ * @param[in] msg  Odometry message
+ */
 void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg) 
 {
   _odom_msg = *msg;
-  // ROS_WARN_STREAM("get odom: " << _odom_msg.pose.pose.position.x << ", " << _odom_msg.pose.pose.position.y << ", " << _odom_msg.pose.pose.position.z);
 }
 
+/**
+ * Publish a position command as a GoalSet message.
+ *
+ * @param[in] pos  Target position [m]
+ * @param[in] yaw  Target yaw [rad]
+ */
 void pubCmd(const Eigen::Vector3d& pos, const double yaw) 
 {
   quadrotor_msgs::GoalSet goal_msg;
@@ -30,11 +40,20 @@ void pubCmd(const Eigen::Vector3d& pos, const double yaw)
   goal_pub_.publish(goal_msg);
 }
 
+/**
+ * Compute a commanded position and yaw from a body-frame displacement.
+ *
+ * Transforms the displacement (dp, dyaw) from the body frame to the world
+ * frame using the current odometry orientation.
+ *
+ * @param[in]  dp    Body-frame displacement [m]
+ * @param[in]  dyaw  Body-frame yaw offset [rad]
+ * @param[out] pos   World-frame commanded position [m]
+ * @param[out] yaw   World-frame commanded yaw [rad]
+ */
 void getCmd(const Eigen::Vector3d& dp, const double& dyaw,
             Eigen::Vector3d& pos, double& yaw)
 {
-
-
   Eigen::Quaterniond q(_odom_msg.pose.pose.orientation.w,
                         _odom_msg.pose.pose.orientation.x, 
                         _odom_msg.pose.pose.orientation.y, 
@@ -45,9 +64,7 @@ void getCmd(const Eigen::Vector3d& dp, const double& dyaw,
                         _odom_msg.pose.pose.position.z);
 
   pos = pos + q.toRotationMatrix() * dp;
-  // ROS_ERROR_STREAM("dp: " << dp.transpose() << ", rot_dp: " << (q.toRotationMatrix() * dp).transpose());
 
-  // yaw (z-axis rotation)
   double siny_cosp = 2 * (q.w() * q.z() + q.x() * q.y());
   double cosy_cosp = 1 - 2 * (q.y() * q.y() + q.z() * q.z());
   double odom_yaw = std::atan2(siny_cosp, cosy_cosp);
@@ -59,21 +76,29 @@ void getCmd(const Eigen::Vector3d& dp, const double& dyaw,
       yaw += 2*M_PI;
 }
 
+/**
+ * Callback for joystick move commands.
+ *
+ * @param[in] msg  Joystick message with axes (dx, dy, dz, dyaw)
+ */
 void moveCommandCallback(const sensor_msgs::Joy::ConstPtr& msg) 
 {
-  ROS_ERROR_STREAM("============moveCommandCallback");
   Eigen::Vector3d d_position(msg->axes.at(0), msg->axes.at(1), msg->axes.at(2));
   double d_yaw = msg->axes.at(3);
-  // ROS_ERROR_STREAM("dpos: " << d_position.transpose() << ", dyaw: " << d_yaw);
 
   Eigen::Vector3d pos_cmd;
   double yaw_cmd;
   getCmd(d_position, d_yaw, pos_cmd, yaw_cmd);
-  ROS_ERROR_STREAM("dpos: " << d_position.transpose() << ", dyaw: " << d_yaw << ", pos_cmd: " << pos_cmd.transpose() << ", yaw_cmd: " << yaw_cmd);
   pubCmd(pos_cmd, yaw_cmd);
 }
 
-
+/**
+ * ROS node entry point for quadrotor move interface.
+ *
+ * @param[in] argc  Argument count
+ * @param[in] argv  Argument vector
+ * @return Exit code
+ */
 int main(int argc, char **argv) {
   ros::init(argc, argv, "quadrotor_move_interface");
 
