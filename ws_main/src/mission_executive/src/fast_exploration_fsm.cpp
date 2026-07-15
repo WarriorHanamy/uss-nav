@@ -90,6 +90,9 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   nh.param("fsm/realworld_experiment",       fp_->flag_realworld_exp_, true);
   nh.param("fsm/enable_area_prediction",     fp_->enable_area_prediction_, true);
   nh.param("fsm/auto_init_scene_graph",      fp_->auto_init_scene_graph_, true);
+  nh.param("fsm/auto_load_scene_graph",     fp_->auto_load_scene_graph_, false);
+  nh.param("fsm/scene_graph_data_path",     fp_->scene_graph_data_path_, std::string(""));
+  nh.param("fsm/scene_graph_load_name",     fp_->scene_graph_load_name_, std::string(""));
   nh.param("fsm/auto_init_delay_sec",        fp_->auto_init_delay_sec_, 2.0);
   nh.param("fsm/scene_graph_init_forward_dist", fp_->scene_graph_init_forward_dist_, 1.8);
   nh.param("fsm/frontier_update_dt",          fp_->frontier_update_dt_, 0.5);
@@ -2604,6 +2607,24 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
     // warm up 10sec -> init skeleton -> start explore
     case WARM_UP:
     {
+      if (fp_->auto_load_scene_graph_ && !fp_->scene_graph_load_name_.empty()) {
+        bool ok = scene_graph_->loadMap(fp_->scene_graph_load_name_,
+                                         fp_->scene_graph_data_path_);
+        if (!ok) {
+          ROS_FATAL("[MissionFSM] Failed to load offline scene graph '%s/%s'",
+                    fp_->scene_graph_data_path_.c_str(),
+                    fp_->scene_graph_load_name_.c_str());
+          ros::shutdown();
+          return;
+        }
+        ROS_INFO("[MissionFSM] Loaded offline scene graph: %s/%s",
+                 fp_->scene_graph_data_path_.c_str(),
+                 fp_->scene_graph_load_name_.c_str());
+        scene_graph_->object_factory_->runThisModule();
+        transitState(WAIT_TRIGGER, "auto_load_scene_graph");
+        break;
+      }
+
       if (fp_->auto_init_scene_graph_ && !fd_->trigger_) {
         const double warmup_elapsed = (ros::Time::now() - fd_->warmup_start_time_).toSec();
         if (warmup_elapsed >= fp_->auto_init_delay_sec_) {

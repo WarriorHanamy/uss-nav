@@ -15,7 +15,6 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:99}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
-      - QT_X11_NO_MITSHM=1
     volumes:
       - type: bind
         source: ./ws_main/src
@@ -34,6 +33,10 @@ services:
       - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts
+      - type: bind
+        source: ./.data
+        target: /workspace/.data
+        read_only: true
       - /tmp/.X11-unix:/tmp/.X11-unix
     entrypoint: ["/entrypoint.sh"]
 
@@ -111,7 +114,6 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:99}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
-      - QT_X11_NO_MITSHM=1
     volumes:
       - type: bind
         source: ./ws_main/src
@@ -130,6 +132,10 @@ services:
       - type: bind
         source: ./.artifacts
         target: /workspace/.artifacts
+      - type: bind
+        source: ./.data
+        target: /workspace/.data
+        read_only: true
       - /tmp/.X11-unix:/tmp/.X11-unix
       - type: bind
         source: ./.pretrained

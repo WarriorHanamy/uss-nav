@@ -14,10 +14,11 @@ def point_cloud_callback(msg):
 
     filtered_msg = pc2.create_cloud_xyz32(msg.header, filtered_cloud)
     filtered_msg.header.frame_id = "world"
+    filtered_msg.header.stamp = rospy.Time.now()
     pub.publish(filtered_msg)
 
 rospy.init_node("point_cloud_filter")
 sub = rospy.Subscriber("/map_generator/global_cloud", PointCloud2, point_cloud_callback)
-pub = rospy.Publisher("/map_generator/global_cloud/fixed", PointCloud2, queue_size=10)
+pub = rospy.Publisher("/map_generator/global_cloud/fixed", PointCloud2, queue_size=1, latch=True)
 
 rospy.spin()

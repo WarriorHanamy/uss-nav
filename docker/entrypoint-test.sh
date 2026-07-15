@@ -49,21 +49,21 @@ sed -e "s/obs_num:.*/obs_num: ${OBS_NUM}/" \
     -e "s/x_size:.*/x_size: ${X_SIZE}/" \
     -e "s/y_size:.*/y_size: ${Y_SIZE}/" \
     /workspace/src/bringup_test/params/sim_ego_map.yaml \
-    > /tmp/sim_ego_map_${TEST_ID}.yaml
+    > /tmp/sim_random_map_${TEST_ID}.yaml
 
 # Patch the launch to use custom map (copy to /tmp since source is read-only)
-cp /workspace/src/bringup_test/launch/sim_ego_map.launch \
-   /tmp/sim_ego_map_${TEST_ID}.launch
-cp /workspace/src/bringup_test/launch/sim_ego_main.launch \
-   /tmp/sim_ego_main_${TEST_ID}.launch
-sed -i 's|params/sim_ego_map.yaml|/tmp/sim_ego_map_'"${TEST_ID}"'.yaml|' \
-   /tmp/sim_ego_map_${TEST_ID}.launch
-sed -i 's|\$(find bringup_test)/launch/sim_ego_map.launch|/tmp/sim_ego_map_'"${TEST_ID}"'.launch|' \
-   /tmp/sim_ego_main_${TEST_ID}.launch
+cp /workspace/src/bringup_test/launch/sim_random_map.launch \
+   /tmp/sim_random_map_${TEST_ID}.launch
+cp /workspace/src/bringup_test/launch/sim_random_main.launch \
+   /tmp/sim_random_main_${TEST_ID}.launch
+sed -i 's|params/sim_ego_map.yaml|/tmp/sim_random_map_'"${TEST_ID}"'.yaml|' \
+   /tmp/sim_random_map_${TEST_ID}.launch
+sed -i 's|\$(find bringup_test)/launch/sim_random_map.launch|/tmp/sim_random_map_'"${TEST_ID}"'.launch|' \
+   /tmp/sim_random_main_${TEST_ID}.launch
 
 # Start ego planner
 echo "Starting ego planner (headless)..."
-roslaunch /tmp/sim_ego_main_${TEST_ID}.launch \
+roslaunch /tmp/sim_random_main_${TEST_ID}.launch \
   flight_type:=$FLIGHT_TYPE max_vel:=$MAX_VEL max_acc:=$MAX_ACC \
   use_rviz:=false \
   &>/tmp/roslaunch.log &
@@ -102,5 +102,5 @@ kill $BRIDGE_PID 2>/dev/null || true
 kill $LAUNCH_PID 2>/dev/null || true
 
 # Clean up temp files
-rm -f /tmp/sim_ego_map_${TEST_ID}.launch /tmp/sim_ego_main_${TEST_ID}.launch
+rm -f /tmp/sim_random_map_${TEST_ID}.launch /tmp/sim_random_main_${TEST_ID}.launch
 echo "=== Test [$TEST_ID] done ==="

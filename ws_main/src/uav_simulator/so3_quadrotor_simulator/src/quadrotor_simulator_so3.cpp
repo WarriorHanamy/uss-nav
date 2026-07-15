@@ -245,8 +245,8 @@ main(int argc, char** argv)
   Control control;
 
   nav_msgs::Odometry odom_msg;
-  odom_msg.header.frame_id = "/world";
-  odom_msg.child_frame_id  = "/" + quad_name;
+  odom_msg.header.frame_id = "world";
+  odom_msg.child_frame_id  = quad_name;
 
   sensor_msgs::Imu imu;
   imu.header.frame_id = "/simulator";

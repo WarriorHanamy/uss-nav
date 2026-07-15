@@ -33,6 +33,7 @@ public:
      * @return True if load succeeded
      */
     bool load(const std::string& save_name);
+    bool load(const std::string& save_name, const std::string& data_path);
 
 private:
     SceneGraph& scene_graph_;

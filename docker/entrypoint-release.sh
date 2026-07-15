@@ -23,7 +23,7 @@ echo "use_rviz=$USE_RVIZ"
 # ── launch simulation ─────────────────────────────────────────────
 echo "Starting map_generator + quadrotor sim + EGO planner..."
 
-roslaunch bringup_test sim_ego_main.launch \
+roslaunch bringup_test sim_random_main.launch \
   flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
   use_rviz:="$USE_RVIZ" \
   &>/tmp/roslaunch.log &

@@ -387,6 +387,11 @@ bool SceneGraph::loadMap(const std::string& save_name) {
     return map_io.load(save_name);
 }
 
+bool SceneGraph::loadMap(const std::string& save_name, const std::string& data_path) {
+    SceneGraphMapIO map_io(*this);
+    return map_io.load(save_name, data_path);
+}
+
 bool SceneGraphMapIO::save(const std::string& save_name) {
     INFO_MSG_BLUE("\n[SceneGraphMapIO] ================= Save Scene Graph =================");
 
@@ -719,6 +724,10 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
 }
 
 bool SceneGraphMapIO::load(const std::string& save_name) {
+    return load(save_name, "");
+}
+
+bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data_path) {
     std::string final_save_name;
     if (!normalizeRelativeSavePath(save_name, final_save_name, false)) {
         INFO_MSG_RED("[SceneGraphMapIO] Load failed: save path must be a valid relative path.");
@@ -727,8 +736,10 @@ bool SceneGraphMapIO::load(const std::string& save_name) {
 
     INFO_MSG_BLUE("\n[SceneGraphMapIO] ================= Load Scene Graph =================");
 
-    // 1) 根据相对保存路径定位快照目录，并读取入口 manifest。
-    const std::string saved_data_dir = joinPath(scene_graph_.this_package_path_, "saved_data");
+    // 1) 根据相对保存路径或外部数据路径定位快照目录，并读取入口 manifest。
+    const std::string saved_data_dir = data_path.empty()
+        ? joinPath(scene_graph_.this_package_path_, "saved_data")
+        : data_path;
     const std::string save_dir = joinPath(saved_data_dir, final_save_name);
     const std::string manifest_path = joinPath(save_dir, "manifest.json");
 

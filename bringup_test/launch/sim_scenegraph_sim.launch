@@ -3,6 +3,20 @@
   <arg name="init_x" default="0.0"/>
   <arg name="init_y" default="0.0"/>
   <arg name="init_z" default="1.0"/>
+  <arg name="map_pcd" default="/workspace/.data/pcd/J30V2_latest.pcd"/>
+
+  <!-- PCD map publisher (global occupancy map) -->
+  <node pkg="map_generator" name="map_pub" type="map_pub" output="screen"
+        args="$(arg map_pcd)">
+    <param name="add_boundary" value="0"/>
+    <param name="add_boundary2" value="0"/>
+    <param name="is_bridge" value="0"/>
+    <param name="downsample_res" value="0.2"/>
+    <param name="map_offset_x" value="0.0"/>
+    <param name="map_offset_y" value="0.0"/>
+    <param name="map_offset_z" value="0.0"/>
+  </node>
+  <node pkg="map_generator" name="map_display" type="map_display.py" output="screen"/>
 
   <!-- Quadrotor dynamics simulator -->
   <node pkg="so3_quadrotor_simulator" type="quadrotor_simulator_so3"
@@ -13,6 +27,12 @@
     <param name="simulator/init_state_z" value="$(arg init_z)"/>
     <remap from="~odom" to="drone_$(arg drone_id)_visual_slam/odom"/>
     <remap from="~cmd" to="drone_$(arg drone_id)_so3_cmd"/>
+  </node>
+
+  <!-- Broadcast odometry as TF for RViz and external visualizers. -->
+  <node pkg="bringup_test" name="drone_$(arg drone_id)_frame_tf"
+        type="frame_tf.py" output="screen">
+    <param name="odom_topic" value="/drone_$(arg drone_id)_visual_slam/odom"/>
   </node>
 
   <!-- SO(3) controller -->

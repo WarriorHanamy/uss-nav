@@ -122,6 +122,9 @@ struct FSMParam
   bool                    flag_realworld_exp_;
   bool                    enable_area_prediction_{false};
   bool                    auto_init_scene_graph_{true};
+  bool                    auto_load_scene_graph_{false};
+  std::string             scene_graph_data_path_;
+  std::string             scene_graph_load_name_;
   double                  auto_init_delay_sec_{2.0};
   double                  scene_graph_init_forward_dist_{1.8};
   double                  frontier_update_dt_{0.5};

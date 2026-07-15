@@ -17,7 +17,7 @@ uss-nav/
 │   │   │   ├── scene_graph/     # 语义目标融合、场景图、骨架生成、LLM 接口
 │   │   │   ├── yoloe/           # YOLOE 检测（仿真 fake + 真实 predict 脚本）
 │   │   │   └── camera_fov/      # 相机视场工具
-│   │   ├── mission_executive/   # 任务状态机、RViz 配置、启动入口、功能脚本
+│   │   ├── mission_executive/   # 任务状态机、启动入口、功能脚本
 │   │   ├── uav_simulator/       # 仿真器、地图生成、深度/点云模拟
 │   │   └── utils/               # 自定义消息、轨迹/命令工具（quadrotor_msgs, traj_utils 等）
 │   ├── project.deps.yaml/       # 依赖记录
@@ -36,6 +36,9 @@ uss-nav/
 ├── src/                         # CLI 工具（TypeScript，测试管理/流水线）
 ├── .artifacts/                  # 构建产物 & 运行时产出（PCD/CSV），dot-prefix 隔离
 │   └── {devel,build,csv,pcd}/
+├── .data/                       # 离线测试数据（PCD 地图 + SceneGraph 快照），untracked
+│   ├── pcd/
+│   └── scene_graph/
 ├── .pretrained/                 # 预训练模型权重（YOLOE, MobileCLIP），手动下载
 └── test-plans/                  # 测试计划
 ```
@@ -71,13 +74,23 @@ TEST_ID=my-test DURATION=60 docker compose run --rm test
 
 ### 启动模式
 
-| 模式 | 入口 | 说明 |
-|------|------|------|
-| 仿真主程序 | `roslaunch ego_planner obj_nav.launch` | 仿真器 + 规划器，首次验证 |
-| 仿真 RViz | `roslaunch mission_executive rviz.launch` | 配合仿真启动，RViz 下发目标 |
-| YOLOE 仿真 | `python3 ws_main/src/perception/yoloe/predict_realtime_cam_sim.py` | 检测服务 |
-| 实机规划 | `roslaunch ego_planner obj_nav_real.launch` | 依赖外部定位/点云/控制器 |
-| 发送指令 | `bash ws_main/src/mission_executive/scripts/Instruction_pub.sh` | 发布 Instruction 消息 |
+| 模式                  | 入口                                                            | 说明                                                                  |
+| --------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| scenegraph-ego (默认) | `roslaunch bringup_test sim_scenegraph_main.launch`               | 离线 PCD 地图 + 离线 SceneGraph → EGO Planner（需 `.data/` 就绪）        |
+| random-sim            | `roslaunch bringup_test sim_random_main.launch`                   | 程序化随机地图 + 仿真器 + EGO Planner（无需外部数据）                   |
+| 切换模式              | `LAUNCH_MODE=random docker compose up devel`                      | 环境变量 `LAUNCH_MODE` 默认 `scenegraph`，设为 `random` 走程序化模式     |
+
+#### scenegraph-ego 模式数据准备
+
+```bash
+mkdir -p .data/pcd .data/scene_graph
+
+# PCD 地图
+ln -s /path/to/J30V2_20260629.pcd .data/pcd/J30V2_latest.pcd
+
+# Scene graph 快照 (需包含 manifest.json / scene_graph.json / objects/)
+cp -r /path/to/J30V2_snapshot .data/scene_graph/
+```
 
 ### 指令类型
 

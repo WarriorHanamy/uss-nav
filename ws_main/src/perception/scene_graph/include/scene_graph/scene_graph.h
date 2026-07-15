@@ -262,6 +262,7 @@ public:
      * @return True if load succeeded
      */
     bool loadMap(const std::string& save_name);
+    bool loadMap(const std::string& save_name, const std::string& data_path);
 
     void refreshLoadedMapVisualization();
     void visualizeSceneGraph();
