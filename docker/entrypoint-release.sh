@@ -7,10 +7,8 @@ source /workspace/devel/setup.bash
 echo "=== USS-NAV Release: SceneGraph Online Construction ==="
 
 # ── display setup ──────────────────────────────────────────────────
-USE_RVIZ=false
 if [ -n "$DISPLAY" ] && [ -d "/tmp/.X11-unix" ]; then
   echo "X11 display: ${DISPLAY}"
-  USE_RVIZ=true
 else
   echo "No DISPLAY, starting Xvfb..."
   export DISPLAY=:99
@@ -18,14 +16,12 @@ else
   sleep 1
 fi
 
-echo "use_rviz=$USE_RVIZ"
-
 # ── launch simulation ─────────────────────────────────────────────
 echo "Starting map_generator + quadrotor sim + EGO planner..."
+echo "RViz managed by ~/rviz_ws (external), not started here."
 
 roslaunch bringup_test sim_random_main.launch \
   flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
-  use_rviz:="$USE_RVIZ" \
   &>/tmp/roslaunch.log &
 LAUNCH_PID=$!
 

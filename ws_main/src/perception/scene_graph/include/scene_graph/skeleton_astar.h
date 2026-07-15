@@ -80,7 +80,7 @@ namespace skeleton_astar{
       tie_breaker_ = 1.0 + 1.0 / 1000;
       open_list_map_.clear();
       closed_list.clear();
-      vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("skeleton_vis", 1);
+      vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("skeleton_vis", 1, true);
     }
     ~SkeletonAstar(){}
     /**

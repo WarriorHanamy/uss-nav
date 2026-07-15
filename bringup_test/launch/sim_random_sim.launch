@@ -15,7 +15,7 @@
     <remap from="~cmd" to="drone_$(arg drone_id)_so3_cmd"/>
   </node>
 
-  <!-- Broadcast odometry as TF for RViz and external visualizers. -->
+  <!-- Broadcast odometry as TF for external visualizers. -->
   <node pkg="bringup_test" name="drone_$(arg drone_id)_frame_tf"
         type="frame_tf.py" output="screen">
     <param name="odom_topic" value="/drone_$(arg drone_id)_visual_slam/odom"/>

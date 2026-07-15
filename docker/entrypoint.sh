@@ -17,7 +17,7 @@ echo "X11 display: ${DISPLAY}"
 
 # ── launch ────────────────────────────────────────────────────────
 echo "Starting simulation..."
-echo "use_rviz=false (RViz launched externally from ~/rviz_ws)"
+echo "RViz managed by ~/rviz_ws (external), not started here."
 
 LAUNCH_MODE="${LAUNCH_MODE:-scenegraph}"
 MAP_PCD="${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}"
@@ -26,7 +26,6 @@ if [ "$LAUNCH_MODE" = "random" ]; then
     echo "Mode: random (procedural map)"
     roslaunch bringup_test sim_random_main.launch \
       flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
-      use_rviz:=false \
       &>/tmp/roslaunch.log &
 else
     echo "Mode: scenegraph (PCD + offline scene graph)"
@@ -38,7 +37,6 @@ else
     roslaunch bringup_test sim_scenegraph_main.launch \
       flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
       map_pcd:="$MAP_PCD" \
-      use_rviz:=false \
       &>/tmp/roslaunch.log &
 fi
 LAUNCH_PID=$!

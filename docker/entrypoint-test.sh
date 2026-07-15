@@ -65,7 +65,6 @@ sed -i 's|\$(find bringup_test)/launch/sim_random_map.launch|/tmp/sim_random_map
 echo "Starting ego planner (headless)..."
 roslaunch /tmp/sim_random_main_${TEST_ID}.launch \
   flight_type:=$FLIGHT_TYPE max_vel:=$MAX_VEL max_acc:=$MAX_ACC \
-  use_rviz:=false \
   &>/tmp/roslaunch.log &
 LAUNCH_PID=$!
 

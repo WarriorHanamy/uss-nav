@@ -120,7 +120,7 @@
         <arg name="elastic_tracker_finish_topic" value="$(arg elastic_tracker_finish_topic)"/>
         <arg name="elastic_tracker_stop_topic" value="$(arg elastic_tracker_stop_topic)"/>
 
-        <!-- MANUAL_TARGET  = 1, // Set aim in rviz
+        <!-- MANUAL_TARGET  = 1, // Set aim externally (e.g. via RViz from ~/rviz_ws)
              EXPLORE_TARGET = 2, // Get aim from Exploration 
              PRESET_TARGET  = 3, // Get preset aim from launch file -->
         <arg name="flight_type" value="2"/>

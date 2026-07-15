@@ -17,8 +17,4 @@
   <param name="obstacle_number"   type="int"    value="50"/>
 
   </node>
-  <!-- Launch RViz with the demo configuration -->
-  <node name="rviz" pkg="rviz" type="rviz"
-        args="-d $(find mockamap)/config/rviz.rviz"
-        />
 </launch>

@@ -178,14 +178,20 @@ REAL_YOLOE=1 docker compose run --rm release
 
 当 `REAL_YOLOE=1` 且 `/workspace/.pretrained/yoloe-11m-seg-pf.pt` 存在时，自动启动 `predict_realtime_cam_sim.py`；否则回退到 `fake_realtime_cam_sim.py`。
 
-## 可视化
+## 可视化 — 强制约束
 
-devel 镜像基于 `ros:noetic-ros-base`，**不含 rviz**。仿真启动后所有节点正常运行（地图生成、四旋翼动力学、EGO 规划器），但无内置可视化输出。
+**本项目内严禁包含任何 RViz 配置、launch 节点或内嵌启动脚本。** 所有 `.rviz` 配置文件、rviz launch 节点、`use_rviz` 参数已彻底清理。
 
-可视化由 `~/rviz_ws` 提供。该工作区基于 `osrf/ros:noetic-desktop-full`（含完整 ROS 桌面 + rviz），
-包含自定义 RViz 插件（PolyhedronArray / EllipsoidArray / ProbMap 等）和 EGO Planner 场景的配置。
+所有可视化工作 **MUST** 由 `~/rviz_ws` 管理。
 
-`start_uss_nav_sim_rviz.sh` 一键启动仿真 + RViz：
+| 原则 | 说明 |
+|------|------|
+| 镜像 | devel 基镜像 `ros:noetic-ros-base` **不含 rviz** |
+| 配置 | 所有 RViz 配置（`.rviz` 文件、自定义插件）位于 `~/rviz_ws` |
+| 启动 | `~/rviz_ws` 使用 `osrf/ros:noetic-desktop-full`（含完整 ROS 桌面 + rviz）|
+| 自定义插件 | PolyhedronArray / EllipsoidArray / ProbMap 等均在 `~/rviz_ws` 管理 |
+
+一键启动仿真 + RViz：
 
 ```bash
 cd ~/uss-nav && ./start_uss_nav_sim_rviz.sh

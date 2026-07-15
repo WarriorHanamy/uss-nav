@@ -7,6 +7,9 @@ ROS_MASTER_URI="${ROS_MASTER_URI:-http://127.0.0.1:11311}"
 DEVEL_CONTAINER="uss-nav-devel-${GIT_SHA:-local}"
 DEFAULT_MAP_PCD="${SCRIPT_DIR}/.data/pcd/J30V2_latest.pcd"
 FALLBACK_MAP_PCD="${SCRIPT_DIR}/2026-06-28-all-120.pcd"
+DEFAULT_SCENE_GRAPH="${SCRIPT_DIR}/.data/scene_graph/J30V2_snapshot"
+FALLBACK_SCENE_GRAPH="${SCRIPT_DIR}/scene_graph_saved/J30V2_whole-20260626-9"
+RVIZ_DEVEL_SETUP="${RVIZ_WS_DIR}/.artifacts/devel/setup.bash"
 
 # ── check prerequisites ────────────────────────────────────────────
 if [[ -z "${DISPLAY:-}" ]]; then
@@ -33,6 +36,19 @@ if [[ "${LAUNCH_MODE:-scenegraph}" != "random" && ! -f "${DEFAULT_MAP_PCD}" ]]; 
         echo "Linked default scene map: ${DEFAULT_MAP_PCD}"
     else
         echo "Missing scene map: ${DEFAULT_MAP_PCD}" >&2
+        echo "Provide it or run with LAUNCH_MODE=random for the procedural map." >&2
+        exit 1
+    fi
+fi
+
+if [[ "${LAUNCH_MODE:-scenegraph}" != "random" && ! -f "${DEFAULT_SCENE_GRAPH}/manifest.json" ]]; then
+    if [[ -f "${FALLBACK_SCENE_GRAPH}/manifest.json" ]]; then
+        echo "Missing scene graph snapshot: ${DEFAULT_SCENE_GRAPH}" >&2
+        echo "Create it from ${FALLBACK_SCENE_GRAPH} before launching." >&2
+        echo "Example: mkdir -p ${SCRIPT_DIR}/.data/scene_graph && cp -a ${FALLBACK_SCENE_GRAPH} ${DEFAULT_SCENE_GRAPH}" >&2
+        exit 1
+    else
+        echo "Missing scene graph snapshot: ${DEFAULT_SCENE_GRAPH}" >&2
         echo "Provide it or run with LAUNCH_MODE=random for the procedural map." >&2
         exit 1
     fi
@@ -76,6 +92,12 @@ if ! docker image inspect rviz_ws:latest >/dev/null 2>&1; then
     docker compose --project-directory "${RVIZ_WS_DIR}" build rviz
 fi
 
+if [[ ! -f "${RVIZ_DEVEL_SETUP}" ]]; then
+    echo "Building rviz_ws workspace artifacts..."
+    mkdir -p "${RVIZ_WS_DIR}/.artifacts/build" "${RVIZ_WS_DIR}/.artifacts/devel"
+    docker compose --project-directory "${RVIZ_WS_DIR}" run --rm build
+fi
+
 # ── launch RViz (blocking, Ctrl+C to quit) ─────────────────────────
 echo ""
 echo "=== USS-NAV Simulation + RViz ==="
@@ -88,4 +110,4 @@ docker compose --project-directory "${RVIZ_WS_DIR}" run --rm \
     -e ROS_MASTER_URI="${ROS_MASTER_URI}" \
     -e DISPLAY="${DISPLAY}" \
     rviz \
-    bash -lc 'rviz -d /root/rviz_ws/bringup/config/ego_planner/uss_nav_sim.rviz'
+    bash -lc 'rviz -d /workspace/src/bringup/config/ego_planner/uss_nav_sim.rviz'

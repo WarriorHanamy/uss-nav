@@ -53,7 +53,7 @@ public:
     SceneGraph(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr& map_interface) {
         nh_ = nh;
         map_interface_      = map_interface;
-        scene_graph_pub_    = nh_.advertise<visualization_msgs::MarkerArray>("/scene_graph/vis", 2);
+        scene_graph_pub_    = nh_.advertise<visualization_msgs::MarkerArray>("/scene_graph/vis", 2, true);
         prompt_pub_         = nh_.advertise<scene_graph::PromptMsg>("/scene_graph/prompt", 2);
         llm_ans_sub_        = nh_.subscribe("/scene_graph/llm_ans", 2, &SceneGraph::llmAnsCallback, this, ros::TransportHints().tcpNoDelay());
         skeleton_gen_       = std::make_shared<SkeletonGenerator>(nh, map_interface);

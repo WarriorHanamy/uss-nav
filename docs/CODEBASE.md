@@ -73,7 +73,7 @@ uss-nav/
 | `python yoloe/predict_realtime_cam_sim.py`   | Vision        | Real-time YOLOE detection (sim)            |
 | `python yoloe/predict_realtime_cam_real.py`  | Vision        | Real-time YOLOE detection (real UAV)       |
 | `roslaunch mission_fsm bridge_drone.launch`  | Multi-drone   | Bridge node for swarm communication        |
-| `roslaunch mission_fsm rviz.launch`          | Visualization | RViz setup (recommended)                   |
+| `~/rviz_ws` (external)                       | Visualization | RViz managed externally (see AGENTS.md)     |
 
 ---
 
@@ -105,11 +105,10 @@ pip install -r requirements.txt
 
 ### Quick Start (Simulation)
 ```bash
-# Terminal 1: RViz
-roslaunch mission_fsm rviz.launch
+# Terminal 1: Start simulation (auto-launches all nodes)
+roslaunch bringup_test sim_random_main.launch
 
-# Terminal 2: Planner + Simulator
-roslaunch ego_planner obj_nav.launch
+# Terminal 2 (optional): Launch RViz from external ~/rviz_ws
 
 # Set 2D Nav Goal in RViz to trigger exploration
 ```

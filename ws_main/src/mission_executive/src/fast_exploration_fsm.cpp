@@ -2621,6 +2621,7 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
                  fp_->scene_graph_data_path_.c_str(),
                  fp_->scene_graph_load_name_.c_str());
         scene_graph_->object_factory_->runThisModule();
+        scene_graph_->refreshLoadedMapVisualization();
         transitState(WAIT_TRIGGER, "auto_load_scene_graph");
         break;
       }

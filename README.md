@@ -22,7 +22,7 @@ uss-nav/
 │   │   └── utils/               # 自定义消息、轨迹/命令工具（quadrotor_msgs, traj_utils 等）
 │   ├── project.deps.yaml/       # 依赖记录
 │   └── CMakeLists.txt
-├── bringup_test/                # 测试启动配置、launch/rviz 文件、参数
+├── bringup_test/                # 测试启动配置、launch 文件、参数
 ├── docker/                      # Dockerfile & entrypoints
 │   ├── Dockerfile.devel         # 系统依赖镜像（apt, ROS, 静态库）
 │   ├── Dockerfile.release       # 发布镜像（含 entrypoint-release.sh）
@@ -117,7 +117,7 @@ cp -r /path/to/J30V2_snapshot .data/scene_graph/
 | `exploration` | `planners/exploration` | 前沿点选择、探索/目标模式切换 |
 | `scene_graph` | `perception/scene_graph` | 目标融合、场景图、骨架生成、LLM 交互 |
 | `yoloe` | `perception/yoloe` | YOLOE 检测（fake/predict 模式，需要 CUDA） |
-| `mission_executive` | `mission_executive` | 任务状态机、RViz 配置、启动入口 |
+| `mission_executive` | `mission_executive` | 任务状态机、启动入口 |
 | `uav_simulator` | `uav_simulator` | 仿真无人机、地图生成、深度/点云渲染 |
 | `quadrotor_msgs` / `traj_utils` | `utils/*` | 自定义消息、轨迹/命令类型定义 |
 

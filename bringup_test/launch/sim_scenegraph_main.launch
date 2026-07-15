@@ -6,7 +6,6 @@
   <arg name="flight_type" default="2"/>
   <arg name="max_vel" default="0.6"/>
   <arg name="max_acc" default="1.0"/>
-  <arg name="use_rviz" default="false"/>
 
   <!-- PCD map path (mounted from .data/pcd/) -->
   <arg name="map_pcd" default="/workspace/.data/pcd/J30V2_latest.pcd"/>
@@ -31,9 +30,4 @@
     <arg name="max_acc" value="$(arg max_acc)"/>
     <arg name="scene_graph_name" value="$(arg scene_graph_name)"/>
   </include>
-
-  <!-- RViz for visualization (enable with use_rviz:=true) -->
-  <node name="rviz" pkg="rviz" type="rviz"
-        args="-d $(find bringup_test)/rviz/sim_ego.rviz" output="screen"
-        if="$(arg use_rviz)"/>
 </launch>

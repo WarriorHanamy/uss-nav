@@ -5,6 +5,6 @@
     <rosparam command="load" file="$(find bringup_test)/params/sim_ego_map.yaml"/>
   </node>
 
-  <!-- RViz display helper for the global map -->
+  <!-- Display helper for the global map -->
   <node pkg="map_generator" name="map_display" type="map_display.py" output="screen"/>
 </launch>

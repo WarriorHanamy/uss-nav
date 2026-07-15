@@ -49,8 +49,4 @@
     <param name="nodeRad"         type="int"    value="1"/>
     <param name="roadRad"         type="int"    value="10"/>
   </node>
-  <!-- Launch RViz with the demo configuration -->
-  <node name="rviz" pkg="rviz" type="rviz"
-        args="-d $(find mockamap)/config/rviz.rviz"
-        />
 </launch>

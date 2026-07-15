@@ -1,7 +1,4 @@
 <launch>
-
-  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find mapping)/config/rviz_sim.rviz">
-  </node> -->
   <include file="$(find realsense2_camera)/launch/rs_camera.launch"/>
 
   <group ns="drone0">

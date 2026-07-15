@@ -135,15 +135,13 @@ For installation of CUDA, please go to [CUDA ToolKit](https://developer.nvidia.c
 
 ## 3. Run the Simulation
 
-Run [Rviz](http://wiki.ros.org/rviz) with our configuration firstly:
+Run the simulation:
 
 ```
-  <!-- go to your workspace and run: -->
-  source devel/setup.bash
-  roslaunch plan_manage rviz.launch
+  roslaunch bringup_test sim_random_main.launch
 ```
 
-Then run the quadrotor simulator and __Fast-Planner__:
+Then run __Fast-Planner__ (included in the launch above, or separately):
 
 ```
   <!-- open a new terminal, go to your workspace and run: -->

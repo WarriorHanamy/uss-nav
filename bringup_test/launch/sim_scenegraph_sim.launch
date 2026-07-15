@@ -29,7 +29,7 @@
     <remap from="~cmd" to="drone_$(arg drone_id)_so3_cmd"/>
   </node>
 
-  <!-- Broadcast odometry as TF for RViz and external visualizers. -->
+  <!-- Broadcast odometry as TF for external visualizers. -->
   <node pkg="bringup_test" name="drone_$(arg drone_id)_frame_tf"
         type="frame_tf.py" output="screen">
     <param name="odom_topic" value="/drone_$(arg drone_id)_visual_slam/odom"/>
@@ -52,8 +52,11 @@
   <!-- 360° LiDAR sensor simulation (pcl_render_node) -->
   <node pkg="local_sensing_node" type="pcl_render_node"
         name="drone_$(arg drone_id)_pcl_render_node" output="log">
-    <remap from="~global_map" to="/map_generator/global_cloud"/>
+    <remap from="~global_map" to="/map_generator/global_cloud/fixed"/>
     <remap from="~odometry" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~cloud" to="/livox/lidar_world"/>
+    <remap from="~sensor_pose" to="/drone_$(arg drone_id)_pcl_render_node/camera_pose"/>
+    <remap from="~depth_img" to="/drone_$(arg drone_id)_pcl_render_node/depth"/>
 
     <param name="drone_id" value="$(arg drone_id)"/>
     <param name="quadrotor_name" value="drone_$(arg drone_id)"/>

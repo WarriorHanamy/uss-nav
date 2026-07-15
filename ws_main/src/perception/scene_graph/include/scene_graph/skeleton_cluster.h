@@ -37,7 +37,7 @@ class SpectralCluster {
 public:
     typedef std::shared_ptr<SpectralCluster> Ptr;
     SpectralCluster(ros::NodeHandle& nh, double sigma_sq): nh_(nh), sigma_sq_(sigma_sq) {
-        cluster_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/cluster_vis", 2);
+        cluster_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/cluster_vis", 2, true);
     };
     ~SpectralCluster() = default;
     /**
@@ -75,8 +75,8 @@ class AreaHandler {
 public:
     typedef std::shared_ptr<AreaHandler> Ptr;
     AreaHandler(ros::NodeHandle& nh): nh_(nh) {
-        cluster_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/cluster_vis", 2);
-        edge_weight_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/edge_weight_vis", 2);
+        cluster_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/cluster_vis", 2, true);
+        edge_weight_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/skeleton/edge_weight_vis", 2, true);
     };
     ~AreaHandler() = default;
     /**

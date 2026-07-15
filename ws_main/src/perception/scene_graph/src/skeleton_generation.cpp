@@ -52,7 +52,7 @@ SkeletonGenerator::SkeletonGenerator(ros::NodeHandle& nh, ego_planner::MapInterf
   skeleton_astar_   = std::make_shared<skeleton_astar::SkeletonAstar>(nh);
   spectral_cluster_ = std::make_shared<SpectralCluster>(nh, 1.0);
   area_handler_  = std::make_shared<AreaHandler>(nh);
-  skeleton_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("skeleton_vis", 100);
+  skeleton_vis_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("skeleton_vis", 100, true);
   cmd_sub_          = nh_.subscribe("/skeleton_cmd", 1, &SkeletonGenerator::cmdCallback, this);
 
   getROSParams();

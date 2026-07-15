@@ -76,11 +76,11 @@ void ObjectFactory::init() {
     segment_result_sub_      = nh_.subscribe<scene_graph::EncodeMask>(seg_result_topic, 5,
                                         &ObjectFactory::segmentationResultCallback, this, ros::TransportHints().tcpNoDelay());
     odom_depth_pub_          = nh_.advertise<nav_msgs::Odometry>(prefixedTopic("/depth_odom"), 2);
-    obj_detection_vis_pub_   = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_detection_vis"), 2);
-    obj_all_vis_pub_         = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_all_vis"), 2);
-    obj_update_vis_pub_      = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_update_vis"), 2);
-    obj_update_pt_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_update_pointcloud"), 2);
-    obj_pt_cloud_all_pub_    = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_pointcloud"), 2);
+    obj_detection_vis_pub_   = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_detection_vis"), 2, true);
+    obj_all_vis_pub_         = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_all_vis"), 2, true);
+    obj_update_vis_pub_      = nh_.advertise<visualization_msgs::MarkerArray>(prefixedTopic("/object_update_vis"), 2, true);
+    obj_update_pt_cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_update_pointcloud"), 2, true);
+    obj_pt_cloud_all_pub_    = nh_.advertise<sensor_msgs::PointCloud2>(prefixedTopic("/object_pointcloud"), 2, true);
 
     obj_process_thread_running_ = true;
     object_process_thread_ = std::make_unique<std::thread>(&ObjectFactory::objectProcessThread, this);
