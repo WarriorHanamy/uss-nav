@@ -15,7 +15,7 @@
 using std::vector;
 using Eigen::Vector3d;
 
-namespace ego_planner {
+namespace mission_executive {
 
 /**
  * Enum for target type classification.
@@ -157,6 +157,6 @@ struct FSMParam
   bool   object_id_nav_require_final_yaw_{true};
 };
 
-}  // namespace ego_planner
+}  // namespace mission_executive
 
 #endif

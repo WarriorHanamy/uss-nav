@@ -1,6 +1,6 @@
 #include <mission_executive/rc_replan_trigger.h>
 
-namespace ego_planner {
+namespace mission_executive {
 
 RcReplanTrigger::RcReplanTrigger(ros::NodeHandle& nh) : nh_(nh) {
   nh_.param("rc_replan_trigger/hold_duration", hold_duration_, 0.0);
@@ -80,7 +80,7 @@ void RcReplanTrigger::rcCallback(const mavros_msgs::RCIn::ConstPtr& msg) {
   }
 }
 
-}  // namespace ego_planner
+}  // namespace mission_executive
 
 /**
  * ROS node entry point for RC replan trigger.
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "rc_replan_trigger");
   ros::NodeHandle nh("~");
 
-  ego_planner::RcReplanTrigger trigger(nh);
+  mission_executive::RcReplanTrigger trigger(nh);
 
   ros::spin();
   return 0;

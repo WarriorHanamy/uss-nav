@@ -59,7 +59,7 @@ public:
         skeleton_gen_       = std::make_shared<SkeletonGenerator>(nh, map_interface);
         object_factory_     = std::make_unique<ObjectFactory>(nh, skeleton_gen_);
         this_package_path_  = ros::package::getPath("scene_graph");
-        // 拓扑点不可达检测/修复/标记 参数(可被 YAML/launch 覆盖)
+        // topo-block unreachable detection/repair/marking params (overridable by YAML/launch)
         nh_.param("topo_block/enable",                  topo_block_enable_,             true);
         nh_.param("topo_block/repair_radius",           topo_repair_radius_,            0.5);
         nh_.param("topo_block/repair_vis_mode",         topo_repair_vis_mode_,           0);
@@ -96,8 +96,26 @@ public:
      * @param[in] yaw  Robot yaw [rad]
      */
     void mountCurPoly(const Eigen::Vector3d pos, const double yaw);
+
+    /**
+     * Get the current polyhedron the robot occupies.
+     *
+     * @return Pointer to the current polyhedron
+     */
     PolyHedronPtr getCurPoly() {return cur_poly_;};
-    int    getRepairVisMode()        const { return topo_repair_vis_mode_; }
+
+    /**
+     * Get the repair visualization mode.
+     *
+     * @return Visualization mode: 0=isVisible check, 1=skip isVisible, 2=isVisible+sphere-intersect midpoint
+     */
+    int getRepairVisMode() const { return topo_repair_vis_mode_; }
+
+    /**
+     * Get the repair visualization sphere radius.
+     *
+     * @return Sphere radius for mode-2 repair visualization [m]
+     */
     double getRepairVisSphereRadius() const { return topo_repair_vis_sphere_radius_; }
 
     /**
@@ -127,7 +145,15 @@ public:
      * updateSceneGraph from expanding topology online.
      */
     void freezeUpdate()   { scene_graph_update_frozen_ = true; }
+    /**
+     * Unfreeze incremental scene graph topology updates.
+     */
     void unfreezeUpdate() { scene_graph_update_frozen_ = false; }
+    /**
+     * Check whether scene graph topology updates are frozen.
+     *
+     * @return True if updates are frozen
+     */
     bool isUpdateFrozen() const { return scene_graph_update_frozen_; }
 
     /**
@@ -217,37 +243,162 @@ public:
      * @return True if an answer exists
      */
     bool hasPromptAnswer(unsigned int prompt_id);
+
+    /**
+     * Clear all stored data for a given prompt ID.
+     *
+     * @param[in] prompt_id  Prompt identifier to clear [--]
+     */
     void clearPromptData(unsigned int prompt_id);
 
     template<typename T>
     bool waitForFutureWithSpinOnce(std::future<T>& future, const ros::Duration& timeout);
 
     // prompt generation //
+    /**
+     * Generate a prompt for predicting all room types.
+     *
+     * @param[out] prompt_str  Generated prompt string
+     * @return True if generation succeeded
+     */
     bool allRoomPredictionPromptGen(std::string &prompt_str);
+
+    /**
+     * Generate a prompt for predicting a single room type.
+     *
+     * @param[in]  room_id     Room ID [--]
+     * @param[out] prompt_json JSON structure to populate
+     * @return True if generation succeeded
+     */
     bool singleRoomPredictionPromptGen(const int room_id, nlohmann::json &prompt_json);
+
+    /**
+     * Generate a prompt for predicting newly detected areas.
+     *
+     * @param[out] prompt_str  Generated prompt string
+     * @return True if generation succeeded
+     */
     bool newAreaPredictionPromptGen(std::string &prompt_str);
+
+    /**
+     * Generate a prompt for choosing the next area to explore.
+     *
+     * @param[out] prompt_str  Generated prompt string
+     * @return True if generation succeeded
+     */
     bool chooseAreaToGoPromptGen(std::string &prompt_str);
+
+    /**
+     * Generate a prompt for choosing a terminate object ID.
+     *
+     * @param[out] prompt_str  Generated prompt string
+     * @return True if generation succeeded
+     */
     bool chooseTerminateObjIdPromptGen(std::string &prompt_str);
+
+    /**
+     * Generate a DF (digital-fingerprint) demo prompt.
+     *
+     * @param[out] prompt_str  Generated prompt string
+     * @return True if generation succeeded
+     */
     bool DFDemoPromptGen(std::string &prompt_str);
+
+    /**
+     * Publish the scene graph JSON to the CoPaw topic.
+     *
+     * @param[in] scene_graph_json_str  Scene graph JSON string
+     */
     void sendSceneGraphJson(std::string &scene_graph_json_str);
+
+    /**
+     * Generate a VLA search prompt for swarm task routing.
+     *
+     * @param[in]  prompt_type           Prompt type code [--]
+     * @param[in]  command               Overall task command
+     * @param[in]  task_session_id       Task session identifier [--]
+     * @param[in]  observation_batch_id  Observation batch identifier [--]
+     * @param[in]  semantic_context       Semantic context JSON
+     * @param[out] prompt_str            Generated prompt string
+     * @return True if generation succeeded
+     */
     bool vlaSearchPromptGen(unsigned char prompt_type, const std::string &command,
                            uint32_t task_session_id, uint32_t observation_batch_id,
                            const nlohmann::json &semantic_context,
                            std::string &prompt_str) const;
 
     // result handle //
+    /**
+     * Handle the result of a room prediction LLM query.
+     *
+     * @param[in] prompt_id  Prompt identifier for the result [--]
+     */
     void handleRoomPredictionResult(unsigned int prompt_id);
+
+    /**
+     * Handle the result of an exploration choice LLM query.
+     *
+     * @param[in]  prompt_id  Prompt identifier for the result [--]
+     * @return Selected area ID on success, -1 on failure
+     */
     int handelExplorationResult(unsigned int prompt_id);
+
+    /**
+     * Handle the result of a terminate object ID LLM query.
+     *
+     * @param[in]  prompt_id  Prompt identifier for the result [--]
+     * @return Selected object ID on success, -1 on failure
+     */
     int handelTerminateObjIdResult(unsigned int prompt_id);
+
+    /**
+     * Handle the result of a DF demo LLM query.
+     *
+     * @param[in]  prompt_id  Prompt identifier for the result [--]
+     * @return Selected DF demo object ID on success, -1 on failure
+     */
     int handelDFDemoResult(unsigned int prompt_id);
+
+    /**
+     * Parse a VLA search prompt result from the LLM answer.
+     *
+     * @param[in] prompt_id             Prompt identifier for the result [--]
+     * @param[in] expected_prompt_type  Expected prompt type code [--]
+     * @return Parsed result structure
+     */
     VLASearchPromptResult parseVlaSearchPromptResult(unsigned int prompt_id,
                                                    unsigned char expected_prompt_type);
 
     // data operations //
+    /**
+     * Get the current prompt ID and atomically increment it.
+     *
+     * @return Current prompt ID before increment [--]
+     */
     unsigned int getCurPromptIdAndPlusOne(){std::lock_guard<std::mutex> lock(mutex_); return cur_prompt_id_++; }
+
+    /**
+     * Get the current prompt ID without incrementing.
+     *
+     * @return Current prompt ID [--]
+     */
     unsigned int getCurPromptId(){return cur_prompt_id_;}
+
+    /**
+     * Get the area ID from a polyhedron.
+     *
+     * @param[in] poly  Polyhedron pointer
+     * @return Area ID of the polyhedron [--]
+     */
     int getAreaFromPoly(const PolyHedronPtr& poly){return poly->area_id_;}
+
+    /**
+     * Check whether any areas need re-prediction.
+     *
+     * @return True if there are areas pending prediction
+     */
     bool needAreaPrediction(){ return !skeleton_gen_->area_handler_->areas_need_predict_.empty();}
+
     /**
      * Save the current scene graph map to disk.
      *
@@ -264,7 +415,14 @@ public:
     bool loadMap(const std::string& save_name);
     bool loadMap(const std::string& save_name, const std::string& data_path);
 
+    /**
+     * Refresh visualization after loading a saved map.
+     */
     void refreshLoadedMapVisualization();
+
+    /**
+     * Publish the full scene graph visualization marker array.
+     */
     void visualizeSceneGraph();
 
 private:
@@ -273,19 +431,19 @@ private:
     ros::Publisher         scene_graph_pub_;
     std::mutex             mutex_;
 
-    // 拓扑点不可达 相关 //
-    ego_planner::MapInterface::Ptr map_interface_;       // 占据/可达查询接口
-    std::vector<PolyHedronPtr>     last_poly_path_;      // 上次 getPathToObjectWithId 的多面体序列(供按 center 标记)
-    std::vector<PolyHedronPtr>     blocked_list_;        // 当前被标记不可达的多面体(供 TTL 重校验/清除)
+    // topo-block unreachable detection //
+    ego_planner::MapInterface::Ptr map_interface_;       // occupancy/inflate query interface
+    std::vector<PolyHedronPtr>     last_poly_path_;      // polyhedron sequence from last getPathToObjectWithId (for center-based marking)
+    std::vector<PolyHedronPtr>     blocked_list_;        // currently blocked polyhedra (for TTL revalidation/clear)
     bool   topo_block_enable_               = true;
     double topo_repair_radius_              = 0.5;
-    int    topo_repair_vis_mode_            = 0;    // 0=isVisible拦截, 1=关闭isVisible, 2=isVisible+球交会中间点
-    double topo_repair_vis_sphere_radius_   = 2.0;  // 模式2专用球半径
+    int    topo_repair_vis_mode_            = 0;    // 0=isVisible intercept, 1=skip isVisible, 2=isVisible+sphere-intersect midpoint
+    double topo_repair_vis_sphere_radius_   = 2.0;  // sphere radius for mode 2
     int    topo_block_hits_thresh_          = 2;
     double topo_block_ttl_                = 8.0;
     bool   topo_block_revalidate_on_fail_ = true;
     int    topo_block_max_iter_            = 4;
-    bool   topo_repair_insert_node_       = false;   // 修复点插入拓扑图: true=丢弃旧节点+生成新节点并连接; false=标记+TTL恢复
+    bool   topo_repair_insert_node_       = false;   // insert repair node into topo graph: true=discard old+generate new+connect; false=mark+TTL recovery
 
     // LLM interface //
     std::string            this_package_path_;
@@ -300,11 +458,12 @@ private:
 };
 
 /**
- * @brief 等待一个 std::future，在等待期间通过调用 ros::spinOnce() 来处理回调。
- * @tparam T future 的返回类型。
- * @param future 要等待的 future 对象。
- * @param timeout 等待的超时时间。
- * @return 如果在超时时间内成功收到结果，则返回 true；否则返回 false。
+ * Wait for a std::future while calling ros::spinOnce() to process callbacks.
+ *
+ * @tparam T Return type of the future
+ * @param[in] future  Future object to wait on
+ * @param[in] timeout  Maximum wait duration [s]
+ * @return True if the future became ready within the timeout
  */
 template<typename T>
 bool SceneGraph::waitForFutureWithSpinOnce(std::future<T>& future, const ros::Duration& timeout)
@@ -314,16 +473,16 @@ bool SceneGraph::waitForFutureWithSpinOnce(std::future<T>& future, const ros::Du
     {
         if (ros::Time::now() - start_time > timeout)
         {
-            return false; // 超时失败
+            return false; // timeout failure
         }
-        // 2. 检查 future 是否就绪 (使用0秒等待实现非阻塞检查)
+        // non-blocking check of future readiness (0-second wait)
         auto status = future.wait_for(std::chrono::seconds(0));
         if (status == std::future_status::ready)
         {
-            return true; // 成功
+            return true; // success
         }
         ros::spinOnce();
-        ros::WallDuration(0.01).sleep(); // 休眠10毫秒
+        ros::WallDuration(0.01).sleep(); // sleep 10 ms
     }
 
     return false;

@@ -1,179 +1,64 @@
-# Fast-Planner
+# mission_executive
 
-## News
+High-level decision FSM for autonomous navigation.
 
-This package is under active maintenance. New features will be listed here.
+Receives `quadrotor_msgs::Instruction` on `/Instruct` and dispatches to the
+appropriate planner (EGO exploration, elastic tracker, VLA swarm, DF demo, etc.)
+via `planner_cmd_mux`. The core state machine `MissionFSM` runs in
+`mission_executive_node`.
 
-- The heading (yaw angle) planner which enables smoother change of heading direction is available.
-
-- The online mapping algorithm is now available. It can take in depth image and camera pose pairs as input, do raycasting to update a probabilistic volumetric map, and build a Euclidean signed distance field (ESDF) for the planning system.
-
-## Overview
-
-__Fast-Planner__ is a robust and efficient planning system that enables agile and fast autonomous flight for quadrotors.
-It takes in information from odometry, sensor streams (such as depth images and point cloud), and outputs high-quality trajectories within a few milliseconds.
-It can support aggressive and fully autonomous flight even in unknown and cluttered environments.
-Demonstrations about the planner have been reported on the [IEEE Spectrum](https://spectrum.ieee.org/automaton/robotics/robotics-hardware/video-friday-nasa-lemur-robot).
-
-## VLA_Diff Exploration Parameters
-
-- `fsm/frontier_update_dt`: frontier后台刷新周期，单位秒；仿真配置默认使用`0.2`，实机配置默认使用`0.5`。
-- `exploration/frontier_tsp_mode`: frontier与TSP的耦合模式。`0`表示沿用本仓库当前帧更新盒、异步timer刷新frontier、TSP读取已有列表的方案；`1`表示累计自上次搜索以来的雷达地图更新盒，按FUEL方式膨胀新frontier搜索区域，并在TSP规划前同步消费最新更新。两种模式均保留HGrid过滤和现有frontier消除逻辑。
-
-## VLA_Swarm Path Execution
-
-VLA_Swarm 的门目标使用 SmallMap 八邻域 A* 生成二维路径，并通过现有
-`MapInterface::searchPath()` 验证三维终点可达性。房间、场景对象和 bbox
-定位目标直接使用三维 A*。所有路径按 `vla_swarm/waypoint_distance` 采样后，
-复用 `local_goal`、`/planning/ego_plan_result` 和 `exec_finish_trigger` 完成推进。
-
-主要参数：
-
-- `vla_swarm/flight_height`：房间和门路径的飞行高度。
-- `vla_swarm/waypoint_distance`：连续 waypoint 的目标间距。
-- `vla_swarm/goal_tolerance`：里程计判定 waypoint 到达的距离阈值。
-- `vla_swarm/astar_clearance_px`：SmallMap A* 前对自由空间执行的像素级安全收缩。
-- `vla_swarm/ego_plan_timeout`：等待当前 waypoint 规划结果的超时时间。
-- `vla_swarm/ego_exec_timeout`：等待当前 waypoint 执行完成的超时时间。
-- `vla_swarm/max_plan_retries`：规划失败或超时后的最大重发次数。
-- `vla_swarm/camera_topic`：单前视相机压缩图像话题。
-- `vla_swarm/observation_topic`：固化 Observation 的发布话题。
-- `vla_swarm/scan_yaw_offsets_deg`：相对基准方向的渐进扫描顺序，默认 `[0, 90, -90, 180]`。
-- `vla_swarm/scan_yaw_tolerance`：判定 yaw 到位的角度误差，单位弧度。
-- `vla_swarm/scan_settle_time`：yaw 到位后等待机体和图像稳定的时间。
-- `vla_swarm/scan_timeout`：单个观察方向的旋转与取图总超时。
-
-到达门或相关房间后，状态机以路径末端方向作为扫描基准，优先检查正面；未发现任务目标时
-再按左、右、后方渐进旋转。每次 yaw 到位后，状态机固化前视图像、session、批次、序号和
-历史位姿并发布 `VLASwarmObservation`。视觉模型返回 `found=true` 时立即进入 bbox 定位，
-不会继续完成剩余方向。到达明确对象或 bbox 三维目标后发布 `target_reached`。不可达、
-规划失败和执行超时会进入统一
-`VLA_SWARM_RECOVERY`，并在结果消息中保留具体失败原因。
-
-
-
-
-__Authors__: [Boyu Zhou](http://boyuzhou.net), [Fei Gao](https://ustfei.com/) and [Shaojie Shen](http://uav.ust.hk/group/) from the [HUKST Aerial Robotics Group](http://uav.ust.hk/).
-
-__Video__:
-
-<!-- add some gif of the paper video: -->
-<p align="center">
-  <img src="files/exp1.gif" width = "420" height = "237"/>
-<!-- </p> -->
-
-<!-- <p align="center"> -->
-  <img src="files/exp2.gif" width = "420" height = "237"/>
-</p>
-
-<p align="center">
-  <a href="https://youtu.be/XxBw2nmL8t0" target="_blank"><img src="files/title.png" alt="video" width="480" height="270" border="1" /></a>
-</p>
-
-This package contains the implementation of __Fast-Planner__ (in folder __fast_planner__) and a lightweight
-quadrotor simulator (in __uav_simulator__). Key components are:
-
-- __plan_env__: The online mapping algorithms. It takes in depth image (or point cloud) and camera pose (odometry) pairs as input, do raycasting to update a probabilistic volumetric map, and build an Euclidean signed distance filed (ESDF) for the planning system. 
-- __path_searching__: Front-end path searching algorithms. Currently it includes a kinodynamic version of A* algorithm that respects the dynamics of quadrotors. The standard A* is also available. 
-- __bspline_opt__: The gradient-based trajectory optimization based on B-spline trajectory representation.
-- __plan_manage__: High-level modules that schedule and call the mapping and planning algorithms. Interfaces for launching the whole system, as well as the configuration files are contained here.
-
-If you use __Fast-Planner__ for your application or research, please cite our related paper:
-
-- [__Robust and Efficient Quadrotor Trajectory Generation for Fast Autonomous Flight__](https://ieeexplore.ieee.org/document/8758904), Boyu Zhou, Fei Gao, Luqi Wang, Chuhao Liu and Shaojie Shen, IEEE Robotics and Automation Letters (RA-L), 2019.
-```
-@article{zhou2019robust,
-  title={Robust and efficient quadrotor trajectory generation for fast autonomous flight},
-  author={Zhou, Boyu and Gao, Fei and Wang, Luqi and Liu, Chuhao and Shen, Shaojie},
-  journal={IEEE Robotics and Automation Letters},
-  volume={4},
-  number={4},
-  pages={3529--3536},
-  year={2019},
-  publisher={IEEE}
-}
-```
-
-
-## 1. Prerequisites
-
-- Our software is developed and tested in Ubuntu 16.04, [ROS Kinetic](http://wiki.ros.org/kinetic/Installation/Ubuntu). Other version may require minor modification.
-
-- We use [**NLopt**](https://nlopt.readthedocs.io/en/latest/NLopt_Installation) to solve the non-linear optimization problem.
-
-- The __uav_simulator__ depends on the C++ linear algebra library __Armadillo__, which can be installed by ``` sudo apt-get install libarmadillo-dev ```.
-
-- _Optional_: If you want to run the more realistic depth camera in __uav_simulator__, installation of [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) is needed. Otherwise, a less realistic depth sensor model will be used (See section _Use GPU Depth Rendering_ below).
-
-## 2. Build on ROS
-
-After the prerequisites are satisfied, you can clone this repository to your catkin workspace and catkin_make. A new workspace is recommended:
-```
-  cd ${YOUR_WORKSPACE_PATH}/src
-  git clone https://github.com/HKUST-Aerial-Robotics/Fast-Planner.git
-  cd ../
-  catkin_make
-```
-
-### Use GPU Depth Rendering (Optional)
-
- The **local_sensing** package in __uav_simulator__ has the option of using GPU or CPU to render the depth sensor measurement. By default, it is set to CPU version in CMakeLists:
- 
- ```
- set(ENABLE_CUDA false)
- # set(ENABLE_CUDA true)
- ```
-The GPU version is recommended, because it generates depth images more like a real depth camera.
-If you want to use the GPU depth rendering, set ENABLE_CUDA to true, and also remember to change the 'arch' and 'code' flags according to your graphics card devices. You can check the right code [here](https://github.com/tpruvot/ccminer/wiki/Compatibility).
+## Architecture
 
 ```
-    set(CUDA_NVCC_FLAGS 
-      -gencode arch=compute_61,code=sm_61;
-    ) 
-``` 
-For installation of CUDA, please go to [CUDA ToolKit](https://developer.nvidia.com/cuda-toolkit)
-
-## 3. Run the Simulation
-
-Run the simulation:
-
-```
-  roslaunch bringup_test sim_random_main.launch
+Instruction  →  MissionFSM  →  callExplorationPlanner()
+                               callTrackPlanner()
+                               callExplorationLLMPlanner()
+                               VLA_Search submachine
+                               DF_Demo submachine
+                               Panorama rotation
+                               Yaw scan
+                    →  planner_cmd_mux  →  EGO planner / Elastic tracker
 ```
 
-Then run __Fast-Planner__ (included in the launch above, or separately):
+## FSM States
 
-```
-  <!-- open a new terminal, go to your workspace and run: -->
-  source devel/setup.bash
-  roslaunch plan_manage simulation.launch
-```
+| State                  | Purpose                          |
+| ---------------------- | -------------------------------- |
+| INIT                   | Startup, wait for initialization |
+| WAIT_TRIGGER           | Wait for external trigger        |
+| WARM_UP                | Sensor/state warm-up             |
+| PLAN_EXPLORE           | Frontier-based exploration       |
+| LLM_PLAN_EXPLORE       | LLM-guided exploration           |
+| APPROACH_EXPLORE       | Navigate to exploration goal     |
+| PLAN_TRACK             | Plan tracking path               |
+| APPROACH_TRACK         | Follow tracking target           |
+| THINKING               | LLM planning deliberation        |
+| YAW_HANDLE             | Yaw scan for wider FOV           |
+| FIND_TERMINATE_TARGET  | Locate terminate target          |
+| GO_TARGET_OBJECT       | Navigate to object               |
+| GO_TARGET_WITH_WAYPOINT| Navigate via waypoints           |
+| DF_DEMO                | Demonstration flight             |
+| VLA_SEARCH_*           | VLA Swarm search submachine      |
+| FINISH / STOP          | Terminal states                  |
 
-Normally, you will find the randomly generated map and the drone model in ```Rviz```. At this time, you can select a goal for the drone using the ```2D Nav Goal``` tool. When a goal is set successfully, a new trajectory will be generated immediately and executed by the drone. A sample is displayed below:
+## Binaries
 
-<!-- add some gif here -->
- <p align="center">
-  <img src="files/exp3.gif" width = "640" height = "360"/>
- </p>
+| Binary                     | Role                              |
+| -------------------------- | --------------------------------- |
+| `mission_executive_node`     | Main FSM + EGO planner + map     |
+| `planner_cmd_mux`           | EGO/Elastic command multiplexer  |
+| `rc_replan_trigger`         | RC channel replan trigger        |
 
-## 4. Use in Your Application
+## Namespace
 
-If you have successfully run the simulation and want to use __Fast-Planner__ in your project,
-please explore the simulation.launch file.
-Important parameters that may be changed in your usage are contained and documented.
+All internal types are under `namespace mission_executive`.
 
-Note that in our configuration, the size of depth image is 640x480. 
-For higher map fusion efficiency we do downsampling (in kino_algorithm.xml, skip_pixel = 2).
-If you use depth images with lower resolution (like 256x144), you might disable the downsampling by setting skip_pixel = 1. Also, the _depth_scaling_factor_ is set to 1000, which may need to be changed according to your device.
+## Key Topics
 
-Finally, please kindly give a STAR to this repo if it helps your research or work, thanks! :)
-
-## 5. Acknowledgements
-  We use **NLopt** for non-linear optimization.
-
-## 6. Licence
-The source code is released under [GPLv3](http://www.gnu.org/licenses/) license.
-
-
-## 7. Disclaimer
-This is research code, it is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of merchantability or fitness for a particular purpose.
+| Topic                               | Type                            | Direction |
+| ----------------------------------- | ------------------------------- | --------- |
+| `/Instruct`                         | `Instruction`                   | Input     |
+| `/planning/ego_plan_result`         | `EgoPlannerResult`              | Input     |
+| `/move_base_simple/goal`            | `PoseStamped`                   | Input     |
+| `/planner_mux/mode`                 | `String`                        | Output    |
+| `~/planning/pos_cmd`                | `PositionCommand`               | Output    |

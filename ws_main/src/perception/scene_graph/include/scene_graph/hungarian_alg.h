@@ -8,26 +8,25 @@
 #include <algorithm>
 #include <numeric>
 
-// 引入Eigen核心部分
 #include <Eigen/Dense>
 
 namespace Hungarian {
 
 /**
- * @class HungarianMatcher
- * @brief 使用匈牙利算法来解决分配问题，特别是用于匹配新旧三维向量均值。
+ * Hungarian algorithm for minimum-cost assignment.
  *
- * 该类将原始的自由函数封装成一个独立的单元。
- * matchMeans 是主要的公共接口，可以静态调用。
+ * Solves the assignment problem for matching old and new 3D mean
+ * vectors (e.g., object centroids between frames). The `matchMeans`
+ * static method is the public interface.
  */
 class HungarianMatcher {
 public:
     /**
-     * @brief 匹配新旧均值，使得总变化（距离平方和）最小。
-     * 这是一个静态方法，可以直接通过类名调用，无需创建实例。
-     * @param old_means 旧的平均值ID和向量的映射
-     * @param new_means 新的平均值ID和向量的映射
-     * @return 一个从新ID到旧ID的匹配映射
+     * Match old and new mean vectors minimizing total cost (sum of squared distances).
+     *
+     * @param[in] old_means  Map of old ID to mean vector
+     * @param[in] new_means  Map of new ID to mean vector
+     * @return Map from new ID to matched old ID
      */
     static std::map<int, int> matchMeans(
         const std::map<int, Eigen::Vector3d>& old_means,
@@ -37,7 +36,7 @@ public:
             return {};
         }
 
-        // 1. 将ID和向量提取到vector中，以建立稳定的索引
+        // 1. Extract IDs and vectors into arrays for stable indexing
         std::vector<int> old_ids, new_ids;
         std::vector<Eigen::Vector3d> old_vecs, new_vecs;
         for(const auto& pair : old_means) {
@@ -49,7 +48,7 @@ public:
             new_vecs.push_back(pair.second);
         }
 
-        // 2. 确定哪个集合是“行”（较小者），哪个是“列”（较大者）
+        // 2. Determine which set is "rows" (smaller) and which is "cols" (larger)
         bool swapped = old_ids.size() > new_ids.size();
 
         const auto& row_ids = swapped ? new_ids : old_ids;
@@ -59,9 +58,9 @@ public:
 
         size_t num_rows = row_ids.size();
         size_t num_cols = col_ids.size();
-        size_t matrix_size = num_cols; // 成本矩阵设为方阵
+        size_t matrix_size = num_cols; // Make cost matrix square
 
-        // 3. 构建成本矩阵
+        // 3. Build cost matrix
         std::vector<std::vector<double>> cost_matrix(matrix_size, std::vector<double>(matrix_size, 0));
         for (size_t i = 0; i < num_rows; ++i) {
             for (size_t j = 0; j < num_cols; ++j) {
@@ -69,31 +68,31 @@ public:
             }
         }
 
-        // 为虚拟行填充一个较大的成本
+        // Fill dummy rows with a high cost
         double high_cost = std::numeric_limits<double>::max() / 2.0;
         for (size_t i = num_rows; i < matrix_size; ++i) {
             std::fill(cost_matrix[i].begin(), cost_matrix[i].end(), high_cost);
         }
 
-        // 4. 使用匈牙利算法求解
-        std::vector<int> assignment; // assignment[i] = j 表示行 i 匹配到列 j
+        // 4. Solve using Hungarian algorithm
+        std::vector<int> assignment; // assignment[i] = j means row i matched to column j
         solve(cost_matrix, assignment);
 
-        // 5. 解析结果，将索引映射回ID
+        // 5. Parse results, map indices back to IDs
         std::map<int, int> new_to_old_id_map;
         double total_real_cost = 0;
 
-        for (size_t i = 0; i < num_rows; ++i) { // 只需遍历真实的行
+        for (size_t i = 0; i < num_rows; ++i) { // Only iterate real rows
             int col_idx = assignment[i];
-            if (col_idx < num_cols) { // 确保匹配到的是真实的列
+            if (col_idx < num_cols) { // Ensure match is to a real column
                 int row_id = row_ids[i];
                 int col_id = col_ids[col_idx];
 
                 int old_id, new_id;
-                if (swapped) { // 行是new, 列是old
+                if (swapped) { // rows are new, columns are old
                     new_id = row_id;
                     old_id = col_id;
-                } else { // 行是old, 列是new
+                } else { // rows are old, columns are new
                     new_id = col_id;
                     old_id = row_id;
                 }
@@ -102,16 +101,17 @@ public:
             }
         }
 
-        std::cout << "匹配完成，真实匹配的总成本（距离平方和）为: " << total_real_cost << std::endl;
+        std::cout << "Match complete, total cost (sum of squared distances): " << total_real_cost << std::endl;
         return new_to_old_id_map;
     }
 
 private:
     /**
-     * @brief 匈牙利算法的核心实现，用于解决分配问题（最小化成本）。
-     * @param costMatrix 成本矩阵 (必须是方阵)。
-     * @param assignment 用于存储结果的向量，assignment[i] = j 表示第 i 行匹配到第 j 列。
-     * @return 最小总成本。
+     * Core Hungarian algorithm implementation for minimum-cost assignment.
+     *
+     * @param[in]  costMatrix  Square cost matrix
+     * @param[out] assignment  Result vector, assignment[i] = j means row i maps to column j
+     * @return Minimum total cost
      */
     static double solve(const std::vector<std::vector<double>>& costMatrix, std::vector<int>& assignment) {
         const int n = costMatrix.size();
@@ -166,7 +166,7 @@ private:
         }
         assignment = result;
 
-        return -v[0]; // 返回最小成本
+        return -v[0]; // Return minimum cost
     }
 };
 
@@ -174,29 +174,28 @@ private:
 
 /*
 // =================================================================
-//                      如何使用新的Class
+//                      How to use the new Class
 // =================================================================
 int main() {
-    // --- 示例数据：旧ID少于新ID ---
-    // 旧的平均值数据
+    // --- Example data: fewer old IDs than new IDs ---
+    // Old means
     std::map<int, Eigen::Vector3d> old_data;
     old_data[20] = Eigen::Vector3d(5.0, 5.0, 5.0);    // ID 20
     old_data[30] = Eigen::Vector3d(10.0, 10.0, 10.0); // ID 30
 
-    // 新的平均值数据
+    // New means
     std::map<int, Eigen::Vector3d> new_data;
-    new_data[101] = Eigen::Vector3d(5.1, 5.2, 5.0);   // ID 101, 最接近 ID 20
-    new_data[102] = Eigen::Vector3d(0.9, 1.1, 0.8);   // ID 102, 这个应该不会被匹配
-    new_data[103] = Eigen::Vector3d(10.5, 9.8, 10.1); // ID 103, 最接近 ID 30
+    new_data[101] = Eigen::Vector3d(5.1, 5.2, 5.0);   // ID 101, closest to ID 20
+    new_data[102] = Eigen::Vector3d(0.9, 1.1, 0.8);   // ID 102, should not match
+    new_data[103] = Eigen::Vector3d(10.5, 9.8, 10.1); // ID 103, closest to ID 30
 
-    // --- 执行匹配 ---
-    // 注意调用方式的变化：通过类名直接调用静态方法
+    // --- Run matching ---
     std::map<int, int> matches = Hungarian::HungarianMatcher::matchMeans(old_data, new_data);
 
-    // --- 打印结果 ---
-    std::cout << "\n匹配结果 (新ID -> 旧ID):" << std::endl;
+    // --- Print results ---
+    std::cout << "\nMatch results (new ID -> old ID):" << std::endl;
     for (const auto& match : matches) {
-        std::cout << "新 ID: " << match.first << "  ->  匹配到旧 ID: " << match.second << std::endl;
+        std::cout << "New ID: " << match.first << "  ->  matched to old ID: " << match.second << std::endl;
     }
 
     return 0;

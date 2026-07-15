@@ -33,6 +33,7 @@
 #include <thread>
 #include <deque>
 #include <mutex>
+#include <map_interface/map_interface.hpp>
 #include <exploration/frontier_manager.h>
 #include <mission_executive/mission_data.h>
 #include <mission_executive/vla_search_map.h>
@@ -51,9 +52,9 @@ using std::shared_ptr;
 using std::unique_ptr;
 using std::string;
 
-namespace ego_planner {
+namespace mission_executive {
 class Tabv;
-class FrontierManager;
+// FrontierManager is in exploration package under ego_planner namespace
 struct FSMParam;
 struct FSMData;
 class EkfEstimator;
@@ -63,8 +64,8 @@ class PerceptionDataMsgFactory;
 class MissionFSM {
 private:
   /* planning utils */
-  MapInterface::Ptr                                 map_;
-  shared_ptr<FrontierManager>                       expl_manager_;
+  ego_planner::MapInterface::Ptr                                 map_;
+  shared_ptr<ego_planner::FrontierManager>                       expl_manager_;
   shared_ptr<SceneGraph>                            scene_graph_;
   CountingSceneGraph::Ptr                           counting_scene_graph_;
   shared_ptr<TrajectoryVisualizer>                  traj_visualizer_;
@@ -755,7 +756,7 @@ public:
    * @param[in] nh   ROS node handle
    * @param[in] map  Map interface pointer
    */
-  void init(ros::NodeHandle& nh, const MapInterface::Ptr& map);
+  void init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map);
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 

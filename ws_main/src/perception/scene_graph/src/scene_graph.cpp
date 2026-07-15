@@ -57,7 +57,7 @@ void SceneGraph::updateObjectToSceneGraph() {
     ros::Time t1 = ros::Time::now();
     object_factory_->lock();
 
-    // todo [gwq] 物体挂载更新可以改成增量式的，但是我懒了，先这样吧 :D
+    // todo [gwq] object mounting update could be incremental, but keeping full-clear for now :D
     for (auto& area : skeleton_gen_->area_handler_->area_map_)
         area.second->clearObjs();
 
@@ -84,7 +84,7 @@ void SceneGraph::updateObjectToSceneGraph() {
     // INFO_MSG("[SceneGraph] | Update object to scene graph time: " << (ros::Time::now() - t1).toSec() * 1000 << " ms");
 }
 
-// remember mount current poly cbefore call this function!
+// remember to mount current poly before calling this function!
 bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3d> &path, Eigen::Vector3d & aim_pos, double &aim_yaw) {
 
     if (!skeleton_gen_->ready()) {
@@ -109,47 +109,47 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
 
     PolyHedronPtr father = obj->edge.polyhedron_father;
 
-    // 搜索 + 占据校验 + 标记不可达 + 自动绕行重搜
-    // iter=0: 首次搜索仅依赖 scene-graph 拓扑, 不做 occupancy inflate 校验, 快速确认初始路径
-    // iter>=1: 对中间 polyhedron 做 inflate 校验, 封锁不可达节点后触发 A* 绕行重搜
+    // search + occupancy check + mark unreachable + auto reroute re-search
+    // iter=0: first search uses scene-graph topology only, no occupancy/inflate check
+    // iter>=1: check intermediate polyhedra for inflate occupancy, block unreachable nodes then trigger A* reroute
     bool ok = false;
     for (int iter = 0; iter < topo_block_max_iter_; ++iter) {
-        if (topo_block_enable_) revalidateBlocked();                 // 策略A: 清理过期标记
+        if (topo_block_enable_) revalidateBlocked();                 // strategy A: clear expired marks
         double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
         skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
-        if (path.empty() || dis >= 99998.0) break;                   // 退化直连(搜索失败)不可接受
+        if (path.empty() || dis >= 99998.0) break;                   // degenerate direct path (search failure) unacceptable
 
-        // 首次搜索(iter=0)直接接受 scene-graph 拓扑路径, 不校验 inflate
+        // first pass (iter=0) accepts scene-graph topology path directly, no inflate check
         if (iter == 0) { ok = true; break; }
         if (!topo_block_enable_) { ok = true; break; }
 
-        // iter>=1: 校验路径中(在 local map 内的)中间点是否落入膨胀层
+        // iter>=1: check whether intermediate points (within local map) fall into inflate layer
         bool any_blocked = false;
         for (auto &poly : last_poly_path_) {
             if (poly == nullptr)              continue;
-            if (poly == cur_poly_ || poly == father) continue;       // 放行起点/终点
+            if (poly == cur_poly_ || poly == father) continue;       // allow start/goal
             if (isInflateBlocked(poly->center_)) {
-                markPolyhedronBlocked(poly->center_, true);          // 规划期占据信号置信, 立即标记
+                markPolyhedronBlocked(poly->center_, true);          // occupancy signal during planning is reliable, mark immediately
                 any_blocked = true;
             }
         }
-        if (!any_blocked) { ok = true; break; }                      // 路径无被封锁点 → 接受
-        // 否则下一轮 A* 会自动绕开被标记节点
+        if (!any_blocked) { ok = true; break; }                      // path has no blocked nodes -> accept
+        // otherwise next A* round will automatically avoid marked nodes
     }
 
-    // 策略B: A* 始终找不到干净路径时, 清空标记重试一次(防误杀导致永久死锁)
+    // strategy B: when A* cannot find a clean path, clear marks and retry once (prevent permanent deadlock from false positives)
     if (!ok && topo_block_revalidate_on_fail_) {
         INFO_MSG_YELLOW("[SceneGraph] | all topo routes blocked, clear marks and retry once.");
         clearAllBlocked();
         double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
         skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
-        ok = (!path.empty() && dis < 99998.0);   // 仍为退化直连则不可接受
+        ok = (!path.empty() && dis < 99998.0);   // still unacceptable if degenerate direct path
     }
     if (!ok) return false;
 
     aim_pos = father->center_;
 
-    // 计算末端目标yaw
+    // compute terminal target yaw
     Eigen::Vector3d dxy = father->center_ - obj->pos;
     double aim_direction_ = atan2(dxy(1), dxy(0)) + M_PI;
     if (aim_direction_ > M_PI)
@@ -161,12 +161,12 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
 }
 
 // ------------------------------------------------------------------
-// 拓扑点不可达: 检测 / 修复 / 标记 / 恢复
+// topo node unreachable: detection / repair / marking / recovery
 // ------------------------------------------------------------------
 bool SceneGraph::isInflateBlocked(const Eigen::Vector3d &p) {
     if (map_interface_ == nullptr) return false;
-    // 仅当点"在 local map 内 且 inflate 占据 且底层 occupancy 非未知"才判为坏点
-    // 底层 UNKNOWN → 尚未观测到该区域, 不应封锁 topo 节点; 越界点不算
+    // a point is only "bad" when it is within the local map AND inflate-occupied AND underlying occupancy is not UNKNOWN
+    // UNKNOWN occupancy -> area not yet observed, should not block topo node; out-of-bounds does not count
     if (!map_interface_->isInLocalMap(p)) return false;
     if (map_interface_->getOccupancy(p) == ego_planner::MapInterface::UNKNOWN) return false;
     return (map_interface_->getInflateOccupancy(p) == ego_planner::MapInterface::OCCUPIED);
@@ -182,9 +182,9 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
     if (fl < 1e-3) return false;
     fwd /= fl;
 
-    // 阶段1: 沿 fwd 方向粗扫, 找离 p 最近的 inflate-free 点
-    // 可见性策略由 topo_repair_vis_mode_ 控制:
-    //   0: isVisible 拦截; 1: 关闭 isVisible; 2: 优先 isVisible, 无解时回退到首个inflate-free点(后续由调用方尝试球交会)
+    // phase 1: coarse sweep along fwd direction, find the nearest inflate-free point from p
+    // visibility strategy controlled by topo_repair_vis_mode_:
+    //   0: isVisible check; 1: skip isVisible; 2: prefer isVisible, fall back to first inflate-free point (caller handles sphere intersection)
     bool   anchor_found = false;
     bool   anchor_fallback_found = false;
     Eigen::Vector3d anchor_fallback;
@@ -193,27 +193,27 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
         if (!map_interface_->isInLocalMap(probe)) continue;
         if (map_interface_->getInflateOccupancy(probe) != ego_planner::MapInterface::FREE) continue;
         if (map_interface_->getOccupancy(probe) == ego_planner::MapInterface::UNKNOWN) continue;
-        // 记录首个 inflate-free 已知点作为模式2回退锚点
+        // record first inflate-free known point as fallback anchor for mode 2
         if (!anchor_fallback_found) {
             anchor_fallback = probe;
             anchor_fallback_found = true;
         }
-        // 可见性检查 — 模式1跳过, 模式0/2执行
+        // visibility check -- mode 1 skips, mode 0/2 runs
         if (topo_repair_vis_mode_ != 1 && !map_interface_->isVisible(probe, toward)) continue;
         p_out = probe;
         anchor_found = true;
-        break;   // 取最近满足条件的点
+        break;   // take the nearest point that satisfies conditions
     }
-    // 模式2回退: 所有 probe 都未通过 isVisible → 使用首个 inflate-free 点, 后续由调用方处理球交会
+    // mode 2 fallback: all probes failed isVisible -> use first inflate-free point, caller handles sphere intersection
     if (!anchor_found && topo_repair_vis_mode_ == 2 && anchor_fallback_found) {
         p_out = anchor_fallback;
         anchor_found = true;
     }
     if (!anchor_found) return false;
 
-    // 阶段2: 以锚点为中心, 在 0.3m 小球内微调取最优(距锚点最近且 inflate-free)
+    // phase 2: refine within a 0.3m sphere around the anchor (nearest to anchor and inflate-free)
     const double refine = 0.3;
-    const Eigen::Vector3d anchor = p_out;   // 固定锚点, 避免循环内 p_out 被边搜边改导致采样中心漂移
+    const Eigen::Vector3d anchor = p_out;   // fix anchor to prevent drift from p_out being modified during search
     double best = 1e9;
     bool   best_found = false;
     Eigen::Vector3d best_fallback;
@@ -227,16 +227,16 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
                 if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
                 if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
                 double sc = (c - anchor).norm();
-                // 记录最优回退点(不考虑isVisible)
+                // record best fallback point (ignoring isVisible)
                 if (sc < best_fallback_dist) {
                     best_fallback_dist = sc;
                     best_fallback = c;
                 }
-                // 可见性检查 — 模式1跳过, 模式0/2执行
+        // visibility check -- mode 1 skips, mode 0/2 runs
                 if (topo_repair_vis_mode_ != 1 && !map_interface_->isVisible(c, toward)) continue;
                 if (sc < best) { best = sc; p_out = c; best_found = true; }
             }
-    // 模式2回退: 细化阶段无 isVisible 通过点 → 使用距锚点最近的回退点
+    // mode 2 fallback: no isVisible pass in refine phase -> use nearest fallback point from anchor
     if (!best_found && topo_repair_vis_mode_ == 2 && best_fallback_dist < 1e9) {
         p_out = best_fallback;
     }
@@ -247,19 +247,19 @@ bool SceneGraph::findIntersectionMidpoint(const Eigen::Vector3d &probe, const Ei
                                           double sphere_radius, Eigen::Vector3d &mid_out) {
     if (map_interface_ == nullptr) return false;
     const double d_full = (probe - toward).norm();
-    // 两球不相交
+    // spheres do not intersect
     if (d_full > 2.0 * sphere_radius) return false;
     if (d_full < 1e-3) return false;
 
-    // 交会圆: 圆心在 probe→toward 中点, 半径 r_cross = sqrt(R² - (d/2)²)
+    // intersection circle: center at probe->toward midpoint, radius r_cross = sqrt(R^2 - (d/2)^2)
     const Eigen::Vector3d mid_center = (probe + toward) * 0.5;
     const double half_d = d_full * 0.5;
     const double r_cross_sq = sphere_radius * sphere_radius - half_d * half_d;
     if (r_cross_sq < 0.0) return false;
     const double r_cross = std::sqrt(r_cross_sq);
 
-    // 在 probe→toward 方向的垂直平面上采样
-    // 构建局部坐标系: vz = normalize(toward - probe), vx/vy 为垂直平面基向量
+    // sample on the plane perpendicular to the probe->toward direction
+    // build local frame: vz = normalize(toward - probe), vx/vy are the perpendicular basis vectors
     const Eigen::Vector3d vz = (toward - probe) / d_full;
     Eigen::Vector3d vx, vy;
     if (std::fabs(vz.z()) < 0.9) {
@@ -270,19 +270,19 @@ bool SceneGraph::findIntersectionMidpoint(const Eigen::Vector3d &probe, const Ei
     vy = vz.cross(vx).normalized();
 
     const double step = 0.1;
-    // 交会圆平面采样
+    // sample points on the intersection circle plane
     for (double r = 0.0; r <= r_cross + 1e-6; r += step) {
         const int n_angle = (r < step) ? 1 : std::max(6, (int)(2.0 * M_PI * r / step));
         for (int ai = 0; ai < n_angle; ++ai) {
             const double angle = 2.0 * M_PI * (double)ai / (double)n_angle;
             const Eigen::Vector3d c = mid_center + r * std::cos(angle) * vx + r * std::sin(angle) * vy;
-            // 验证: c 在 probe 和 toward 的 sphere_radius 范围内
+            // verify: c is within sphere_radius of both probe and toward
             if ((c - probe).norm() > sphere_radius + 1e-3) continue;
             if ((c - toward).norm() > sphere_radius + 1e-3) continue;
             if (!map_interface_->isInLocalMap(c)) continue;
             if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
             if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
-            // 双向 isVisible 检查
+            // bidirectional isVisible check
             if (!map_interface_->isVisible(probe, c)) continue;
             if (!map_interface_->isVisible(c, toward)) continue;
             mid_out = c;
@@ -312,20 +312,20 @@ void SceneGraph::insertReplacementNode(const Eigen::Vector3d &old_center, const 
     if (!topo_repair_insert_node_) return;
     auto new_poly = skeleton_gen_->insertPolyhedronAt(new_center);
     if (new_poly == nullptr) return;
-    // 基于 inflate/occupancy 连接可见邻居(连接半径复用修复半径)
+    // connect visible neighbors based on inflate/occupancy (connection radius reuses repair radius)
     skeleton_gen_->connectToVisibleNeighbors(new_poly, topo_repair_radius_ * 2.0);
-    // 永久封锁旧节点: 不参与 TTL 恢复, 不参与跨任务清块
+    // permanently block the old node: not subject to TTL recovery or cross-task clearing
     markPolyhedronBlocked(old_center, true);
 }
 
 void SceneGraph::revalidateBlocked() {
     if (map_interface_ == nullptr) return;
-    if (topo_repair_insert_node_) return;   // 插入模式: 旧节点已永久废弃, 不自动恢复
+    if (topo_repair_insert_node_) return;   // insert mode: old node is permanently retired, no auto-recovery
     ros::Time now = ros::Time::now();
     std::vector<PolyHedronPtr> still;
     for (auto &poly : blocked_list_) {
         if (poly == nullptr || !poly->nav_blocked_) continue;
-        // 不在 local map 内 → 无局部占据证据, 直接解除(避免远距离无法校验导致的永久封锁)
+        // not in local map -> no local occupancy evidence, release directly (avoid permanent block from unreachable far-away nodes)
         if (!map_interface_->isInLocalMap(poly->center_)) {
             poly->nav_blocked_  = false;
             poly->blocked_hits_ = 0;
@@ -333,14 +333,14 @@ void SceneGraph::revalidateBlocked() {
             continue;
         }
         if ((now - poly->blocked_stamp_).toSec() > topo_block_ttl_) {
-            // TTL 到期: 在 local map 内且不再占据 → 解除; 仍占据 → 续期
+            // TTL expired: within local map and no longer occupied -> release; still occupied -> renew
             if (!isInflateBlocked(poly->center_)) {
                 poly->nav_blocked_  = false;
                 poly->blocked_hits_ = 0;
                 INFO_MSG_GREEN("[SceneGraph] | unblock polyhedron(TTL) @ " << poly->center_.transpose());
                 continue;
             }
-            poly->blocked_stamp_ = now;  // 续期
+            poly->blocked_stamp_ = now;  // renew
         }
         still.push_back(poly);
     }
@@ -348,7 +348,7 @@ void SceneGraph::revalidateBlocked() {
 }
 
 void SceneGraph::clearAllBlocked() {
-    if (topo_repair_insert_node_) return;   // 插入模式: 旧节点已永久废弃, 跨任务也不清块
+    if (topo_repair_insert_node_) return;   // insert mode: old node permanently retired, not even cleared across tasks
     for (auto &poly : blocked_list_) {
         if (poly) { poly->nav_blocked_ = false; poly->blocked_hits_ = 0; }
     }
@@ -412,7 +412,7 @@ bool SceneGraph::newAreaPredictionPromptGen(std::string &prompt_str) {
 bool SceneGraph::allRoomPredictionPromptGen(std::string &prompt_str) {
 
     nlohmann::json data;
-    // add data!
+    // populate data
     for (auto& area : skeleton_gen_->area_handler_->area_map_) {
         singleRoomPredictionPromptGen(area.first, data);
     }
@@ -457,7 +457,7 @@ bool SceneGraph::chooseAreaToGoPromptGen(std::string &prompt_str) {
         data["areas"].push_back(area_json);
     }
 
-    // 在data中加入历史area访问信息，格式为data["visitHistory"] = {}
+    // add historical area visit info to data as data["visitHistory"] = {}
     data["visitHistory"] = {};
     std::vector<int> tmp_history;
     for (auto& id : history_visited_area_ids_) {
@@ -569,7 +569,7 @@ bool SceneGraph::vlaSearchPromptGen(unsigned char prompt_type, const std::string
         return false;
     }
 
-    // 会话字段由 SceneGraph 统一构造，SmallMap 模块只提供当前地图语义快照。
+    // session fields are constructed uniformly by SceneGraph; SmallMap provides only the current map semantic snapshot
     nlohmann::json data;
     data["overall_task"] = command;
     data["task_session_id"] = task_session_id;
@@ -607,7 +607,7 @@ bool SceneGraph::vlaSearchPromptGen(unsigned char prompt_type, const std::string
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A1:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A2:
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_A3:
-            // 单机渐进观察直接使用总体任务描述约束目标，避免空 object_need 诱发无关 bbox。
+            // single-robot progressive observation uses overall task description as target constraint, avoiding irrelevant bboxes from empty object_need
             data["object_need"] = nlohmann::json::array({command});
             break;
         case scene_graph::PromptMsg::PROMPT_TYPE_LOCAL_PLAN_PREDICTION_B:
@@ -800,18 +800,18 @@ void SceneGraph::handleRoomPredictionResult(const unsigned int prompt_id) {
 std::future<std::string> SceneGraph::sendPrompt(unsigned int prompt_id, unsigned char prompt_type,
                                                 std::string prompt_str, const std::chrono::seconds& timeout, int max_retries)
 {
-    // 1. 创建最终要返回给调用者的 promise 和 future
+    // 1. create the promise and future to return to the caller
     wait_recv_id_ = prompt_id;
     auto final_promise = std::make_shared<std::promise<std::string>>();
     std::future<std::string> final_future = final_promise->get_future();
 
-    // 2. 创建一个后台线程来执行所有耗时操作
+    // 2. create a background thread for all time-consuming operations
     std::thread worker_thread([this, prompt_id, prompt_type, prompt_str, timeout, max_retries, final_promise]() {
         {
             std::lock_guard<std::mutex> lock(mutex_);
             if (llm_ans_promises_.find(prompt_id) != llm_ans_promises_.end()) {
                 ROS_WARN("[SceneGraph] | Prompt (id: %u) is already in progress. Ignoring new request.", prompt_id);
-                // 用异常告知调用者请求未被处理
+                // inform caller via exception that request was not processed
                 final_promise->set_exception(std::make_exception_ptr(
                     std::runtime_error("Prompt ID " + std::to_string(prompt_id) + " is already in progress.")));
                 return;
@@ -845,28 +845,28 @@ std::future<std::string> SceneGraph::sendPrompt(unsigned int prompt_id, unsigned
                 try {
                     std::lock_guard<std::mutex> lock(mutex_);
                     std::string answer_str = attempt_future.get();
-                    final_promise->set_value(answer_str);            // 将最终结果放入final_promise
+                    final_promise->set_value(answer_str);            // put final result into final_promise
                     llm_ans_str_poll_[prompt_id] = answer_str;
                     INFO_MSG_GREEN("[SceneGraph] | Success! Received answer for prompt (id: " << prompt_id << ")");
                     // INFO_MSG_GREEN("[SceneGraph] | Answer: \n" << answer_str);
-                    return; // 任务成功，退出线程
+                    return; // task succeeded, exit thread
                 } catch (const std::exception& e) {
                     final_promise->set_exception(std::current_exception());
                     ROS_ERROR("[SceneGraph] | Exception caught while getting future value: %s", e.what());
-                    return; // 出现异常，退出线程
+                    return; // exception occurred, exit thread
                 }
             }
 
             ROS_WARN("[SceneGraph] | Timeout for prompt (id: %u, attempt: %d/%d).", prompt_id, attempt, max_retries);
             {
-                // 清理本次失败的promise，为下次重试或最终失败做准备
+                // clean up the failed promise, preparing for next retry or final failure
                 std::lock_guard<std::mutex> lock(mutex_);
                 llm_ans_promises_.erase(prompt_id);
                 llm_prompts_.erase(prompt_id);
             }
         }
 
-        // 5. 所有重试都失败了
+        // 5. all retries have failed
         ROS_ERROR("[SceneGraph] | All %d attempts failed for prompt (id: %u).", max_retries, prompt_id);
         final_promise->set_exception(std::make_exception_ptr(
             std::runtime_error("Request failed after " + std::to_string(max_retries) + " attempts.")));
@@ -902,7 +902,7 @@ void SceneGraph::llmAnsCallback(const scene_graph::PromptMsg::ConstPtr &msg) {
     }
     INFO_MSG_GREEN("[SceneGraph] | *** Callback Recv llm answer (id: " << msg->prompt_id << ")");
     promise_it->second.set_value(msg->answer);
-    // promise 完成后立即移出活动表，重复或迟到答案将被忽略。
+    // remove from active table immediately after promise completes; duplicate or late answers are ignored
     llm_ans_promises_.erase(promise_it);
 }
 
@@ -966,7 +966,7 @@ void SceneGraph::visualizeSceneGraph() {
         }
     }
 
-    // visualize
+    // publish markers
     visualization_msgs::MarkerArray marker_array;
     visualization_msgs::Marker marker_top_vertex;
     marker_top_vertex.header.frame_id = "world";

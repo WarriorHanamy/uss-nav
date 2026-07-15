@@ -17,6 +17,9 @@
 #include "../libs/libleidenalg/include/ModularityVertexPartition.h"
 #include "../libs/libleidenalg/include/CPMVertexPartition.h"
 
+/**
+ * Hash function for Eigen::Vector3d used in unordered_map keys.
+ */
 struct Vector3dHash_SpecClus {
     std::size_t operator()(const Eigen::Vector3d& vector) const {
         std::size_t h1 = std::hash<double>()(vector.x());
@@ -53,13 +56,52 @@ private:
     ros::Publisher cluster_vis_pub_;
 
     double sigma_sq_{1.0};    ///< Gaussian kernel bandwidth for similarity [m^2]
-    unsigned int k_{0};       // number of clusters
+    unsigned int k_{0};       ///< Number of clusters [--]
+    /**
+     * Compute similarity matrix from polyhedron centroid distances.
+     *
+     * @param[out] W      Similarity matrix
+     * @param[out] ED     Euclidean distance matrix
+     * @param[in]  polys  Input polyhedra
+     */
     void calSimilarityMatrix(Eigen::MatrixXd& W, Eigen::MatrixXd& ED, std::vector<PolyHedronPtr> polys);
+    /**
+     * Compute degree matrix from similarity matrix.
+     *
+     * @param[in]  W  Similarity matrix
+     * @param[out] D  Degree matrix
+     */
     void calDegreeMatrix(Eigen::MatrixXd& W, Eigen::MatrixXd& D);
+    /**
+     * Compute Laplacian matrix L = D - W.
+     *
+     * @param[in]  W  Similarity matrix
+     * @param[in]  D  Degree matrix
+     * @param[out] L  Laplacian matrix
+     */
     void calLaplacianMatrix(Eigen::MatrixXd& W, Eigen::MatrixXd& D, Eigen::MatrixXd& L);
+    /**
+     * Compute eigenvalues and eigenvectors of the Laplacian.
+     *
+     * @param[in]  L  Laplacian matrix
+     * @param[out] U  Eigenvector matrix
+     */
     void calLaplacianEigen(Eigen::MatrixXd& L, Eigen::MatrixXd& U);
+    /**
+     * K-means clustering on eigenvector rows.
+     *
+     * @param[in] points   Input points (eigenvector rows)
+     * @param[in] k        Number of clusters [--]
+     * @param[in] max_iter Maximum iterations [--]
+     * @return Cluster labels per point
+     */
     std::vector<int> kmeans(const Eigen::MatrixXd& points, int k, int max_iter);
 
+    /**
+     * Publish cluster visualization markers.
+     *
+     * @param[in] clusters  Cluster data to visualize
+     */
     void visualizeClusters(const std::vector<PolyhedronCluster>& clusters);
 };
 
@@ -99,14 +141,21 @@ public:
      */
     void incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys);
     
-    // load map
     void resetForMapLoad();
+    /**
+     * Register a loaded area from disk.
+     *
+     * @param[in] area  Loaded area cluster
+     * @return True if registration succeeded
+     */
     bool registerLoadedArea(const PolyhedronCluster::Ptr& area);
     void finishMapLoad();
     std::map<int, PolyhedronCluster::Ptr> area_map_;
     std::map<int, bool> areas_need_predict_, areas_need_delete_;
 
-    // vector<int> areas_need_delete_;
+    /**
+     * Publish all current cluster markers.
+     */
     void visualizeClusters();
 
 private:
@@ -115,15 +164,50 @@ private:
     std::unordered_map<Eigen::Vector3d, int, Vector3dHash_SpecClus> poly_cluster_map_;
     std::mutex mutex_;
 
-    int max_area_id_{0};                      // need +1 after add one area
+    int max_area_id_{0};                      ///< Next available area ID (increment after use) [--]
 
     void mutexLock() {mutex_.lock();};
     void mutexUnlock() {mutex_.unlock();};
+    /**
+     * Community detection using Leiden algorithm with CPM partition.
+     *
+     * @param[in]     polys_all      All polyhedra in the graph
+     * @param[out]    partition_res  Resulting partition
+     * @param[in]     resolution     Resolution parameter [--]
+     */
     void communityDetection(vector<PolyHedronPtr> &polys_all, std::unique_ptr<CPMVertexPartition>& partition_res, double resolution);
+    /**
+     * Find neighbor areas for a given area.
+     *
+     * @param[in] cur_area_id  Area ID to query
+     */
     void findCurAreaNbrs(int cur_area_id);
+    /**
+     * Visualize edge weights between adjacent polyhedra.
+     *
+     * @param[in] polys       Polyhedra list
+     * @param[in] edges_data  Edge connectivity data
+     * @param[in] edge_weights  Edge weight values [--]
+     */
     void visualizeEdgeWeights(const std::vector<PolyHedronPtr>& polys, const std::vector<igraph_integer_t>& edges_data, const std::vector<double>& edge_weights);
+    /**
+     * Draw a 3D bounding box marker.
+     *
+     * @param[out] marker    Output marker
+     * @param[in]  min       Minimum corner [m]
+     * @param[in]  max       Maximum corner [m]
+     * @param[in]  id        Marker ID [--]
+     * @param[in]  color     RGB color [--]
+     * @param[in]  line_width  Line width [m]
+     */
     void drawBoundingBox(visualization_msgs::Marker& marker, const Eigen::Vector3d& min, const Eigen::Vector3d& max,
                          int id, const Eigen::Vector3d &color, float line_width);
+    /**
+     * Convert Eigen::Vector3d to geometry_msgs::Point.
+     *
+     * @param[in] pt  Input point [m]
+     * @return ROS geometry point
+     */
     inline geometry_msgs::Point eigenToGeoPt(const Eigen::Vector3d& pt);
 };
 

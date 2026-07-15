@@ -1,11 +1,12 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
 #include <plan_manage/ego_replan_fsm.h>
-#include <mission_executive/fast_exploration_fsm.h>
+#include <mission_executive/mission_fsm.h>
 
 #include <memory>
 
 using namespace ego_planner;
+using namespace mission_executive;
 
 /**
  * ROS node entry point for the exploration FSM.
@@ -18,7 +19,7 @@ using namespace ego_planner;
  */
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "exploration_node");
+  ros::init(argc, argv, "mission_executive_node");
   ros::NodeHandle nh("~");
 
   EGOReplanFSM rebo_replan;

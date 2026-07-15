@@ -46,8 +46,8 @@ class MapInterface{
   {
     // get global box range from parameter file
     std::string package_name("mission_executive");
-    para_file_path_ = ros::package::getPath(package_name) + "/launch/explore_para.yaml";
-    INFO_MSG("[MapInterface] explore_para_path: " << para_file_path_);
+    para_file_path_ = ros::package::getPath(package_name) + "/launch/global_box.yaml";
+    INFO_MSG("[MapInterface] global_box_path: " << para_file_path_);
     para_ptr_ = std::make_shared<parameter_server::ParaeterSerer>(para_file_path_);
     nh.param("fsm/drone_id", drone_id_, -1);
     resetGlobalBox();

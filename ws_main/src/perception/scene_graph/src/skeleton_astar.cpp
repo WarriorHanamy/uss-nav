@@ -22,7 +22,7 @@ void SkeletonAstar::getNeighborPolyhedronsNotInCloseList(AstarNode::Ptr cur_node
   for (const auto& edge : cur_node->polyhedron_->edges_){
     if (edge.poly_nxt_ != nullptr){
       if (closed_list.find(edge.poly_nxt_->center_) != closed_list.end()) continue;
-      // 跳过被标记为不可达的节点; 但放行终点(否则目标永不可达)
+      // Skip nodes marked as unreachable; but allow the goal (otherwise the goal is never reachable)
       if (edge.poly_nxt_->nav_blocked_ && (edge.poly_nxt_->center_ - end_pos_).norm() > 1e-2) continue;
       double nxt_cost_g = cur_node->cost_g_ + getEuclHeu(cur_node->pos_, edge.poly_nxt_->center_);
       AstarNode::Ptr neighbor_node = std::make_shared<AstarNode>

@@ -9,7 +9,7 @@ using std::unordered_map;
 using std::vector;
 using Eigen::Vector3d;
 
-namespace ego_planner {
+namespace mission_executive {
 
 /**
  * FSM states for the exploration mission executive.
@@ -60,6 +60,6 @@ struct MissionData
 };
 
 
-}  // namespace ego_planner
+}  // namespace mission_executive
 
 #endif

@@ -1,6 +1,6 @@
 # ===============================================================
 # EGO Planner params  (consolidated from advanced_param_sim.xml)
-# All loaded inside exploration_node private namespace.
+# All loaded inside mission_executive_node private namespace.
 # ===============================================================
 
 # traj_server

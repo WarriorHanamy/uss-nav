@@ -13,7 +13,7 @@ void SpectralCluster::calculate(const std::vector<PolyHedronPtr> &polys_without_
     calLaplacianMatrix(W, D, L);
     calLaplacianEigen(L, U);
 
-    // K-Means 算法
+    // K-Means algorithm
     srand(time(nullptr));
     std::vector<int> cluster_assignments = kmeans(U, static_cast<int>(k_), 100);
     clusters.resize(k_);
@@ -32,8 +32,8 @@ void SpectralCluster::calSimilarityMatrix(Eigen::MatrixXd &W, Eigen::MatrixXd &E
 
     std::unordered_map<Eigen::Vector3d, int, Vector3dHash_SpecClus> poly_index_map;
 
-    // 1. 计算每个点的局部 sigma
-    int K = 7; // K近邻参数
+    // 1. Compute local sigma for each point
+    int K = 7; // KNN parameter
     std::vector<double> local_sigmas(poly_num);
     for (int i = 0; i < poly_num; ++i) {
         std::vector<double> dists_to_i;
@@ -43,15 +43,15 @@ void SpectralCluster::calSimilarityMatrix(Eigen::MatrixXd &W, Eigen::MatrixXd &E
         }
         std::sort(dists_to_i.begin(), dists_to_i.end());
         if (dists_to_i.size() >= K) {
-            local_sigmas[i] = dists_to_i[K - 1]; // 到第K个邻居的距离
+            local_sigmas[i] = dists_to_i[K - 1]; // distance to K-th neighbor
         } else if (!dists_to_i.empty()) {
-            local_sigmas[i] = dists_to_i.back(); // 如果点数不足K，取最远的
+            local_sigmas[i] = dists_to_i.back(); // fewer than K points, take farthest
         } else {
-            local_sigmas[i] = 1.0; // 孤立点
+            local_sigmas[i] = 1.0; // isolated point
         }
     }
 
-    // 2. 计算相似度矩阵 W
+    // 2. Compute similarity matrix W
     for (int i = 0; i < polys.size(); i++) {
         poly_index_map[polys[i]->center_] = i;
     }
@@ -60,11 +60,11 @@ void SpectralCluster::calSimilarityMatrix(Eigen::MatrixXd &W, Eigen::MatrixXd &E
             if (nbr_poly.is_force_connected_) continue;
             int j = poly_index_map[nbr_poly.poly_nxt_->center_];
             if (abs(W(i, j)) < 1e-5 && polys[i] != polys[j]) {
-                // TODO [gwq] 根据节点所包含的空间信息设计相似度计算函数
+                // TODO [gwq] design similarity function based on spatial info of nodes
                 double eula_dis = (polys[i]->center_ - polys[j]->center_).norm();
                 double sigma_product = local_sigmas[i] * local_sigmas[j];
                 if (sigma_product > 1e-6)
-                    W(i, j) = W(j, i) = exp(-eula_dis * eula_dis / (2 * 0.1));  // 欧氏距离越大，相似度越低
+                    W(i, j) = W(j, i) = exp(-eula_dis * eula_dis / (2 * 0.1));  // larger Euclidean distance -> lower similarity
             }
         }
         for (int j = i + 1; j < polys.size(); j++) {
@@ -103,16 +103,16 @@ void SpectralCluster::calLaplacianEigen(Eigen::MatrixXd &L, Eigen::MatrixXd &U) 
 
     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(L);
     if (es.info() != Eigen::Success) {
-        // 处理错误
+        // Handle error
         return;
     }
-    Eigen::VectorXd eigen_values = es.eigenvalues(); // 已排序
-    Eigen::MatrixXd eigen_vectors = es.eigenvectors(); // 与特征值对应
+    Eigen::VectorXd eigen_values = es.eigenvalues(); // sorted
+    Eigen::MatrixXd eigen_vectors = es.eigenvectors(); // corresponding to eigenvalues
 
-    /* 使用特征向量间隙算法计算 k */
+    /* Compute k using eigen-gap heuristic */
     k_ = 0;
     double max_gap = 0.0;
-    // 特征值数量小于2时，无法计算间隙，默认为1个簇
+    // less than 2 eigenvalues, cannot compute gap, default to 1 cluster
     if (n < 2) {
         k_ = n;
     } else {
@@ -124,7 +124,7 @@ void SpectralCluster::calLaplacianEigen(Eigen::MatrixXd &L, Eigen::MatrixXd &U) 
             }
         }
     }
-    if (k_ == 0 && n > 0) k_ = 1; // 至少保证有1个簇
+    if (k_ == 0 && n > 0) k_ = 1; // ensure at least 1 cluster
 
     k_ = 5;
 
@@ -132,15 +132,15 @@ void SpectralCluster::calLaplacianEigen(Eigen::MatrixXd &L, Eigen::MatrixXd &U) 
     INFO_MSG("   [SpectralCluster] Eigen Gap algorithm suggests k = "<< k_);
     INFO_MSG("   =======================================================");
 
-    // 直接选取前 k_ 个特征向量
+    // Select top k_ eigenvectors
     U = eigen_vectors.leftCols(k_);
-    // 归一化 U 的行
+    // Normalize rows of U
     for (int i = 0; i < n; i++) {
         double norm = U.row(i).norm();
         if (norm > 1e-6) {
             U.row(i).normalize();
         } else {
-            // 如果范数接近于0，则保持为0向量
+            // If norm near zero, keep as zero vector
             U.row(i) = Eigen::VectorXd::Zero(k_).transpose();
         }
     }
@@ -190,16 +190,16 @@ void SpectralCluster::visualizeClusters(const std::vector<PolyhedronCluster> &cl
 }
 
 
-// K-Means 算法的简单实现
-// centroids: 初始质心
-// points: N x k 的矩阵，每一行是一个点
-// max_iter: 最大迭代次数
-// 返回值: 一个包含 N 个元素的一维向量，每个元素是对应点的簇索引
+// Simple K-Means implementation
+// centroids: initial centroids
+// points: N x k matrix, each row is a point
+// max_iter: maximum iterations
+// Returns: N-element vector, each entry is cluster index for that point
 std::vector<int> SpectralCluster::kmeans(const Eigen::MatrixXd& points, int k, int max_iter) {
     int num_points = points.rows();
     int num_dims = points.cols();
 
-    // 随机初始化质心
+    // Randomly initialize centroids
     Eigen::MatrixXd centroids(k, num_dims);
     for (int i = 0; i < k; ++i) {
         centroids.row(i) = points.row(rand() % num_points);
@@ -208,7 +208,7 @@ std::vector<int> SpectralCluster::kmeans(const Eigen::MatrixXd& points, int k, i
     std::vector<int> assignments(num_points);
     for (int iter = 0; iter < max_iter; ++iter) {
         bool changed = false;
-        // 分配步骤：将每个点分配给最近的质心
+        // Assignment step: assign each point to nearest centroid
         for (int i = 0; i < num_points; ++i) {
             double min_dist = -1.0;
             int best_cluster = 0;
@@ -225,10 +225,10 @@ std::vector<int> SpectralCluster::kmeans(const Eigen::MatrixXd& points, int k, i
             }
         }
 
-        // 如果没有点的分配发生变化，则收敛
+        // Converged if no reassignments
         if (!changed) break;
 
-        // 更新步骤：重新计算质心
+        // Update step: recompute centroids
         centroids.setZero();
         std::vector<int> counts(k, 0);
         for (int i = 0; i < num_points; ++i) {
@@ -238,7 +238,7 @@ std::vector<int> SpectralCluster::kmeans(const Eigen::MatrixXd& points, int k, i
         for (int j = 0; j < k; ++j) {
             if (counts[j] > 0) {
                 centroids.row(j) /= counts[j];
-            } else { // 如果一个簇变空了，重新随机初始化
+            } else { // empty cluster, reinitialize randomly
                 centroids.row(j) = points.row(rand() % num_points);
             }
         }
@@ -256,7 +256,7 @@ int AreaHandler::getAreaFromPoly(const PolyHedronPtr &poly) {
         INFO_MSG_RED("[CommDetection]: [getAreaFromPoly] failed, poly == nullptr");
         return -1;
     }
-    // todo [gwq] 可能需要判斷當前poly是否存在
+    // todo [gwq] may need to check if current poly exists
     return poly_cluster_map_[poly->center_];
 }
 
@@ -290,10 +290,10 @@ void AreaHandler::finishMapLoad() {
 void AreaHandler::communityDetection(vector<PolyHedronPtr> &polys_all, std::unique_ptr<CPMVertexPartition>& partition_res, double resolution = 0.02) {
     auto check_igraph_error = [](igraph_error_t err, const std::string& function_name) {
         if (err != IGRAPH_SUCCESS) {
-            // 如果函数返回的不是 IGRAPH_SUCCESS，就打印错误信息并终止程序
+            // If not IGRAPH_SUCCESS, print error and exit
             std::cerr << "Fatal IGraph Error in function '" << function_name
                       << "': " << igraph_strerror(err) << std::endl;
-            exit(1); // 立即退出，防止程序带着无效状态继续运行
+            exit(1); // exit immediately to prevent running with invalid state
         }
     };
 
@@ -428,7 +428,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
     }
 
     if (!area_map_.empty()) {
-        // ... [前面部分代码保持不变] ...
+        // ... [preceding code unchanged] ...
         // calculate old areas which connected by 'new_polys'
         map<int, bool> areas_to_update;
         for (const auto& poly : new_polys) {
@@ -444,7 +444,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             return;
         }
 
-        // [Log统一] 打印需要更新的区域信息
+        // [Log] print area info needing update
         for (const auto& area : areas_to_update) {
             INFO_MSG_GREEN("              | * Area [" << area.first << ", pos " << area_map_[area.first]->center_.transpose() << "] need update.");
         }
@@ -459,7 +459,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
         }
         candidate_polys.insert(candidate_polys.end(), new_polys.begin(), new_polys.end());
 
-        // 为多面体指针创建到索引的反向映射，方便后续查找
+        // create reverse mapping from poly ptr to index for later lookup
         std::map<PolyHedronPtr, size_t> poly_to_idx_map;
         for(size_t i = 0; i < candidate_polys.size(); ++i) {
             poly_to_idx_map[candidate_polys[i]] = i;
@@ -467,13 +467,13 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
 
         communityDetection(candidate_polys, partition, 0.018);
 
-        // ======================= 新增：预合并逻辑开始 =======================
+        // ======================= Pre-merge logic begin =======================
         int n_communities = partition->n_communities();
         INFO_MSG_GREEN("   | Communities detection done, split into [" << n_communities << "] communities.");
         std::vector<std::vector<PolyHedronPtr>> new_poly_members;
         vector<vector<size_t>>                  partition_raw_members(n_communities);
 
-        // 1. 构建多面体到社区ID的快速查找映射
+        // 1. Build fast lookup from poly to community ID
         std::vector<int> poly_idx_to_community_id(candidate_polys.size(), -1);
         for (int i = 0; i < candidate_polys.size(); ++i) {
             int comm_id = partition->membership(i);
@@ -487,21 +487,21 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             }
         }
 
-        // [Log统一] 打印每个社区的成员数量
+        // [Log] print member count per community
         for (int i = 0; i< partition_raw_members.size(); i++) {
             INFO_MSG_GREEN("   | -- Initial Community [" << i << "] has " << partition_raw_members[i].size() << " members.");
         }
 
         if (n_communities > 1) {
 
-            // 2. 统计每对社区间的连接边界上的多面体数量
-            //    键是排过序的社区ID对，值是边界上多面体的索引集合
+            // 2. Count border polyhedra between each community pair
+            //    key is sorted community ID pair, value is set of border poly indices
             std::map<std::pair<int, int>, std::set<size_t>> border_polys_count;
             for (size_t i = 0; i < candidate_polys.size(); ++i) {
                 int community1_id = poly_idx_to_community_id[i];
                 for (const auto& edge : candidate_polys[i]->edges_) {
                     auto it = poly_to_idx_map.find(edge.poly_nxt_);
-                    if (it != poly_to_idx_map.end()) { // 确保邻居在候选集内
+                    if (it != poly_to_idx_map.end()) { // ensure neighbor is in candidate set
                         size_t neighbor_idx = it->second;
                         int community2_id = poly_idx_to_community_id[neighbor_idx];
                         if (community1_id != community2_id) {
@@ -509,20 +509,20 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
                             int c2 = std::max(community1_id, community2_id);
                             border_polys_count[{c1, c2}].insert(i);
                             border_polys_count[{c1, c2}].insert(neighbor_idx);
-                            // [Log统一] 打印详细的边界多面体位置，可用于调试
+                            // [Log] detailed border poly locations for debugging
                             // INFO_MSG_GREEN("   | ---- Border poly contact: " << candidate_polys[i]->center_.transpose() << " <-> " << candidate_polys[neighbor_idx]->center_.transpose());
                         }
                     }
                 }
             }
 
-            // [Log统一] 打印社区间的边界多面体统计
+            // [Log] print border poly stats between communities
             for (const auto& border : border_polys_count) {
                 INFO_MSG_GREEN("   | -- Border between Community [" << std::get<0>(border.first) << "] and [" << std::get<1>(border.first) << "] has "
                                   << floor(static_cast<double>(border.second.size()) / 2.0) << " poly pairs.");
             }
 
-            // 3. 并查集 (DSU) 用于管理合并
+            // 3. DSU for managing merges
             struct DSU {
                 std::vector<int> parent;
                 DSU(int n) { parent.resize(n); std::iota(parent.begin(), parent.end(), 0); }
@@ -531,7 +531,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             };
             DSU dsu(n_communities);
 
-            // 4. 根据连接强度（边界多面体数量）决定是否合并
+            // 4. Decide merge based on connection strength (border poly count)
             const int MERGE_THRESHOLD = 4;
             for (const auto& pair : border_polys_count) {
                 if (pair.second.size() > MERGE_THRESHOLD) {
@@ -541,7 +541,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
                 }
             }
 
-            // 5. 生成最终合并后的社区
+            // 5. Generate final merged communities
             std::map<int, vector<PolyHedronPtr>> final_communities_map;
             for (int i = 0; i < n_communities; ++i) {
                 int root = dsu.find(i);
@@ -549,28 +549,28 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
                     final_communities_map[root].push_back(candidate_polys[member_idx]);
                 }
             }
-            // 用合并后的结果替换原始的社区成员
+            // Replace original community members with merged result
             new_poly_members.clear();
             for(const auto& pair : final_communities_map) {
                 new_poly_members.push_back(pair.second);
             }
         } else {
-            // 如果只有一个社区，则直接使用
+            // single community, use directly
             new_poly_members.resize(1);
             vector<size_t> members = partition_raw_members[0];
             for (auto& member : members) {
                 new_poly_members[0].push_back(candidate_polys[member]);
             }
         }
-        // ======================= 新增：预合并逻辑结束 =======================
+        // ======================= Pre-merge logic end =======================
 
         std::map<int, Eigen::Vector3d> old_area_centers, new_area_centers;
 
-        // 使用合并前的旧区域中心
+        // Old area centers before merge
         for (const auto& area_id : areas_to_update)
             old_area_centers[area_id.first] = area_map_[area_id.first]->center_;
 
-        // 使用合并后的新社区来计算中心
+        // Compute new area centers from merged communities
         for (int i = 0; i < new_poly_members.size(); i++) {
             Eigen::Vector3d center(0, 0, 0);
             for (const auto& poly : new_poly_members[i]) {
@@ -638,7 +638,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             for (const auto& area_id : matched_areas) {
                 if (!area_id.second) {
                     INFO_MSG_YELLOW("   | ** DELETE area [" << area_id.first << "] ...");
-                    area_map_.erase(area_id.first);          // todo [gwq] 应该在外部接口中统一处理删除逻辑
+                    area_map_.erase(area_id.first);                      // todo [gwq] deletion should be handled in external interface
                     areas_need_delete_[area_id.first] = true;
                 }
             }
@@ -647,7 +647,7 @@ void AreaHandler::incrementalUpdateAreas(const vector<PolyHedronPtr>& new_polys)
             findCurAreaNbrs(area_id.first);
         }
     }else {
-        // ... [首次初始化的代码保持不变] ...
+        // ... [first-time initialization code unchanged] ...
         PolyhedronCluster::Ptr new_area = std::make_shared<PolyhedronCluster>();
         new_area->id_ = max_area_id_ ++;
         for (auto& poly : new_polys) new_area->addPoly(poly, true);
@@ -671,7 +671,7 @@ void AreaHandler::visualizeClusters() {
     // marker_array.markers.push_back(marker_text);
     marker_text.ns = "clusters_box";
     marker_array.markers.push_back(marker_text);
-    // 随机生成颜色
+    // Randomly generate colors
     // std::vector<Eigen::Vector3d> colors(cur_clusters_.size());
     // for (int i = 0; i < cur_clusters_.size(); i++) {
     //     double hue = (double)i / cur_clusters_.size();
@@ -689,7 +689,7 @@ void AreaHandler::visualizeClusters() {
     //     marker_text.scale.x = marker_text.scale.y = marker_text.scale.z = 1.0;
     //     marker_text.color.a = 1.0;
     //
-    //     // 在HSV上采样颜色，保证颜色的鲜艳
+    //             // Sample colors in HSV for vibrancy
     //     double hue = static_cast<double>(clusters.size());
     //     double saturation = 1.0;
     //     double value = 1.0;
@@ -810,20 +810,20 @@ void AreaHandler::drawBoundingBox(visualization_msgs::Marker& marker, const Eige
     marker.header.frame_id = "world";
     marker.header.stamp = ros::Time::now();
     marker.ns = "clusters_box";
-    marker.id = id; // 如果需要多个框，应使用不同的ID
+    marker.id = id; // use different IDs for multiple boxes
     marker.type = visualization_msgs::Marker::LINE_LIST;
     marker.action = visualization_msgs::Marker::ADD;
 
-    // 设置线宽
+    // Set line width
     marker.scale.x = line_width;
 
-    // 设置颜色 (r, g, b, a)
+    // Set color (r, g, b, a)
     marker.color.r = color.x();
     marker.color.g = color.y();
     marker.color.b = color.z();
-    marker.color.a = 1.0; // 不透明
+    marker.color.a = 1.0; // opaque
 
-    // 定义长方体的8个顶点
+    // Define 8 vertices of the bounding box
     std::vector<geometry_msgs::Point> vertices;
     vertices.push_back(eigenToGeoPt(Eigen::Vector3d(min.x(), min.y(), min.z())));
     vertices.push_back(eigenToGeoPt(Eigen::Vector3d(max.x(), min.y(), min.z())));
@@ -836,20 +836,20 @@ void AreaHandler::drawBoundingBox(visualization_msgs::Marker& marker, const Eige
     auto addLine = [](visualization_msgs::Marker& m, const geometry_msgs::Point& p1, const geometry_msgs::Point& p2) {
         m.points.push_back(p1); m.points.push_back(p2);
     };
-    // 定义12条边 (每条边由两个点组成)
-    // 前面四条边
+    // Define 12 edges (each edge has two points)
+    // Front 4 edges
     addLine(marker, vertices[0], vertices[1]);
     addLine(marker, vertices[1], vertices[2]);
     addLine(marker, vertices[2], vertices[3]);
     addLine(marker, vertices[3], vertices[0]);
 
-    // 后面四条边
+    // Back 4 edges
     addLine(marker, vertices[4], vertices[5]);
     addLine(marker, vertices[5], vertices[6]);
     addLine(marker, vertices[6], vertices[7]);
     addLine(marker, vertices[7], vertices[4]);
 
-    // 连接前后的四条边
+    // Connecting front-to-back 4 edges
     addLine(marker, vertices[0], vertices[4]);
     addLine(marker, vertices[1], vertices[5]);
     addLine(marker, vertices[2], vertices[6]);

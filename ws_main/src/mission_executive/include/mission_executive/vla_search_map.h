@@ -15,7 +15,7 @@
 
 class SceneGraph;
 
-namespace ego_planner {
+namespace mission_executive {
 
 struct VLASearchRoom {
   int id{-1};
@@ -53,7 +53,7 @@ class VLASearchMap {
    * @param[in] nh   ROS node handle
    * @param[in] map  Map interface pointer
    */
-  VLASearchMap(ros::NodeHandle& nh, const MapInterface::Ptr& map);
+  VLASearchMap(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map);
   /**
    * Update the 2D semantic map from the current occupancy grid.
    *
@@ -221,7 +221,7 @@ class VLASearchMap {
    */
   static std::string roomLabel(int id);
 
-  MapInterface::Ptr map_;
+  ego_planner::MapInterface::Ptr map_;
   ros::Publisher image_pub_;
   std::string image_topic_{"/vla_search/small_map"};
   std::string frame_id_{"world"};
@@ -255,6 +255,6 @@ class VLASearchMap {
   std::vector<VLASearchDoor> doors_;
 };
 
-}  // namespace ego_planner
+}  // namespace mission_executive
 
 #endif

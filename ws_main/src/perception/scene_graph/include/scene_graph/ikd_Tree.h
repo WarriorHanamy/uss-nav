@@ -18,7 +18,7 @@ namespace skeleton_gen{
 
 struct ikdTree_ObjectDataType{
   float x,y,z;
-  ObjectNode::Ptr obj_;            // 多面体指针
+  ObjectNode::Ptr obj_;            ///< Object node pointer [--]
   ikdTree_ObjectDataType (ObjectNode::Ptr obj_ptr = nullptr){
     if (obj_ptr != nullptr){
       obj_ = obj_ptr;
@@ -38,7 +38,7 @@ struct ikdTree_ObjectDataType{
 
 struct ikdTree_PolyhedronType_FixedCenter{
   float x,y,z;
-  PolyHedronPtr polyhedron_;            // 多面体指针
+  PolyHedronPtr polyhedron_;            ///< Polyhedron pointer [--]
   ikdTree_PolyhedronType_FixedCenter (PolyHedronPtr poly_ptr = nullptr){
     if (poly_ptr != nullptr){
       polyhedron_ = poly_ptr;
@@ -59,7 +59,7 @@ struct ikdTree_PolyhedronType_FixedCenter{
 
 struct ikdTree_PolyhedronType{
     float x,y,z;
-    PolyHedronPtr polyhedron_;            // 多面体指针
+    PolyHedronPtr polyhedron_;            ///< Polyhedron pointer [--]
     ikdTree_PolyhedronType (PolyHedronPtr poly_ptr = nullptr){
       if (poly_ptr != nullptr){
         polyhedron_ = poly_ptr;
@@ -312,12 +312,50 @@ public:
      */
     KD_TREE(float delete_param = 0.5, float balance_param = 0.6, float box_length = 0.2);
     ~KD_TREE();
+    /**
+     * Set the delete criterion parameter.
+     *
+     * @param[in] delete_param  Delete criterion [--]
+     */
     void Set_delete_criterion_param(float delete_param);
+    /**
+     * Set the balance criterion parameter.
+     *
+     * @param[in] balance_param  Balance criterion [--]
+     */
     void Set_balance_criterion_param(float balance_param);
+    /**
+     * Set the downsample voxel size.
+     *
+     * @param[in] box_length  Voxel size [m]
+     */
     void set_downsample_param(float box_length);
+    /**
+     * Initialize the KD-Tree with given parameters.
+     *
+     * @param[in] delete_param   Delete criterion [--]
+     * @param[in] balance_param  Balance criterion [--]
+     * @param[in] box_length     Downsample voxel size [m]
+     */
     void InitializeKDTree(float delete_param = 0.5, float balance_param = 0.7, float box_length = 0.2);
+    /**
+     * Total number of nodes in the tree.
+     *
+     * @return Number of nodes [--]
+     */
     int size();
+    /**
+     * Number of valid (non-deleted) points.
+     *
+     * @return Valid point count [--]
+     */
     int validnum();
+    /**
+     * Get the root alpha balance and delete ratios.
+     *
+     * @param[out] alpha_bal  Balance ratio [--]
+     * @param[out] alpha_del  Delete ratio [--]
+     */
     void root_alpha(float &alpha_bal, float &alpha_del);
     /**
      * Build the KD-Tree from a point cloud.
@@ -335,14 +373,67 @@ public:
      * @param[in]  max_dist        Maximum search distance [m]
      */
     void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);
+    /**
+     * Box-range search for points within an axis-aligned box.
+     *
+     * @param[in]  Box_of_Point  Search box boundary [m]
+     * @param[out] Storage       Result point vector
+     */
     void Box_Search(const BoxPointType &Box_of_Point, PointVector &Storage);
+    /**
+     * Radius search for points within a sphere.
+     *
+     * @param[in]  point   Query point [m]
+     * @param[in]  radius  Search radius [m]
+     * @param[out] Storage Result point vector
+     */
     void Radius_Search(PointType point, const float radius, PointVector &Storage);
+    /**
+     * Add multiple points to the tree.
+     *
+     * @param[in]  PointToAdd   Points to insert
+     * @param[in]  downsample_on  Enable downsampling [--]
+     * @return Number of points added [--]
+     */
     int Add_Points(PointVector & PointToAdd, bool downsample_on);
+    /**
+     * Add points defined by box regions.
+     *
+     * @param[in] BoxPoints  List of box regions
+     */
     void Add_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    /**
+     * Delete specified points from the tree.
+     *
+     * @param[in] PointToDel  Points to delete
+     */
     void Delete_Points(PointVector & PointToDel);
+    /**
+     * Delete all points within given box regions.
+     *
+     * @param[in] BoxPoints  Box regions to delete [m]
+     * @return Number of deleted points [--]
+     */
     int Delete_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    /**
+     * Flatten the tree into a point vector.
+     *
+     * @param[in]  root         Root node
+     * @param[out] Storage      Output point vector
+     * @param[in]  storage_type  Storage record type
+     */
     void flatten(KD_TREE_NODE * root, PointVector &Storage, delete_point_storage_set storage_type);
+    /**
+     * Acquire points removed during rebalancing.
+     *
+     * @param[out] removed_points  Output removed points
+     */
     void acquire_removed_points(PointVector & removed_points);
+    /**
+     * Get the axis-aligned bounding box of all points in the tree.
+     *
+     * @return Bounding box [m]
+     */
     BoxPointType tree_range();
     PointVector PCL_Storage;
     KD_TREE_NODE * Root_Node = nullptr;

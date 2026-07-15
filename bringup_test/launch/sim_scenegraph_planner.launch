@@ -6,7 +6,7 @@
   <arg name="scene_graph_name" default="J30V2_snapshot"/>
 
   <!-- Exploration node (EGO planner FSM + map + optimizer) -->
-  <node pkg="mission_executive" type="exploration_node"
+  <node pkg="mission_executive" type="mission_executive_node"
         name="drone_$(arg drone_id)_ego_planner_node" output="screen">
 
     <!-- Load consolidated planner params -->

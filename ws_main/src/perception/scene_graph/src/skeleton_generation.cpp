@@ -164,7 +164,7 @@ void SkeletonGenerator::connectToVisibleNeighbors(const PolyHedronPtr &poly, dou
         auto &neighbor = pt.polyhedron_;
         if (neighbor == poly || neighbor == nullptr) continue;
         if (neighbor->nav_blocked_) continue;
-        // 严格可见性: 两节点中心之间不能有障碍物(避免生成穿墙边)
+        // Strict visibility: no obstacle between two node centers (avoid edges through walls)
         if (!map_interface_->isVisible(poly->center_, neighbor->center_)) continue;
 
         double len = (poly->center_ - neighbor->center_).norm();
@@ -400,7 +400,7 @@ bool SkeletonGenerator::expandSkeleton(const Eigen::Vector3d &start_point, doubl
     expand_pending_frontiers_.pop_front();
     if (cur_ftr->deleted_ || cur_ftr == nullptr) continue;
 
-    // step3. 首次鉴定边界，如果边界不合法，则尝试调整边界，尽可能使其符合要求
+    // step3. Verify frontier for the first time; if invalid, try to adjust it
     verifyFrontier(cur_ftr);
     if (!cur_ftr->valid_){
       adjustFrontier(cur_ftr);
@@ -453,7 +453,7 @@ void SkeletonGenerator::adjustExpandStartPt(Eigen::Vector3d& start_point){
       rayCast(start_point, direction, _max_expansion_ray_length, 0.1);
     Eigen::Vector3d hit_point = get<0>(ray_cast_result);
 
-    // 未检测到障碍物，则认为该方向可能为长廊道，需要进行扩展
+    // No obstacle detected, likely a long corridor in this direction, need expansion
     if (get<1>(ray_cast_result) == -2){
       start_point =start_point + 0.5 * direction * _max_expansion_ray_length;
     }else{
@@ -507,7 +507,7 @@ bool SkeletonGenerator::initNewPolyhedron(PolyHedronPtr new_polyhedron){
     return false;
   }
 
-  // todo：此处有一个checkFloor过程，不知道不加这个会不会有很大影响
+  // todo: there is a checkFloor step here; impact of skipping it unknown
   if (!new_polyhedron->is_gate_){
     // step1. sample black and white vertices and re-calculate the center of the polyhedron
     generatePolyVertices(new_polyhedron);
@@ -545,7 +545,7 @@ bool SkeletonGenerator::initNewPolyhedron(PolyHedronPtr new_polyhedron){
       // INFO_MSG_YELLOW("[SkeletonGen] | Polyhedron is inside another polyhedron [" << check_inside_result.second.transpose() << "], skip it.");
       return false;
     }
-    // step4. 构建多面体面元
+    // step4. Build polyhedron facets
     previous_time = ros::Time::now();
     initFacetsFromPolyhedron(new_polyhedron);
     current_time = ros::Time::now();
@@ -585,7 +585,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
         if (v_neighbor->type_ == Vertex::WHITE){
           if (v_neighbor->is_visited_ == true) continue;
           Eigen::Vector3d mid_pt = (v->position_ + v_neighbor->position_) / 2.0;
-          // todo 这里有一个判断中点是否距离障碍物是否过近，并添加待选白色顶点的过程
+          // todo: check if midpoint is too close to obstacle; add candidate white vertices
           if (true)
             white_v_bufer.push_back(v_neighbor);
         }else if (v_neighbor->type_ == Vertex::BLACK || v_neighbor->type_ == Vertex::GRAY){
@@ -600,11 +600,11 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
     collision_v_groups.push_back(collision_v_single_group);
   }
 
-  // Filter collision vertices 保留符合规则的 collision vertex
-  // 相当于滤波作用，去掉极端噪声点
+  // Filter collision vertices: keep only those meeting the criteria
+  // Acts as a filter to remove extreme noise points
   for (std::vector<VertexPtr> collision_v_single_group : collision_v_groups){
-    double mean_length = 0.0;     // 碰撞采样点到采样中心的平均距离
-    int longest_index = -1;       //
+    double mean_length = 0.0;     // average distance from collision samples to center
+    int longest_index = -1;
     int shortest_index = -1;
     double longest = 0;
     double shortest = 9999;
@@ -615,7 +615,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
 
     int vertex_num = static_cast<int>(collision_v_single_group.size());
     for (int i = 0; i < vertex_num; i++){
-      // todo: 此处有z轴上下界检查，不知道是否关键，暂时不加
+      // todo: z-axis bound check here; impact of skipping unknown, omitted for now
       if (checkIfOnLocalFloorOrCeil(collision_v_single_group.at(i)->position_) == 0) continue;
       double dis = collision_v_single_group.at(i)->distance_to_center_;
       if (dis - mean_length > tolerance && dis > longest){
@@ -636,9 +636,10 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
     }
   }
   // inflate black vertices
-  /* 这段代码的主要功能是对多面体中的黑色顶点进行膨胀处理。具体来说，如果一个黑色顶点被标记为关键顶点，
- * 那么与其相连的所有黑色顶点也将被标记为关键顶点。这有助于确保在构建多面体的骨架时，考虑更多的顶点连接关系，
- * 从而生成更精确的骨架结构。这种膨胀处理有助于防止在后续处理中忽略某些重要的顶点连接。*/
+  /* Inflate black vertices: if a black vertex is marked as critical,
+   * all connected black vertices are also marked as critical.
+   * This ensures more vertex connectivity is considered during
+   * skeleton construction, preventing omission of important connections. */
   for (auto colli_v_single_group : collision_v_groups)
     for (auto v : colli_v_single_group)
       for (auto v_neighbor : v->connected_vertices_)
@@ -648,14 +649,14 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
   // create critical vertices mesh
   std::vector<Eigen::Vector3d> collision_v_for_mesh;
   for (VertexPtr black_v : polyhedron->black_vertices_){
-    // todo: 这里有一个判断条件，不知道是否关键，暂时不加 (checkFloorOrCeil)
+    // todo: condition check here (checkFloorOrCeil); impact unknown, omitted
     // if (!black_v->is_critical_ && checkIfOnLocalFloorOrCeil(black_v->position_) != 0) continue;
     collision_v_for_mesh.push_back(sphere_sample_directions_.at(black_v->dir_sample_buffer_index_));
     black_v->is_critical_ = true;
   }
   for (VertexPtr gray_v : polyhedron->gray_vertices_){
-    // todo: 这里有一个判断条件，不知道是否关键，暂时不加 (checkFloorOrCeil)
-    if (!gray_v->is_critical_) continue;  // todo 有效性待验证
+    // todo: condition check here (checkFloorOrCeil); impact unknown, omitted
+    if (!gray_v->is_critical_) continue;  // todo: validity to be verified
     collision_v_for_mesh.push_back(sphere_sample_directions_.at(gray_v->dir_sample_buffer_index_));
     gray_v->is_critical_ = true;
   }
@@ -677,7 +678,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
   }
 
   // Calculate outwards normal for each facet
-  // 生成候选单位法向量，并确定最终的法向量朝向
+  // Generate candidate unit normals and determine final normal orientation
   for (auto & facet : polyhedron->facets_){
     Eigen::Vector3d v1 = facet->vertices_.at(1)->position_ - facet->vertices_.at(0)->position_;
     Eigen::Vector3d v2 = facet->vertices_.at(2)->position_ - facet->vertices_.at(0)->position_;
@@ -689,7 +690,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
                               candidate_normal : -candidate_normal;
   }
 
-  // BFS to find frontier clusters 边界聚类
+  // BFS to find frontier clusters
   for (auto & colli_v_single_group : collision_v_groups){
     std::vector<FacetPtr> facets_group;
     findFacetsGroupFromVertices(polyhedron, colli_v_single_group, facets_group);
@@ -724,13 +725,13 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
     }
   }
 
-  // 滤边界滤波
+  // Frontier boundary filtering
   // Add bv_group for those connecting bvs having big diff in dis_to_center
-  // 将不是frontier的facet进行聚类！！！！
+  // Cluster non-frontier facets !!!!
   std::vector<FacetPtr> ignored_facets;
   for (FacetPtr cur_facet : polyhedron->facets_){
     if (cur_facet->frontier_processed_) continue;
-    // todo： 此处有z轴上下界检查，不知道是否关键，暂时不加
+    // todo: z-axis bound check here; impact unknown, omitted
     int ignore_cnt = 0;
     for (int i = 0; i < 3; i++){
       VertexPtr v1 = cur_facet->vertices_.at(i);
@@ -777,8 +778,8 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
   }
 }
 
-// 验证边界的有效性
-// 若边界有效，确定下一个node的位置，写入frontier的next_node_pos，并将frontier的valid设置为true
+// Verify frontier validity
+// If valid, determine the next node position, write to frontier's next_node_pos, and set valid to true
 void SkeletonGenerator::verifyFrontier(PolyhedronFtrPtr ftr){
   Eigen::Vector3d ray_cast_start_pt = ftr->proj_center_ + 2.0 * ftr->out_unit_normal_ * _search_margin;
   tuple<Eigen::Vector3d, int, Eigen::Vector3d> collision_res =
@@ -793,14 +794,14 @@ void SkeletonGenerator::verifyFrontier(PolyhedronFtrPtr ftr){
     rayCast(ray_cast_start_pt, ftr->out_unit_normal_, _max_expansion_ray_length, 0.2);
   Eigen::Vector3d hit_point = get<0>(ray_cast_result);
 
-  // 未检测到障碍物，则认为该方向可能为长廊道，需要进行扩展
+  // No obstacle detected, likely a long corridor, need expansion
   bool need_expand = false;
   Eigen::Vector3d new_polyhedron_center;
   if (get<1>(ray_cast_result) == -2){
     need_expand = true;
     new_polyhedron_center = ftr->proj_center_ + 0.5 * ftr->out_unit_normal_ * _max_expansion_ray_length;
   }
-  // 检测到障碍物，但是还有一定的距离，则认为该方向可能为边界，需要进行扩展
+  // Obstacle detected but still some distance away, likely a boundary, need expansion
   else if (getDistance(hit_point, ftr->proj_center_) > _frontier_creation_threshold){
     need_expand = true;
     new_polyhedron_center = (hit_point + ftr->proj_center_) * 0.5;
@@ -833,7 +834,7 @@ void SkeletonGenerator::verifyFrontier(PolyhedronFtrPtr ftr){
 }
 
 void SkeletonGenerator::adjustFrontier(PolyhedronFtrPtr ftr){
-  // step1 尝试仅调整投影中心
+  // step1: try adjusting only the projection center
   if (ftr->proj_facet_ == nullptr) return;
 
   Eigen::Vector3d prev_proj_center = ftr->proj_center_;
@@ -841,22 +842,22 @@ void SkeletonGenerator::adjustFrontier(PolyhedronFtrPtr ftr){
   ftr->proj_center_                = ftr->proj_facet_->center_;
   verifyFrontier(ftr);
   if (!ftr->valid_){
-    // step2 尝试仅调整法向量
+    // step2: try adjusting only the normal vector
     ftr->proj_center_     = prev_proj_center;
     ftr->out_unit_normal_ = ftr->proj_facet_->out_unit_normal_;
     verifyFrontier(ftr);
     if (!ftr->valid_){
-      // step3 尝试同时调整法向量和投影中心
+      // step3: try adjusting both normal and projection center
       ftr->proj_center_   = ftr->proj_facet_->center_;
       verifyFrontier(ftr);
       if (!ftr->valid_){
-        // step4 尝试使用邻域平面中心作为当前frontier的中心
+        // step4: try using the centroid of a neighboring facet as the frontier center
         ftr->out_unit_normal_ = prev_normal;
         for (FacetPtr cur_facet : ftr->proj_facet_->neighbor_facets_){
           if (ftr->valid_) break;
           ftr->proj_center_ = cur_facet->center_;
           verifyFrontier(ftr);
-          // step5 尝试使用邻域作平面法向量为当前frontier的法向量
+          // step5: try using the normal of a neighboring facet as the frontier normal
           if (!ftr->valid_){
             ftr->out_unit_normal_ = cur_facet->out_unit_normal_;
             verifyFrontier(ftr);
@@ -875,11 +876,11 @@ bool SkeletonGenerator::processAValidFrontier(PolyhedronFtrPtr cur_ftr){
   }else
     gate = cur_ftr->gate_;
 
-  // todo : 此处有检查，如下，先不加
+  // todo: check exists here, omitted for now
   /*
   bool floor = checkFloor(gate);
   bool bbx = checkWithinBbx(gate->coord);
-  // 如果gate node不在地面上或者不在bbx中，则认为该frontier不需要进行后续的回滚操作，并认为该frontier无效
+  // If gate node is not on the ground or outside bbx, skip rollback and mark frontier invalid
   if (!floor || !bbx) {
     gate->rollbacked = true;
     if (!floor) {
@@ -996,7 +997,7 @@ bool SkeletonGenerator::checkConnectivityBetweenPolyhedrons(PolyHedronPtr p1, Po
 }
 
 // return pair<bool, Eigen::Vector3d>
-// <是否在另一多面体中， 多面体orin center>
+// <whether inside another polyhedron, polyhedron origin center>
 pair<bool, Eigen::Vector3d> SkeletonGenerator::checkIfContainedByAnotherPolyhedron(PolyHedronPtr polyhedron){
 
   std::unordered_map<Eigen::Vector3d, bool, Vector3dHash> polyhedron_map;
@@ -1044,7 +1045,7 @@ void SkeletonGenerator::centralizePolyhedronCoord(PolyHedronPtr polyhedron){
   polyhedron->center_ = center_sum;
 }
 
-// 采样生成黑白顶点
+// Sample to generate black and white vertices
 void SkeletonGenerator::generatePolyVertices(PolyHedronPtr poly){
   int num_directions = static_cast<int>(sphere_sample_directions_.size());
   for (int i = 0; i < num_directions; i++){
@@ -1090,8 +1091,8 @@ void SkeletonGenerator::generatePolyVertices(PolyHedronPtr poly){
   }
 }
 
-// 1. 标准的quickhull算法，生成凸包，并使输出的三角形网格顶点顺序为逆时针
-// 2. 生成默认单位球采样的凸包，这样可以获得所有面元的定点相对于球心的方向
+// 1. Standard QuickHull algorithm generates convex hull with CCW triangle vertex order
+// 2. Generate convex hull of unit sphere samples to obtain facet vertex directions relative to sphere center
 void SkeletonGenerator::initFacetVerticesDirection(){
   quickhull::QuickHull<double> qh;
   quickhull::HalfEdgeMesh<double, size_t> mesh =
@@ -1130,7 +1131,7 @@ bool SkeletonGenerator::checkInBoundingBox(const Eigen::Vector3d& point){
 }
 
 bool SkeletonGenerator::checkInLocalUpdateRange(const Eigen::Vector3d& point){
-  // 坐标轴对齐的长方体
+  // Axis-aligned bounding box
   Eigen::Vector3d pt_in_body_frame = transPointToBodyFrame(point);
   if (pt_in_body_frame.x() > _local_x_max || pt_in_body_frame.x() < _local_x_min ||
       pt_in_body_frame.y() > _local_y_max || pt_in_body_frame.y() < _local_y_min ||
@@ -1280,11 +1281,11 @@ void SkeletonGenerator::sampleUnitSphere(){
   sphere_sample_directions_.clear();
   sphere_sample_directions_qh_.clear();
 
-  // // Fibonicci sphere
-  // 根据密度因子调整黄金角度
+  // // Fibonacci sphere
+  // Adjust golden angle by density factor
   // double golden_angle = M_PI * (3. - sqrt(5.)) * 1.0;
   //
-  // // 生成采样点
+  // // Generate sample points
   // for (int i = 0; i < _sampling_density; ++i) {
   //   double y = 1 - (static_cast<double>(i) / static_cast<double>(_sampling_density - 1)) * 2.0;
   //   double radius = sqrt(1 - y * y);
@@ -1295,7 +1296,7 @@ void SkeletonGenerator::sampleUnitSphere(){
   //   sphere_sample_directions_qh_.emplace_back(x, y, z);
   // }
 
-  // n阶魔方采样
+  // N-level cube sampling
   int sample_level = _sampling_level;
   double interval = 1.0 / static_cast<double>(sample_level);
   for (int iter_y = 0; iter_y < sample_level + 1; iter_y++){
@@ -1349,7 +1350,7 @@ void SkeletonGenerator::sampleUnitSphere(){
 }
 
 // // return : (IF_COLLISION, index)
-// // 返回最近的障碍物距离以及索引
+// // Return the nearest obstacle distance and its index
 // inline pair<double, Eigen::Vector3d>
 //             SkeletonGenerator::collisionCheck(const Eigen::Vector3d& point){
 //   Eigen::Vector3d min_dis_node_index(-9999, -9999, -9999);
@@ -1371,7 +1372,7 @@ void SkeletonGenerator::sampleUnitSphere(){
 // #endif
 // }
 
-// 在指定方向向量上找到与平面相交的点，并判断是否在三角形内
+// Find ray-plane intersection and check if point is inside the triangle
 // return : (IF_INTERSECTION, intersection_point)
 pair<bool, Eigen::Vector3d> SkeletonGenerator::findContactWithFacetInDirection
   (const FacetPtr &facet, const Eigen::Vector3d &point, const Eigen::Vector3d &direction){
@@ -1392,18 +1393,18 @@ pair<bool, Eigen::Vector3d> SkeletonGenerator::findContactWithFacetInDirection
 pair<bool, Eigen::Vector3d>
 SkeletonGenerator::rayPlaneIntersection(const Eigen::Vector3d& rayOrigin, const Eigen::Vector3d& rayDirection,
                                         const double a, const double b, const double c, const double d){
-  // 计算平面法向量
+  // Compute plane normal
   Eigen::Vector3d planeNormal(a, b, c);
   double denom = planeNormal.dot(rayDirection);
   if (std::abs(denom) < 1e-6) {
     return make_pair(false, Eigen::Vector3d(0, 0, 0));
   }
-  // 计算交点距离
+  // Compute intersection distance
   double t = -(planeNormal.dot(rayOrigin) + d) / denom;
-  if (t < 0) { // 交点在射线后方
+  if (t < 0) { // intersection is behind the ray origin
     return make_pair(false, Eigen::Vector3d(0, 0, 0));
   }
-  // 计算交点坐标
+  // Compute intersection coordinates
   Eigen::Vector3d intersection = rayOrigin + rayDirection * t;
   return make_pair(true, intersection);
 }
@@ -1414,26 +1415,26 @@ bool SkeletonGenerator::ifPointInTriangle(const Eigen::Vector3d& point, const st
   Eigen::Vector3d v0 = vertices[0]->position_;
   Eigen::Vector3d v1 = vertices[1]->position_;
   Eigen::Vector3d v2 = vertices[2]->position_;
-  // 计算三角形的边向量
+  // Compute edge vectors of the triangle
   Eigen::Vector3d edge0 = v1 - v0;
   Eigen::Vector3d edge1 = v2 - v1;
   Eigen::Vector3d edge2 = v0 - v2;
-  // 计算点到三角形顶点的向量
+  // Compute vectors from point to triangle vertices
   Eigen::Vector3d vp0 = point - v0;
   Eigen::Vector3d vp1 = point - v1;
   Eigen::Vector3d vp2 = point - v2;
-  // 计算叉积
+  // Compute cross products
   Eigen::Vector3d c0 = edge0.cross(vp0);
   Eigen::Vector3d c1 = edge1.cross(vp1);
   Eigen::Vector3d c2 = edge2.cross(vp2);
-  // 检查叉积是否同向
+  // Check if all cross products point in the same direction
   double dot0 = c0.dot(c1);
   double dot1 = c1.dot(c2);
   return (dot0 >= 0 && dot1 >= 0);
 }
 
-// true  两侧
-// false 同侧
+// true  opposite sides
+// false same side
 bool SkeletonGenerator::ifPtInIpsilateralOfPlane(const Eigen::Vector3d& pt1, const Eigen::Vector3d& pt2, const FacetPtr facet){
   double d1 = facet->plane_equation_(0) * pt1.x() + facet->plane_equation_(1) * pt1.y() + facet->plane_equation_(2) * pt1.z() + facet->plane_equation_(3);
   double d2 = facet->plane_equation_(0) * pt2.x() + facet->plane_equation_(1) * pt2.y() + facet->plane_equation_(2) * pt2.z() + facet->plane_equation_(3);
@@ -1484,7 +1485,7 @@ void SkeletonGenerator::findFacetsGroupFromVertices(PolyHedronPtr polyhedron, st
       }
     } // v_facet
     if (good_facet){
-      // todo : 此处有z轴上下界检查，后续添加
+      // todo: z-axis bound check here, to be added later
       res.push_back(cur_facet);
       cur_facet->frontier_processed_ = true;
     }
@@ -1547,7 +1548,7 @@ void SkeletonGenerator::splitFrontier(PolyHedronPtr polyhedron, std::vector<Face
     if (initSingleFrontier(new_frontier))
       res.push_back(new_frontier);
   } // single_cluster.size() <= _max_facets_grouped
-  // 若组内的facet数量大于_max_facets_grouped，则分割为多个frontier （ftr分块）
+  // If cluster size exceeds _max_facets_grouped, split into multiple frontiers (ftr chunking)
   else{
     for (FacetPtr f : single_cluster){
       if (f->is_visited_) continue;
@@ -1601,7 +1602,7 @@ bool SkeletonGenerator::initSingleFrontier(PolyhedronFtrPtr cur_ftr){
     Eigen::Vector3d intersection =
              cur_ftr->avg_center_ + t * cur_ftr->out_unit_normal_;
 
-    // 判断交点是否在三角形内
+    // Check if intersection is inside the triangle
     Eigen::Vector3d cross1 = (cur_facet->vertices_[1]->position_ - cur_facet->vertices_[0]->position_)
                               .cross(intersection - cur_facet->vertices_[0]->position_);
     Eigen::Vector3d cross2 = (cur_facet->vertices_[2]->position_ - cur_facet->vertices_[1]->position_)
@@ -1620,7 +1621,7 @@ bool SkeletonGenerator::initSingleFrontier(PolyhedronFtrPtr cur_ftr){
     }
   }
 
-  // 找到角度相差最小的facet作为投影面
+  // Find the facet with smallest angular difference as the projection plane
   if (!proj_center_found){
     double min_angle = M_PI;
     FacetPtr best_facet = nullptr;
@@ -1637,7 +1638,7 @@ bool SkeletonGenerator::initSingleFrontier(PolyhedronFtrPtr cur_ftr){
   }
 
   // set vertices
-  // 保证所有点都只输出一遍
+  // Ensure each vertex is output only once
   for (FacetPtr cur_facet : cur_ftr->facets_){
     for (VertexPtr cur_vertex : cur_facet->vertices_){
       bool exist = false;

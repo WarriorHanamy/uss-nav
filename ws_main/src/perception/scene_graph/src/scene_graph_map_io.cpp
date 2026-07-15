@@ -32,7 +32,7 @@ double jsonNumberOrDefault(const json& value, const double fallback = 0.0) {
     return value.is_number() ? value.get<double>() : fallback;
 }
 
-// JSON 与 Eigen/PCL 数据之间的轻量转换工具，供保存/加载流程复用。
+// Lightweight conversion utils between JSON and Eigen/PCL data for save/load.
 json vec3ToJson(const Eigen::Vector3d& vec) {
     return json::array({
         sanitizeFiniteNumber(vec.x()),
@@ -245,7 +245,7 @@ bool shouldSerializePolyhedron(const PolyHedronPtr& poly) {
     if (poly == nullptr) return false;
     if (!poly->is_gate_) return true;
 
-    // 未接入拓扑图的 gate 多为 frontier 处理失败时留下的临时对象，不应进入快照。
+    // Gates not connected to the topology graph are temporary leftovers, skip snapshot.
     return !poly->connected_nodes_.empty() || !poly->edges_.empty();
 }
 
@@ -279,7 +279,7 @@ int getCanonicalPolyId(const PolyHedronPtr& poly,
     return it != poly_id_map.end() ? it->second : -1;
 }
 
-// 从骨架生成器可达的入口出发，筛出可持久化的 polyhedron，并对重复 gate 做归一化。
+// Collect persistent polyhedra reachable from the skeleton generator and deduplicate gates.
 PolySnapshotSelection collectAllReachablePolys(const SceneGraph& scene_graph) {
     std::vector<PolyHedronPtr> seed_polys;
     scene_graph.skeleton_gen_->getAllPolys(seed_polys);
@@ -395,7 +395,7 @@ bool SceneGraph::loadMap(const std::string& save_name, const std::string& data_p
 bool SceneGraphMapIO::save(const std::string& save_name) {
     INFO_MSG_BLUE("\n[SceneGraphMapIO] ================= Save Scene Graph =================");
 
-    // 1) 规范化相对保存路径并准备快照目录。
+    // 1) Normalize relative save path and prepare snapshot directory.
     std::string final_save_name;
     if (!normalizeRelativeSavePath(save_name, final_save_name, true)) {
         INFO_MSG_RED("[SceneGraphMapIO] Save aborted: invalid relative save path.");
@@ -412,14 +412,14 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
         return false;
     }
 
-    // 2) 锁住骨架和目标对象模块，保证导出期间读到的是一致状态。
+    // 2) Lock skeleton and object factory for a consistent snapshot.
     std::unique_lock<SkeletonGenerator> skeleton_lock(*scene_graph_.skeleton_gen_);
     std::unique_lock<ObjectFactory> object_lock(*scene_graph_.object_factory_);
 
     INFO_MSG_YELLOW("[SceneGraphMapIO] Snapshot path : " << save_dir);
     INFO_MSG_YELLOW("[SceneGraphMapIO] Collecting runtime snapshot ...");
 
-    // 先为跨对象引用建立稳定 ID，避免 JSON 中直接保存裸指针关系。
+    // Assign stable IDs for cross-object references instead of raw pointers in JSON.
     const PolySnapshotSelection poly_selection = collectAllReachablePolys(scene_graph_);
     const std::vector<PolyHedronPtr>& polys = poly_selection.polys;
     auto& object_map = scene_graph_.object_factory_->object_map_;
@@ -439,7 +439,7 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
     auto touch_facet = [&](const FacetPtr& facet) { return touchPtrAndGetId(facet, facet_id_map, facets); };
     auto touch_frontier = [&](const PolyhedronFtrPtr& frontier) { return touchPtrAndGetId(frontier, frontier_id_map, frontiers); };
 
-    // 3) 从 polyhedron 出发展开依赖，把顶点、面片、frontier 等关联元素收集齐。
+    // 3) Collect all reachable vertices, facets, frontiers from each polyhedron.
     for (const auto& poly : polys) {
         for (const auto& vertex : poly->black_vertices_) touch_vertex(vertex);
         for (const auto& vertex : poly->white_vertices_) touch_vertex(vertex);
@@ -460,7 +460,7 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
         }
     }
 
-    // 按模块拆分写入场景图状态，便于后续按对象类型重建。
+    // Write scene graph state in modular sections for type-based reconstruction.
     json root;
     root["format_version"] = 1;
     root["saved_at"] = nowAsReadableString();
@@ -490,7 +490,7 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
         {"merged_duplicate_gate_count", poly_selection.merged_duplicate_gate_count}
     };
 
-    // 4) 按类别写入几何、拓扑、区域和 SceneGraph 自身状态。
+    // 4) Write geometry, topology, areas, and SceneGraph state by category.
     for (const auto& vertex : vertices) {
         json vertex_json;
         vertex_json["id"] = vertex_id_map.at(vertex.get());
@@ -628,8 +628,8 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
         root["areas_need_delete"].push_back({{"area_id", area_pair.first}, {"value", area_pair.second}});
     }
 
-    // 目标检测对象除了元数据外，还会把点云附件落盘到独立文件。
-    // 5) 单独导出 object 的点云附件，并在 JSON 中记录相对路径。
+    // Object point cloud attachments are saved to separate files alongside metadata.
+    // 5) Export object point cloud attachments and record relative paths in JSON.
     int saved_cloud_num = 0;
     for (const auto& obj_pair : object_map) {
         const auto& obj = obj_pair.second;
@@ -702,7 +702,7 @@ bool SceneGraphMapIO::save(const std::string& save_name) {
         {"merged_duplicate_gate_count", poly_selection.merged_duplicate_gate_count}
     };
 
-    // 6) 写出主 JSON 和 manifest，作为一次可回放的快照。
+    // 6) Write main JSON and manifest as a replayable snapshot.
     const bool scene_graph_ok = writeJsonFile(joinPath(save_dir, "scene_graph.json"), root);
     const bool manifest_ok = writeJsonFile(joinPath(save_dir, "manifest.json"), manifest);
     if (!scene_graph_ok || !manifest_ok) {
@@ -736,7 +736,7 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
 
     INFO_MSG_BLUE("\n[SceneGraphMapIO] ================= Load Scene Graph =================");
 
-    // 1) 根据相对保存路径或外部数据路径定位快照目录，并读取入口 manifest。
+    // 1) Locate snapshot directory from relative path or external data path, read manifest.
     const std::string saved_data_dir = data_path.empty()
         ? joinPath(scene_graph_.this_package_path_, "saved_data")
         : data_path;
@@ -753,7 +753,7 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
         return false;
     }
 
-    // 2) 校验快照格式，解析主 scene graph 文件。
+    // 2) Validate snapshot format and parse the main scene graph file.
     const std::string scene_graph_file = manifest.value("scene_graph_file", std::string("scene_graph.json"));
     const std::string object_dir_name = manifest.value("object_dir", std::string("objects"));
     const std::string scene_graph_path = joinPath(save_dir, scene_graph_file);
@@ -769,14 +769,14 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
         return false;
     }
 
-    // 3) 锁住运行时模块，防止加载过程中被并发访问。
+    // 3) Lock runtime modules to prevent concurrent access during loading.
     std::unique_lock<SkeletonGenerator> skeleton_lock(*scene_graph_.skeleton_gen_);
     std::unique_lock<ObjectFactory> object_lock(*scene_graph_.object_factory_);
 
     INFO_MSG_YELLOW("[SceneGraphMapIO] Load path : " << save_dir);
     INFO_MSG_YELLOW("[SceneGraphMapIO] Resetting runtime state ...");
 
-    // 清空旧运行时状态，确保后续完全由快照内容重建。
+    // Clear old runtime state for full reconstruction from snapshot.
     scene_graph_.skeleton_gen_->resetForMapLoad();
     scene_graph_.skeleton_gen_->area_handler_->resetForMapLoad();
     scene_graph_.object_factory_->resetForMapLoad();
@@ -800,8 +800,8 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
 
     INFO_MSG_YELLOW("[SceneGraphMapIO] Creating runtime objects ...");
 
-    // 第一阶段仅创建对象本体并恢复标量字段，关系引用留到下一阶段统一连接。
-    // 4) 先按 ID 重建各类运行时对象，并恢复它们的基础属性。
+    // Phase 1: create objects and restore scalar fields; references linked in phase 2.
+    // 4) Reconstruct runtime objects by ID and restore their base properties.
     for (const auto& vertex_json : root.value("vertices", json::array())) {
         const int id = vertex_json.at("id").get<int>();
         VertexPtr vertex = std::make_shared<Vertex>();
@@ -923,8 +923,8 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
 
     INFO_MSG_YELLOW("[SceneGraphMapIO] Resolving runtime relations ...");
 
-    // 第二阶段按保存时记录的 ID 恢复拓扑关系、归属关系和图边。
-    // 5) 再补回对象之间的引用关系，恢复完整场景拓扑。
+    // Phase 2: restore topology relations, ownership, and graph edges from saved IDs.
+    // 5) Rebuild inter-object references to restore full scene topology.
     for (const auto& vertex_json : root.value("vertices", json::array())) {
         VertexPtr vertex = vertex_lookup.at(vertex_json.at("id").get<int>());
         for (const int connected_id : jsonToIntVector(vertex_json.value("connected_vertex_ids", json::array()))) {
@@ -1046,8 +1046,8 @@ bool SceneGraphMapIO::load(const std::string& save_name, const std::string& data
 
     INFO_MSG_YELLOW("[SceneGraphMapIO] Rebuilding runtime indices ...");
 
-    // 最后重新注册到各运行时管理器，并恢复 SceneGraph 级别的上下文状态。
-    // 6) 把重建后的对象重新挂回管理器，并补齐全局上下文与缓存状态。
+    // Re-register with runtime managers and restore SceneGraph-level context.
+    // 6) Re-hook reconstructed objects into managers and restore global context/cache.
     for (const auto& area_pair : area_lookup) {
         if (!scene_graph_.skeleton_gen_->area_handler_->registerLoadedArea(area_pair.second)) return false;
     }

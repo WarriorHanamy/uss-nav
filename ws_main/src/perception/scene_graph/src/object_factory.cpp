@@ -276,11 +276,11 @@ void ObjectFactory::objectFilterThread() {
         }
 
         lock.unlock();
-        // 计算本次循环已用时间
+        // elapsed time for this cycle
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end_time - start_time;
 
-        // 如果执行时间小于目标周期，则等待剩余时间
+        // sleep for remaining time if execution is faster than period
         if (elapsed < period) {
             std::this_thread::sleep_for(period - elapsed);
         }
@@ -289,7 +289,7 @@ void ObjectFactory::objectFilterThread() {
 
 
 
-// 处理单个mask的函数，将作为线程入口
+// process a single mask as thread entry point
 ObjectNode::Ptr ObjectFactory::processSingleObject(const ProcessedCLoudInput &input) {
     ObjectNode::Ptr result;
     result = std::make_shared<ObjectNode>();
@@ -307,7 +307,7 @@ ObjectNode::Ptr ObjectFactory::processSingleObject(const ProcessedCLoudInput &in
         cv::morphologyEx(mask_fixed, mask_fixed, cv::MORPH_OPEN, kernel);
         cv::morphologyEx(mask_fixed, mask_fixed, cv::MORPH_CLOSE, kernel);
 
-        // 提取点云
+        // extract point cloud
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud = extractCloud(input.depth_img, input.rgb_img, mask_fixed, input.pt_color);
         if (cloud->empty()) return result;
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud = filteringCloud(cloud);
@@ -379,13 +379,13 @@ void ObjectFactory::doSemanticProcessingOnce() {
     }
 
     for (int i = 0 ; i < cur_data_.cur_semantic_recv_msg_->masks.size() ; i++) {
-        // 等待直到有可用线程
+        // wait until a thread slot is available
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [&]() { return active_threads < _max_threads; });
         active_threads++;
         lock.unlock();
 
-        // mask处理
+        // mask processing
         cv_bridge::CvImagePtr mask_ptr = cv_bridge::toCvCopy(cur_data_.cur_semantic_recv_msg_->masks[i],
                                                              sensor_msgs::image_encodings::MONO8);
         cv::Mat mask = mask_ptr->image;
@@ -408,7 +408,7 @@ void ObjectFactory::doSemanticProcessingOnce() {
         for (int j = 0; j < 512; j++)
             label_feature(j) = cur_data_.cur_semantic_recv_msg_->word_vectors[i].word_vector[j];
 
-        // 启动新线程处理当前mask
+        // launch a new thread to process the current mask
         ProcessedCLoudInput input(cur_data_.cur_depth_, cur_data_.cur_rgb_, mask_fixed, cur_data_.cur_tf_,
                                   cur_data_.cur_semantic_recv_msg_->labels[i], label_feature,
                                   cur_data_.cur_semantic_recv_msg_->confs[i],getRandomColor());
@@ -419,17 +419,17 @@ void ObjectFactory::doSemanticProcessingOnce() {
             }
         );
         futures.emplace_back(std::move(cur_future));
-        // 添加管理线程，监听子线程并通知主线程可以启动新线程
+        // add management thread to monitor child threads and notify main thread
         auto& last_shared_future = futures.back();
         std::thread([&, sf = last_shared_future]() mutable {
-            sf.wait(); // 等待当前future完成
+            sf.wait(); // wait for the current future to complete
             std::lock_guard<std::mutex> lock2(mtx);
             active_threads--;
-            cv.notify_one(); // 通知可以启动新线程
+            cv.notify_one(); // notify that a new thread can start
         }).detach();
     }
 
-    // 等待所有线程完成并收集结果
+    // wait for all threads to finish and collect results
     for (auto& future : futures) {
         try {
             ObjectNode::Ptr obj = future.get();
@@ -555,7 +555,7 @@ void ObjectFactory::mergeObjAIntoB(ObjectNode::Ptr &obj_src, ObjectNode::Ptr &ob
     // point cloud merge
     obj_src->id = obj_target->id;
     if (calculateSemanticSimilarity(obj_src, obj_target) > 0.75){
-        // 對多維向量加權平均
+        // weighted average of multi-dimensional vectors
         double weight_src = obj_src->cloud->size() / (obj_src->cloud->size() + obj_target->cloud->size());
         obj_src->label_feature = (obj_src->label_feature * weight_src + obj_target->label_feature * (1 - weight_src)) / 2.0f;
 
@@ -594,7 +594,7 @@ void ObjectFactory::mergeObjAIntoB(ObjectNode::Ptr &obj_src, ObjectNode::Ptr &ob
         if(obj_target->edge.polyhedron_father != nullptr && cur_polyhedron_ != nullptr){
             if((obj_target->edge.polyhedron_father->center_ - obj_target->pos).norm() > (cur_polyhedron_->center_ - obj_target->pos).norm()){
                 double vis_angle = calculateAbsPitch(cur_polyhedron_->center_, obj_target->pos);
-                if(vis_angle < M_PI / 6){ // 30度视角范围内才更新father polyhedron
+                if(vis_angle < M_PI / 6){ // only update father polyhedron within 30-degree view angle
                     obj_target->edge.polyhedron_father = cur_polyhedron_;
                 }
             }
@@ -603,7 +603,7 @@ void ObjectFactory::mergeObjAIntoB(ObjectNode::Ptr &obj_src, ObjectNode::Ptr &ob
 }
 
 void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
-    //  =========↓↓ merge obj into existing object ↓↓=========
+    //  ========= merge obj into existing object =========
         auto nbr_cmp = [this](const std::pair<double, ObjectNode::Ptr>& a,
                               const std::pair<double, ObjectNode::Ptr>& b) {
             if (a.first > b.first) return true;
@@ -618,7 +618,7 @@ void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
         std::map<int, double> semantic_sims;
         if (getObjectsInRange(cur_obj->pos, 1.0, nodes_in_range)) {
             for (const auto& node : nodes_in_range) node_candidate[node.obj_->id] = node.obj_;
-            // step1 计算候选对象与当前对象之间的overlap
+            // step1 compute overlap between candidate and current object
             for (const auto& nbr : node_candidate) {
                 PointCloudOverlapCalculator overlap_calculator;
                 overlap = overlap_calculator.calculateOverlapBInA(nbr.second->cloud, cur_obj->cloud, _voxel_size);
@@ -631,7 +631,7 @@ void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
                 }
             }
             sort(nbrs_candidate1.begin(), nbrs_candidate1.end(), nbr_cmp);
-            // step2 计算候选对象与当前对象之间的semantic similarity
+            // step2 compute semantic similarity between candidate and current object
             for (const auto& nbr : nbrs_candidate1) {
                 double semantic_sim = calculateSemanticSimilarity(cur_obj, nbr.second);
                 semantic_sims[nbr.second->id] = semantic_sim;
@@ -640,7 +640,7 @@ void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
             }
 
             sort(nbrs_candidate2.begin(), nbrs_candidate2.end(), nbr_cmp);
-            //step3 merge obj into existing object
+            // step3 merge obj into existing object
             if (!nbrs_candidate2.empty())
                 matched_id = nbrs_candidate2.front().second->id;
             else {
@@ -663,7 +663,7 @@ void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
             //     INFO_MSG("   KD Tree nodes num : " << object_kd_tree_->validnum());
             //     INFO_MSG("   All Overlaps: ");
             //     for (const auto & i : overlaps) {
-            //         // 查询map中是否有该对象
+            //         // check if the object exists in the map
             //         if (semantic_sims.find(i.first) != semantic_sims.end())
             //             INFO_MSG("      [" << object_map_[i.first]->label << "] Overlap: " << i.second << "Semantic Sim: " << semantic_sims[i.first]);
             //         else
@@ -707,18 +707,17 @@ void ObjectFactory::mergeObjectIntoMap(ObjectNode::Ptr &cur_obj) {
 }
 
 /**
- * @brief 从深度图像和掩码图像中提取点云
+ * Extract a colored point cloud from depth, RGB, and mask images.
  *
- * 该函数根据输入的深度图像和掩码图像，提取出符合条件的3D点云。
- * 深度图像中的每个像素值表示该点到相机的距离（深度），而掩码图像则指示哪些像素应该被包含在点云中。
- * 只有当掩码图像中对应像素的值大于0且深度值在_min_depth和_max_depth之间时，才会将该像素转换为3D点并添加到点云中。
+ * Extracts 3D points where the mask is positive and depth is within
+ * [_min_depth, _max_depth]. Each pixel value in the depth image
+ * represents distance to the camera.
  *
- * @param depth_img 深度图像，类型为cv::Mat。
- * @param rgb_img
- * @param mask 掩码图像，类型为cv::Mat，用于指示哪些像素应该被包含在点云中。
- * @param color
- * @return pcl::PointCloud<pcl::PointXYZRGB>::Ptr 指向提取的点云的智能指针。
- *         如果深度图像和掩码图像的大小不匹配，则返回nullptr。
+ * @param[in] depth_img  Depth image [m]
+ * @param[in] rgb_img    RGB image [--]
+ * @param[in] mask       Segmentation mask indicating which pixels to include [--]
+ * @param[in] color      Assigned point color [RGB]
+ * @return Extracted point cloud, or nullptr if sizes mismatch
  */
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat &depth_img, const cv::Mat &rgb_img,
                                                                    const cv::Mat &mask, const Eigen::Vector3d &color) {
@@ -728,27 +727,27 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat
         return nullptr;
     }
 
-    // 1. 预分配内存，避免动态扩容带来的性能损耗
+    // 1. pre-allocate memory to avoid dynamic resizing overhead
     cloud->points.reserve(depth_img.rows * depth_img.cols);
 
     int rows = depth_img.rows;
     int cols = depth_img.cols;
-    bool use_intrinsics = _use_camera_intrinsics; // 本地变量缓存，略微加速访问
+    bool use_intrinsics = _use_camera_intrinsics; // cache local variables for slightly faster access
     float max_ray = _max_ray_length;
     float min_dep = _min_depth;
 
-    // 针对 Realsense (uint16_t) 和 仿真 (uchar) 分开处理，
-    // 这样可以在编译期确定指针类型，极大提升速度
+    // handle Realsense (uint16_t) and simulation (uchar) separately
+    // to determine pointer types at compile time, greatly improving speed
     if (_use_realsense) {
-        // === Realsense 模式 (深度图为 uint16_t) ===
+        // === Realsense mode (depth image as uint16_t) ===
         for (int v = 0; v < rows; ++v) {
-            // 获取行指针 (Row Pointers)
+            // get row pointers
             const uchar* ptr_mask = mask.ptr<uchar>(v);
             const uint16_t* ptr_depth = depth_img.ptr<uint16_t>(v);
             const cv::Vec3b* ptr_rgb = rgb_img.ptr<cv::Vec3b>(v);
 
             for (int u = 0; u < cols; ++u) {
-                // 使用指针直接访问
+                // direct pointer access
                 if (ptr_mask[u] == 255 || _depth_cloud_disp_all) {
                     float distance = static_cast<float>(ptr_depth[u]) / 1000.0f;
 
@@ -756,12 +755,12 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat
                         pcl::PointXYZRGB point;
                         if (use_intrinsics) {
                             point.x = distance;
-                            // 减少类型转换次数，合并计算
+                            // reduce type casting overhead, combine computation
                             point.y = static_cast<float>(-(static_cast<double>(u) - _camera_cx) * distance / _camera_fx);
                             point.z = static_cast<float>(-(static_cast<double>(v) - _camera_cy) * distance / _camera_fy);
                         } else {
-                            // 注意：depth_directions_ 通常是一维数组，这里需要线性索引
-                            // 如果 depth_directions_ 很大，建议也在外部获取指针
+                            // note: depth_directions_ is a 1D array, need linear index
+                            // if depth_directions_ is large, consider fetching pointer outside loop
                             int pixel_index = v * cols + u;
                             Eigen::Vector3d point_eigen = depth_directions_[pixel_index] * distance;
                             point.x = static_cast<float>(point_eigen.z());
@@ -769,7 +768,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat
                             point.z = static_cast<float>(-point_eigen.y());
                         }
 
-                        // RGB 赋值
+                        // assign RGB values
                         const cv::Vec3b& pixel = ptr_rgb[u];
                         point.r = pixel[2];
                         point.g = pixel[1];
@@ -780,15 +779,15 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat
             }
         }
     } else {
-        // === 仿真模式 (深度图为 uchar) ===
+        // === simulation mode (depth image as uchar) ===
         for (int v = 0; v < rows; ++v) {
             const uchar* ptr_mask = mask.ptr<uchar>(v);
-            const uchar* ptr_depth = depth_img.ptr<uchar>(v); // 注意这里类型是 uchar
+            const uchar* ptr_depth = depth_img.ptr<uchar>(v); // note: type is uchar here
             const cv::Vec3b* ptr_rgb = rgb_img.ptr<cv::Vec3b>(v);
 
             for (int u = 0; u < cols; ++u) {
                 if (ptr_mask[u] == 255 || _depth_cloud_disp_all) {
-                    // Simulation 深度计算公式
+                    // simulation depth formula
                     float distance = (255 - ptr_depth[u]) / 255.0f * _max_depth;
 
                     if (distance > min_dep && distance <= max_ray) {
@@ -824,13 +823,13 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::extractCloud(const cv::Mat
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr ObjectFactory::filteringCloud(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud_in) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
     ros::Time t1 = ros::Time::now();
-    // 体素滤波
+    // voxel grid filter
     pcl::VoxelGrid<pcl::PointXYZRGB> grid;
     grid.setInputCloud(cloud_in);
     grid.setLeafSize(_voxel_size, _voxel_size, _voxel_size);
     grid.filter(*cloud_filtered);
     ros::Time t2 = ros::Time::now();
-    // 统计滤波
+    // statistical outlier removal
     for (int i = 0; i < 1; i++) {
         pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
         sor.setInputCloud(cloud_filtered);
@@ -863,7 +862,7 @@ void ObjectFactory::calculateDepthDirectionsFromVerticalFov(double vertical_fov)
 }
 
 Eigen::Vector3d ObjectFactory::getRandomColor() {
-    // 生成随机颜色
+    // generate random color
     std::mt19937 rng(std::random_device{}());
     std::uniform_int_distribution<int> dist(0, 255);
     return Eigen::Vector3d(dist(rng), dist(rng), dist(rng));
@@ -871,7 +870,7 @@ Eigen::Vector3d ObjectFactory::getRandomColor() {
 
 void ObjectFactory::getAxisAlignedBoundingBox(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud,
                                               pcl::PointCloud<pcl::PointXYZ>::Ptr &aab_corners) {
-    // 获取轴对齐的边界框
+    // get axis-aligned bounding box
     if (cloud->empty()) {
         PCL_ERROR("Couldn't read the pcd file\n");
         return ;
@@ -896,26 +895,26 @@ void ObjectFactory::getOrientedBoundingBox(const pcl::PointCloud<pcl::PointXYZRG
         PCL_ERROR("Couldn't read the pcd file\n");
         return ;
     }
-    // 计算点云的质心&协方差矩阵
+    // compute point cloud centroid & covariance matrix
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cloud, centroid);
     Eigen::Matrix3f covariance_matrix;
     pcl::computeCovarianceMatrixNormalized(*cloud, centroid, covariance_matrix);
 
-    // 计算协方差矩阵的特征向量和特征值
+    // compute eigenvectors and eigenvalues of covariance matrix
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance_matrix, Eigen::ComputeEigenvectors);
     Eigen::Matrix3f eigen_vectors = eigen_solver.eigenvectors();
 
-    // 构建旋转矩阵
+    // build rotation matrix
     Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
     transform.block<3, 3>(0, 0) = eigen_vectors.transpose();
     transform.block<3, 1>(0, 3) = -1.f * (transform.block<3, 3>(0, 0) * centroid.head<3>());
 
-    // 旋转点云
+    // transform point cloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_transformed(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::transformPointCloud(*cloud, *cloud_transformed, transform);
 
-    // 计算旋转后点云的轴对齐边界框并计算角点
+    // compute AABB of transformed cloud and its corners
     Eigen::Vector4f min_pt, max_pt;
     pcl::getMinMax3D(*cloud_transformed, min_pt, max_pt);
     // pcl::PointCloud<pcl::PointXYZ>::Ptr obb_corners(new pcl::PointCloud<pcl::PointXYZ>);
@@ -930,7 +929,7 @@ void ObjectFactory::getOrientedBoundingBox(const pcl::PointCloud<pcl::PointXYZRG
     obb_corners->points[6] = pcl::PointXYZ(max_pt.x(), max_pt.y(), max_pt.z());
     obb_corners->points[7] = pcl::PointXYZ(min_pt.x(), max_pt.y(), max_pt.z());
 
-    // 反向旋转边界框的角点
+    // inverse-transform bounding box corners
     Eigen::Matrix4f inverse_transform = transform.inverse();
     pcl::transformPointCloud(*obb_corners, *obb_corners, inverse_transform);
 }
@@ -1104,9 +1103,9 @@ visualization_msgs::Marker ObjectFactory::visualizeRefresh(const std::string ns,
 }
 
 cv::Mat ObjectFactory::decodeRealsenseCompressedDepth(const sensor_msgs::CompressedImage &msg) {
-    // 1. 校验格式 (通常是 "16UC1; compressedDepth")
-    // 虽然不是必须，但用于调试是个好习惯
-    // ROS compressedDepth 的标准头部长度是 12 字节
+    // 1. validate format (typically "16UC1; compressedDepth")
+    // not strictly required but good for debugging
+    // ROS compressedDepth standard header length is 12 bytes
     const size_t header_size = 12;
 
     if (msg.data.size() <= header_size) {
@@ -1114,20 +1113,20 @@ cv::Mat ObjectFactory::decodeRealsenseCompressedDepth(const sensor_msgs::Compres
         return cv::Mat();
     }
 
-    // 2. 解析头部参数 (如果你需要处理非 PNG 压缩的深度，比如有损压缩，需要用到这些)
-    // 头部结构: [0-3: config/enum], [4-7: depth_max], [8-11: depth_quantization]
-    // 这里的解析是为了展示完整的协议，如果只是解压 PNG，这部分其实可以跳过
+    // 2. parse header parameters (needed for non-PNG compressed depth, e.g. lossy compression)
+    // header structure: [0-3: config/enum], [4-7: depth_max], [8-11: depth_quantization]
+    // parsing to demonstrate the full protocol; can be skipped for PNG-only decode
     float depth_quant_a, depth_quant_b;
     memcpy(&depth_quant_a, &msg.data[4], sizeof(float));
     memcpy(&depth_quant_b, &msg.data[8], sizeof(float));
 
-    // 3. 核心步骤：跳过 12 字节头部，提取纯图像数据
-    // 我们构建一个指向 raw data + 12 的数据引用
+    // 3. core step: skip 12-byte header, extract raw image data
+    // build a data reference pointing to raw data + 12
     const std::vector<uint8_t> imageData(msg.data.begin() + header_size, msg.data.end());
 
-    // 4. 使用 OpenCV 解码
-    // 关键 flag: cv::IMREAD_UNCHANGED (或 -1)。
-    // 只有这个 flag 才能保证解码出 16位 (CV_16U) 的原始深度，否则会被转成 8位 BGR。
+    // 4. decode using OpenCV
+    // key flag: cv::IMREAD_UNCHANGED (or -1).
+    // only this flag preserves 16-bit (CV_16U) raw depth; otherwise it is converted to 8-bit BGR.
     cv::Mat decoded_img = cv::imdecode(imageData, cv::IMREAD_UNCHANGED);
 
     if (decoded_img.empty()) {
@@ -1144,7 +1143,7 @@ void ObjectFactory::readParam(ros::NodeHandle &node, std::string param_name, T &
         return;
     }
 
-    // Counting 对象图只覆盖需要独立调节的参数，其余相机与融合参数继承原 obj 配置。
+    // counting object graph only covers independently tunable parameters; camera and fusion params inherit from obj config.
     if (!param_prefix_.empty() && param_prefix_ != "obj") {
         const std::size_t slash_pos = param_name.find('/');
         const std::string leaf_name =
@@ -1197,14 +1196,14 @@ void ObjectFactory::visualizeResult(bool force_full_refresh) {
             visualizeObjLabel(marker, obj.second, obj.first, ros::Time::now());
             marker_array.markers.push_back(marker);
 
-            // 利用 obj.second->color 给点云染色
+            // color point cloud using obj.second->color
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr pt_cloud_obj_color = obj.second->cloud;
             for (auto & pt : pt_cloud_obj_color->points) {
                 pt.r = obj.second->color.x(); pt.g = obj.second->color.y(); pt.b = obj.second->color.z();
             }
             *pt_cloud_all += *pt_cloud_obj_color;
 
-            // 使用点云原始颜色
+            // use original point cloud colors
             // *pt_cloud_all += *obj.second->cloud;
         }
         if (skeleton_enabled_) {
@@ -1284,20 +1283,20 @@ void ObjectFactory::visualizeObjBoundingBox(visualization_msgs::Marker &marker,
         return ;
     }
     visualization_msgs::Marker box_marker;
-    box_marker.header.frame_id = "world"; // 你可以根据需要更改frame_id
+    box_marker.header.frame_id = "world"; // change frame_id as needed
     box_marker.header.stamp = timestamp;
     box_marker.ns     = "obb_corners";
     box_marker.id     = id;
     box_marker.type   = visualization_msgs::Marker::LINE_LIST;
     box_marker.action = visualization_msgs::Marker::ADD;
     box_marker.pose.orientation.w = 1.0;
-    box_marker.scale.x = 0.01; // 线的宽度
+    box_marker.scale.x = 0.01; // line width
     box_marker.color.r = obj_node->color.x() / 255.0f;
     box_marker.color.g = obj_node->color.y() / 255.0f;
     box_marker.color.b = obj_node->color.z() / 255.0f;
     box_marker.color.a = 1.0f;
 
-    // 添加包围盒的边
+    // add bounding box edges
     pcl::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> obb_corners;
     if (use_axis_box)
         obb_corners = obj_node->obb_axis;
@@ -1332,7 +1331,7 @@ void ObjectFactory::visualizeObjBoundingBox(visualization_msgs::Marker &marker,
 
 void ObjectFactory::visualizeObjPosition(visualization_msgs::Marker &marker, const ObjectNode::Ptr &obj_node, int id, const ros::Time &timestamp) {
     visualization_msgs::Marker pos_marker;
-    pos_marker.header.frame_id = "world"; // 你可以根据需要更改frame_id
+    pos_marker.header.frame_id = "world"; // change frame_id as needed
     pos_marker.header.stamp = timestamp;
     pos_marker.ns     = "obj_position";
     pos_marker.id     = id;
@@ -1350,7 +1349,7 @@ void ObjectFactory::visualizeObjPosition(visualization_msgs::Marker &marker, con
 
 void ObjectFactory::visualizeObjLabel(visualization_msgs::Marker &marker, const ObjectNode::Ptr &obj_node, int id, const ros::Time &timestamp) {
     visualization_msgs::Marker label_marker;
-    label_marker.header.frame_id = "world"; // 你可以根据需要更改frame_id
+    label_marker.header.frame_id = "world"; // change frame_id as needed
     label_marker.header.stamp = timestamp;
     label_marker.ns     = "obj_label";
     label_marker.id     = id;

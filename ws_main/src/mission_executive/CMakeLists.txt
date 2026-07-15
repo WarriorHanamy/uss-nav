@@ -27,7 +27,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include
- LIBRARIES mission_executive
  CATKIN_DEPENDS exploration traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph # lkh_tsp_solver
  DEPENDS OpenCV
 )
@@ -41,14 +40,14 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-add_executable(exploration_node
-  src/exploration_node.cpp 
-  src/fast_exploration_fsm.cpp
+add_executable(mission_executive_node
+  src/mission_executive_node.cpp 
+  src/mission_fsm.cpp
   src/vla_search_map.cpp
 )
-add_dependencies(exploration_node ${catkin_EXPORTED_TARGETS})
+add_dependencies(mission_executive_node ${catkin_EXPORTED_TARGETS})
 
-target_link_libraries(exploration_node 
+target_link_libraries(mission_executive_node 
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   # -ldw

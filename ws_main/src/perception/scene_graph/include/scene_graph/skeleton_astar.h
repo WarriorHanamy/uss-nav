@@ -45,6 +45,9 @@ namespace skeleton_astar{
     }
     ~AstarNode(){}
 
+    /**
+     * Recalculate total cost f = g + h.
+     */
     void calF(){
       cost_f_ = cost_g_ + cost_h_;
     }
@@ -105,8 +108,22 @@ namespace skeleton_astar{
      * @param[out] path  Path waypoints [m]
      */
     void getPath(std::vector<Eigen::Vector3d>& path);
-    void getPolyPath(std::vector<PolyHedronPtr>& poly_path);   // 返回上次搜索路径对应的多面体序列
+    /**
+     * Get the polyhedron sequence corresponding to the last A* path.
+     *
+     * @param[out] poly_path  Output polyhedron sequence
+     */
+    void getPolyPath(std::vector<PolyHedronPtr>& poly_path);
+    /**
+     * Get neighbor polyhedra of the current node that are not in the closed list.
+     *
+     * @param[in]  cur_node        Current A* node
+     * @param[out] neighbor_nodes  Output neighbor nodes
+     */
     void getNeighborPolyhedronsNotInCloseList(AstarNode::Ptr cur_node, std::vector<AstarNode::Ptr>& neighbor_nodes);
+    /**
+     * Publish the found A* path as ROS visualization markers.
+     */
     void visualizePath();
 
   private:
@@ -115,7 +132,7 @@ namespace skeleton_astar{
     ros::Publisher  vis_pub_;
     Eigen::Vector3d end_pos_;
     std::vector<Eigen::Vector3d> path_;
-    std::vector<PolyHedronPtr>   poly_path_;   // 与 path_ 对应的多面体序列
+    std::vector<PolyHedronPtr>   poly_path_;  ///< Polyhedron sequence corresponding to path_
     std::priority_queue<AstarNode::Ptr, std::vector<AstarNode::Ptr>, AstarNodeCompare> open_list_;
     std::unordered_map<Eigen::Vector3d, AstarNode::Ptr, Vector3dHash> open_list_map_;
     std::unordered_map<Eigen::Vector3d, AstarNode::Ptr, Vector3dHash> closed_list;

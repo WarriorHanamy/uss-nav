@@ -79,11 +79,11 @@ public:
      * Input data structure for a single frame of segmentation output.
      */
     struct SemanticDataInput {
-        cv::Mat cur_depth_, cur_rgb_;                           ///< Depth and RGB images
-        nav_msgs::Odometry cur_depth_odom_;                     ///< Depth sensor odometry
-        Eigen::Matrix4d    cur_tf_;                             ///< Camera-to-world transform [m]
-        Eigen::Vector3d    cur_pos_;                            ///< Camera position [m]
-        scene_graph::EncodeMask::ConstPtr cur_semantic_recv_msg_; ///< Segmentation result message
+        cv::Mat cur_depth_, cur_rgb_;                               /**< Depth and RGB images */
+        nav_msgs::Odometry cur_depth_odom_;                  /**< Depth sensor odometry */
+        Eigen::Matrix4d    cur_tf_;                        /**< Camera-to-world transform [m] */
+        Eigen::Vector3d    cur_pos_;                      /**< Camera position [m] */
+        scene_graph::EncodeMask::ConstPtr cur_semantic_recv_msg_;     /**< Segmentation result message */
     };
 
     ObjectFactory(ros::NodeHandle& nh);
@@ -92,13 +92,58 @@ public:
                   const std::string& topic_prefix);
     ~ObjectFactory();
 
+    /**
+     * Start the object processing loop.
+     *
+     * Enables input acceptance and notifies waiting threads.
+     * Must be called after construction to begin processing.
+     */
     void runThisModule();
+
+    /**
+     * Stop the object processing loop.
+     *
+     * Disables input acceptance and pauses processing threads.
+     */
     void stopThisModule();
+
+    /**
+     * Start a fresh detection session.
+     *
+     * Cancels current session, resets map state,
+     * re-enables input, and notifies threads.
+     */
     void startFreshSession();
+
+    /**
+     * Cancel the current detection session.
+     *
+     * Clears pending messages and waits for active processing to finish.
+     */
     void cancelSession();
+
+    /**
+     * Stop processing and return objects with sufficient detections.
+     *
+     * @return List of object nodes that passed the detection counter threshold
+     */
     std::vector<ObjectNode::Ptr> stopAndSnapshot();
+
+    /**
+     * Lock the internal mutex.
+     */
     void lock(){mutex_.lock();};
+
+    /**
+     * Unlock the internal mutex.
+     */
     void unlock(){mutex_.unlock();};
+
+    /**
+     * Check whether the main processing loop is allowed to run.
+     *
+     * @return True if allow_thread_run_ is set
+     */
     bool ok();
 
     /**
@@ -109,16 +154,59 @@ public:
      */
     void getObjectEdgesWithArea(const std::unordered_map<Eigen::Vector3d, int, Vector3dHash_SpecClus>& poly_clusterId_map,
                                 std::vector<std::vector<Eigen::Vector3d>>& edges);
+
+    /**
+     * Get pointer to the full object map.
+     *
+     * @return Pointer to the map of object ID to ObjectNode
+     */
     std::map<int, ObjectNode::Ptr>* getAllObjs(){return &object_map_;};
+
+    /**
+     * Check if an object has enough detections for persistence.
+     *
+     * @param[in]  obj_node  Object node to check [--]
+     * @return True if detection count meets threshold
+     */
     bool objInGoodDetection(const ObjectNode::Ptr& obj_node) const {return obj_node->detection_count >= _detection_counter_thresh;};
+
+    /**
+     * Reset runtime state for a fresh map load.
+     *
+     * Clears all object maps, queues, and KD-tree.
+     */
     void resetForMapLoad();
+
+    /**
+     * Register a pre-existing object into the map.
+     *
+     * @param[in]  obj_node           Object to register [--]
+     * @param[in]  need_more_detection Whether to keep in pending queue [--]
+     * @return True if registration succeeded
+     */
     bool registerLoadedObject(const ObjectNode::Ptr& obj_node, bool need_more_detection);
+
+    /**
+     * Finalize map loading state.
+     *
+     * Clears temporary update buffers after a map load.
+     */
     void finishMapLoad();
+
+    /**
+     * Publish visualization markers for debugging.
+     *
+     * @param[in]  force_full_refresh  Force redraw all markers [--]
+     */
     void visualizeResult(bool force_full_refresh = false);
 
     std::map<int, ObjectNode::Ptr> object_map_, object_map_needMoreDetection_;
 
 private:
+
+    /**
+     * Initialize parameters, subscribers, and processing threads.
+     */
     void init();
     std::mutex mutex_;
     std::shared_ptr<SkeletonGenerator> skel_gen_ptr_;
@@ -181,24 +269,132 @@ private:
     int    _obj_main_thread_run_hz;
     bool obj_filter_thread_running_{false}, obj_process_thread_running_{false};
     std::unique_ptr<std::thread> object_filter_thread_, object_process_thread_;
+    /**
+     * Background thread for filtering poorly detected objects.
+     */
     void objectFilterThread();
+    /**
+     * Background thread for processing semantic data frames.
+     */
     void objectProcessThread();
 
+
+    /**
+     * Callback for incoming segmentation results.
+     *
+     * @param[in]  msg  Encoded segmentation mask message
+     */
     void segmentationResultCallback(const scene_graph::EncodeMask::ConstPtr& msg);
+
+    /**
+     * Extract a colored point cloud from depth, RGB, and mask images.
+     *
+     * @param[in]  depth_img  Depth image [m]
+     * @param[in]  rgb_img    RGB image [--]
+     * @param[in]  mask       Segmentation mask [--]
+     * @param[in]  color      Assigned point color [RGB]
+     * @return Extracted point cloud
+     */
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extractCloud(const cv::Mat& depth_img, const cv::Mat &rgb_img, const cv::Mat& mask, const Eigen::Vector3d &color);
+
+    /**
+     * Apply voxel grid and statistical outlier filtering.
+     *
+     * @param[in]  cloud_in  Input point cloud [m]
+     * @return Filtered point cloud
+     */
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteringCloud(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud_in);
 
+
+    /**
+     * Push input data into the processing queue.
+     *
+     * @param[in]  data  Semantic data input [--]
+     */
     void pushDataInDeque(const SemanticDataInput& data);
+
+    /**
+     * Process a single masked object into an ObjectNode.
+     *
+     * @param[in]  input  Processed cloud input [--]
+     * @return Object node with cloud, OBB, and semantic features
+     */
     ObjectNode::Ptr processSingleObject(const ProcessedCLoudInput &input);
+
+    /**
+     * Execute one iteration of semantic processing.
+     *
+     * Dequeues a message, spawns threads for each mask,
+     * merges results into the persistent object map.
+     */
     void doSemanticProcessingOnce();
 
+
+    /**
+     * Precompute ray directions from camera FOV.
+     *
+     * @param[in]  vertical_fov  Vertical field of view [rad]
+     */
     void calculateDepthDirectionsFromVerticalFov(double vertical_fov);
+
+    /**
+     * Compute oriented bounding box from a point cloud.
+     *
+     * @param[in]   cloud        Input point cloud [m]
+     * @param[out]  obb_corners  8 corner points of OBB [m]
+     */
     void getOrientedBoundingBox(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr &obb_corners);
+
+    /**
+     * Compute axis-aligned bounding box from a point cloud.
+     *
+     * @param[in]   cloud         Input point cloud [m]
+     * @param[out]  aab_corners   8 corner points of AABB [m]
+     */
     void getAxisAlignedBoundingBox(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr &aab_corners);
+
+    /**
+     * Calculate intersection volume between two bounding boxes.
+     *
+     * @param[in]  box1  First bounding box corners [m]
+     * @param[in]  box2  Second bounding box corners [m]
+     * @return Intersection volume [m^3]
+     */
     double calculateBoxIntersection(const pcl::PointCloud<pcl::PointXYZ>::Ptr& box1, const pcl::PointCloud<pcl::PointXYZ>::Ptr& box2);
+
+    /**
+     * Calculate spatial similarity between two objects.
+     *
+     * @param[in]  obj1  First object [--]
+     * @param[in]  obj2  Second object [--]
+     * @return Similarity score [--]
+     */
     double calculateSpatialSimilarity(const ObjectNode::Ptr& obj1, const ObjectNode::Ptr& obj2);
+
+    /**
+     * Calculate semantic feature similarity between two objects.
+     *
+     * @param[in]  obj1  First object [--]
+     * @param[in]  obj2  Second object [--]
+     * @return Cosine similarity score [--]
+     */
     double calculateSemanticSimilarity(const ObjectNode::Ptr &obj1, const ObjectNode::Ptr &obj2);
+
+    /**
+     * Merge source object into target object.
+     *
+     * Combines point clouds, updates semantic features,
+     * and recomputes bounding boxes.
+     * @param[in,out]  obj_src     Source object to merge from
+     * @param[in,out]  obj_target  Target object to merge into
+     */
     void mergeObjAIntoB(ObjectNode::Ptr& obj_src, ObjectNode::Ptr& obj_target);
+
+    /**
+     * Merge an observed object into the persistent object map.
+     *
+     * @param[in,out]  cur_obj  Observed object to merge
+     */
     void mergeObjectIntoMap(ObjectNode::Ptr &cur_obj);
 
     /**
@@ -219,29 +415,164 @@ private:
      * @return True if results found
      */
     bool getObjectsNearestN(const Eigen::Vector3d &center, int n, ObjectKDTreeNodeVector &objects_nearest_n);
+
+    /**
+     * Add a new object to the map and KD-tree.
+     *
+     * @param[in,out]  obj_node  Object node to add
+     */
     void addNewObject(ObjectNode::Ptr& obj_node);
+
+    /**
+     * Delete a single object from the KD-tree.
+     *
+     * @param[in]  obj_node  Object node to delete [--]
+     * @return True if deletion succeeded
+     */
     bool deleteObjectInTree(const ObjectNode::Ptr &obj_node);
+
+    /**
+     * Delete multiple objects from the KD-tree.
+     *
+     * @param[in]  obj_nodes  List of object nodes to delete [--]
+     * @return True if any deletion succeeded
+     */
     bool deleteObjectInTree(const std::vector<ObjectNode::Ptr> &obj_nodes);
+
+    /**
+     * Update an existing object position in the KD-tree.
+     *
+     * @param[in]  obj_node  Object node with updated position [m]
+     */
     void updateObjectInTree(const ObjectNode::Ptr& obj_node);
+
+    /**
+     * Batch update object positions in the KD-tree.
+     *
+     * @param[in]  update_existing_objects  List of (old_pos, obj) pairs [m]
+     */
     void updateExistingObjectInKdtree(const std::vector<std::pair<Eigen::Vector3d, ObjectNode::Ptr>> & update_existing_objects);
 
     // visualization utils
+
+    /**
+     * Create a DELETEALL refresh marker.
+     *
+     * @param[in]  ns         Namespace for the marker [--]
+     * @param[in]  type       Marker type [--]
+     * @param[in]  timestamp  ROS timestamp [s]
+     * @return DELETEALL marker
+     */
     visualization_msgs::Marker visualizeRefresh(const std::string ns, const int type, const ros::Time &timestamp);
+
+    /**
+     * Populate a marker with object bounding box wireframe.
+     *
+     * @param[in,out]  marker       Marker to populate
+     * @param[in]      obj_node     Object node [--]
+     * @param[in]      id           Marker ID [--]
+     * @param[in]      timestamp    ROS timestamp [s]
+     * @param[in]      use_axis_box Use AABB instead of OBB [--]
+     */
     void visualizeObjBoundingBox(visualization_msgs::Marker & marker, const ObjectNode::Ptr& obj_node, int id, const ros::Time &timestamp, bool
                                  use_axis_box);
+
+    /**
+     * Populate a marker with object position sphere.
+     *
+     * @param[in,out]  marker    Marker to populate
+     * @param[in]      obj_node  Object node [--]
+     * @param[in]      id        Marker ID [--]
+     * @param[in]      timestamp ROS timestamp [s]
+     */
     void visualizeObjPosition(visualization_msgs::Marker & marker, const ObjectNode::Ptr& obj_node, int id, const ros::Time &timestamp);
+
+    /**
+     * Populate a marker with object text label.
+     *
+     * @param[in,out]  marker    Marker to populate
+     * @param[in]      obj_node  Object node [--]
+     * @param[in]      id        Marker ID [--]
+     * @param[in]      timestamp ROS timestamp [s]
+     */
     void visualizeObjLabel(visualization_msgs::Marker & marker, const ObjectNode::Ptr& obj_node, int id, const ros::Time &timestamp);
+
+    /**
+     * Populate a marker with all object-skeleton edges.
+     *
+     * @param[in,out]  marker  Marker to populate
+     */
     void visualizeObjEdgeAll(visualization_msgs::Marker & marker);
+
+    /**
+     * Publish visualization markers for recently updated objects.
+     */
     void visualizeUpdateObjects();
+
+    /**
+     * Remove visualization markers for deleted objects.
+     *
+     * @param[in]  objs_to_delete  List of objects to remove from display [--]
+     */
     void deVisualizeObjects(const std::vector<ObjectNode::Ptr> &objs_to_delete);
 
+
+    /**
+     * Generate a random RGB color.
+     *
+     * @return Random color vector [0-255, RGB]
+     */
     Eigen::Vector3d getRandomColor();
+
+    /**
+     * Convert Eigen vector to geometry_msgs::Point.
+     *
+     * @param[in]  pt  Eigen 3D point [m]
+     * @return Geometry point
+     */
     inline geometry_msgs::Point eigenToGeoPt(const Eigen::Vector3d& pt);
+
+    /**
+     * Convert PCL point to geometry_msgs::Point.
+     *
+     * @param[in]  pt  PCL 3D point [m]
+     * @return Geometry point
+     */
     inline geometry_msgs::Point pclToGeoPt(const pcl::PointXYZ& pt);
+
+    /**
+     * Read a ROS parameter with fallback default.
+     *
+     * @param[in]      node        ROS node handle
+     * @param[in]      param_name  Parameter name [--]
+     * @param[in,out]  param_val   Output parameter value
+     * @param[in]      default_val Default value if not found
+     */
     template<typename T>
     void readParam(ros::NodeHandle &node, std::string param_name, T &param_val, T default_val);
+
+    /**
+     * Get the full parameter name with prefix.
+     *
+     * @param[in]  name  Base parameter name [--]
+     * @return Prefixed parameter name
+     */
     std::string prefixedParam(const std::string& name) const;
+
+    /**
+     * Get the full topic name with prefix.
+     *
+     * @param[in]  name  Base topic name [--]
+     * @return Prefixed topic name
+     */
     std::string prefixedTopic(const std::string& name) const;
+
+    /**
+     * Decode a Realsense compressed depth image.
+     *
+     * @param[in]  msg  Compressed depth image message [--]
+     * @return Decoded depth image as CV_16U
+     */
     cv::Mat decodeRealsenseCompressedDepth(const sensor_msgs::CompressedImage& msg);
 };
 #endif //OBJECT_FACTORY_H

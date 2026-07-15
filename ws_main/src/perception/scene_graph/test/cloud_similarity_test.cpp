@@ -5,7 +5,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/voxel_grid.h>
-// 假设 pt_cloud_tools.h 和 INFO_MSG 宏已正确包含和定义
+// Assumes pt_cloud_tools.h and INFO_MSG macro are correctly included and defined
 // #include <../include/scene_graph/pt_cloud_tools.h>
 
 #include <iostream>
@@ -14,42 +14,42 @@
 
 typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloudRGB;
 
-// 辅助函数：将十六进制颜色字符串转换为 RGB 结构体
+// Helper: convert hex color string to RGB struct
 struct RgbColor {
     uint8_t r;
     uint8_t g;
     uint8_t b;
 };
 
-// 接受十六进制字符串（如 "#FF0000"）并返回 RgbColor
+// Accept hex string (e.g. "#FF0000") and return RgbColor
 RgbColor hexToRgb(const std::string& hex_color) {
     if (hex_color.length() != 7 || hex_color[0] != '#') {
-        // 默认返回白色
+        // Default to white
         return {255, 255, 255};
     }
 
-    // 从位置 1, 3, 5 开始解析 R, G, B 的十六进制值
+    // Parse R, G, B hex values from positions 1, 3, 5
     unsigned int r_val, g_val, b_val;
     std::stringstream ss;
 
-    // 解析 R
+    // Parse R
     ss << std::hex << hex_color.substr(1, 2);
     ss >> r_val;
-    ss.clear(); // 清除状态标志
+    ss.clear(); // Clear state flags
 
-    // 解析 G
+    // Parse G
     ss << std::hex << hex_color.substr(3, 2);
     ss >> g_val;
     ss.clear();
 
-    // 解析 B
+    // Parse B
     ss << std::hex << hex_color.substr(5, 2);
     ss >> b_val;
 
     return {(uint8_t)r_val, (uint8_t)g_val, (uint8_t)b_val};
 }
 
-// 📌 更改：函数现在接受一个颜色参数 (十六进制字符串)
+// 📌 Change: function now accepts a color parameter (hex string)
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr generateRandomPointsInSphere(
     const Eigen::Vector4f& sphere_center,
     float sphere_radius,
@@ -66,7 +66,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr generateRandomPointsInSphere(
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(-sphere_radius, sphere_radius);
 
-    // 将颜色参数转换为 RGB 结构体
+    // Convert color parameter to RGB struct
     RgbColor color = hexToRgb(hex_color);
 
     for (int i = 0; i < num_points; ++i)
@@ -86,7 +86,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr generateRandomPointsInSphere(
         point.y = y + sphere_center[1];
         point.z = z + sphere_center[2];
 
-        // 📌 更改：使用固定的颜色
+        // 📌 Change: use fixed color
         point.r = color.r;
         point.g = color.g;
         point.b = color.b;
@@ -104,22 +104,22 @@ int main(int argc, char** argv)
 
     ros::Publisher pub = nh.advertise<sensor_msgs::PointCloud2> ("/cloud_test", 1);
 
-    // 📌 定义两个不同的颜色 (例如：红色和蓝色)
-    const std::string color1_hex = "#FF0000"; // 红色
-    const std::string color2_hex = "#0000FF"; // 蓝色
+    // 📌 Define two different colors (e.g. red and blue)
+    const std::string color1_hex = "#FF0000"; // red
+    const std::string color2_hex = "#0000FF"; // blue
     int num_points = 10000;
     float radius = 1.0;
 
-    // 📌 更改：调用时传递指定的颜色
+    // 📌 Change: pass specified color on call
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud1 = generateRandomPointsInSphere(
         Eigen::Vector4f(0.0, 0.0, 0.0, 1.0), radius, num_points, color1_hex);
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud2 = generateRandomPointsInSphere(
         Eigen::Vector4f(1.0, 0.0, 0.0, 1.0), radius, num_points, color2_hex);
 
-    // --- 省略了原始代码中不相关的部分，例如 pt_cloud_tools.h 的依赖 ---
+    // --- Omitted irrelevant parts of original code, e.g. pt_cloud_tools.h dependency ---
 
-    // 对这两个点云做体素滤波
+    // Voxel filter both point clouds
     pcl::VoxelGrid<pcl::PointXYZRGB> sor;
     sor.setLeafSize(0.07f, 0.07f, 0.07f);
 
@@ -131,22 +131,22 @@ int main(int argc, char** argv)
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr filtered_cloud2(new pcl::PointCloud<pcl::PointXYZRGB>);
     sor.filter(*filtered_cloud2);
 
-    // 重新赋值给 cloud1 和 cloud2 (如果你想使用过滤后的版本进行后续计算)
+    // Reassign to cloud1 and cloud2 (if you want filtered versions for downstream computation)
     cloud1 = filtered_cloud1;
     cloud2 = filtered_cloud2;
 
 
-    // 假设 INFO_MSG 已定义，否则注释掉或替换为 ROS_INFO
+    // Assume INFO_MSG is defined, otherwise comment out or replace with ROS_INFO
     // INFO_MSG("cloud1 size : " << cloud1->size() << " cloud2 size : " << cloud2->size());
     ROS_INFO("cloud1 size : %zu, cloud2 size : %zu", cloud1->size(), cloud2->size());
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_all = pcl::PointCloud<pcl::PointXYZRGB>::Ptr(new pcl::PointCloud<pcl::PointXYZRGB>);
 
-    // 合并点云
+    // Merge point clouds
     *cloud_all = *cloud1;
     *cloud_all += *cloud2;
 
-    // 假设 PointCloudOverlapCalculator 可用，否则注释掉
+    // Assume PointCloudOverlapCalculator is available, otherwise comment out
     /*
     PointCloudOverlapCalculator cloud_similarity_server{};
     std::cout << "cloud similarity score: " << cloud_similarity_server.calculateOverlapBInA(cloud1, cloud2, 0.07f)<< std::endl;

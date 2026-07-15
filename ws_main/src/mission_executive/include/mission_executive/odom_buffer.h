@@ -15,7 +15,7 @@ using Eigen::Vector3d;
 using std::vector;
 using std::string;
 
-namespace ego_planner {
+namespace mission_executive {
 
 
 class OdomBuffer {

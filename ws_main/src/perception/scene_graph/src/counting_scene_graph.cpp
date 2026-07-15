@@ -19,7 +19,7 @@ CountingSceneGraph::CountingSceneGraph(ros::NodeHandle& nh): nh_(nh) {
         this
     );
 
-    // Counting 图只复用对象检测与跨帧融合，不创建 skeleton、area 或 topology。
+    // Counting graph reuses object detection and cross-frame fusion only; no skeleton, area, or topology.
     object_factory_ = std::make_unique<ObjectFactory>(
         nh_,
         "counting_obj",

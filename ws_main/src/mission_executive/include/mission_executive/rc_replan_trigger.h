@@ -7,7 +7,7 @@
 
 #include <vector>
 
-namespace ego_planner {
+namespace mission_executive {
 
 class RcReplanTrigger {
 public:
@@ -38,6 +38,6 @@ private:
   ros::Time hold_begin_time_;         // 长按计时起点, isZero()=未在计时
 };
 
-}  // namespace ego_planner
+}  // namespace mission_executive
 
 #endif  // _RC_REPLAN_TRIGGER_H_

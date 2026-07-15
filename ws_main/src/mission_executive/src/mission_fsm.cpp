@@ -18,8 +18,8 @@
 #include <scene_graph/skeleton_generation.h>
 #include <std_msgs/Bool.h>
 #include <string>
-#include <mission_executive/fast_exploration_fsm.h>
-#include <mission_executive/expl_data.h>
+#include <mission_executive/mission_fsm.h>
+#include <mission_executive/fsm_data.h>
 #include <plan_env/grid_map.h>
 #include <memory>
 #include <unistd.h>
@@ -36,7 +36,8 @@
     } while (0)
 using Eigen::Vector4d;
 
-namespace ego_planner {
+namespace mission_executive {
+using namespace ego_planner;
 namespace {
 /**
  * Normalize an angle to the range [-pi, pi].
@@ -4150,4 +4151,4 @@ inline Eigen::Vector3d MissionFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in)
   p_out.x() = p_in.x; p_out.y() = p_in.y; p_out.z() = p_in.z;
   return p_out;
 }
-}  // namespace fast_planner
+}  // namespace mission_executive

@@ -148,31 +148,85 @@ class SkeletonGenerator {
      */
     double astarSearch(const PolyHedronPtr start_polyhedron, const PolyHedronPtr end_polyhedron,
                        std::vector<Eigen::Vector3d>& path);
-    void getLastAstarPolyPath(std::vector<PolyHedronPtr>& poly_path){ skeleton_astar_->getPolyPath(poly_path); } // 上次 A*路径多面体序列
-    ego_planner::MapInterface::Ptr getMapInterface(){ return map_interface_; }                                   // 暴露地图接口供占据查询
-    // topo 导航不可达: 将修复点插入拓扑图(创建节点、注册kdtree、连接可见邻居)
+    /**
+     * Get the polyhedron sequence from the last A* path.
+     *
+     * @param[out] poly_path  Output polyhedron sequence
+     */
+    void getLastAstarPolyPath(std::vector<PolyHedronPtr>& poly_path){ skeleton_astar_->getPolyPath(poly_path); }
+    /**
+     * Expose the map interface for occupancy queries.
+     *
+     * @return Map interface pointer
+     */
+    ego_planner::MapInterface::Ptr getMapInterface(){ return map_interface_; }
+    /**
+     * Insert a new polyhedron node at the given position and register it in the KD-tree.
+     *
+     * Used when topology navigation is unreachable: creates a node,
+     * registers it in the KD-tree, and connects to visible neighbors.
+     *
+     * @param[in] center  Position for the new node [m]
+     * @return The newly created polyhedron
+     */
     PolyHedronPtr insertPolyhedronAt(const Eigen::Vector3d& center);
+    /**
+     * Connect a polyhedron to all visible neighbors within a given radius.
+     *
+     * @param[in] poly    Polyhedron to connect
+     * @param[in] radius  Search radius [m]
+     */
     void connectToVisibleNeighbors(const PolyHedronPtr& poly, double radius);
+    /**
+     * Reset all runtime state for loading a new map.
+     */
     void resetForMapLoad();
+    /**
+     * Register a pre-loaded polyhedron into the skeleton for map reloading.
+     *
+     * @param[in] polyhedron  Polyhedron to register
+     * @return True if registration succeeded
+     */
     bool registerLoadedPolyhedron(const PolyHedronPtr& polyhedron);
+    /**
+     * Finalize map loading: clear iteration state and log results.
+     */
     void finishMapLoad();
 
     // mutex for skeleton
+    /**
+     * Lock the skeleton mutex for thread-safe access.
+     */
     void lock(){mutex_.lock();};
+    /**
+     * Unlock the skeleton mutex.
+     */
     void unlock(){mutex_.unlock();};
 
     std::vector<PolyHedronPtr> cur_iter_polys_;
     PolyHedronPtr              cur_iter_first_poly_{nullptr};
+    /**
+     * Refresh visualization for the loaded map.
+     */
     void refreshLoadedMapVisualization();
+    /**
+     * Visualize which area (room) each polyhedron belongs to.
+     */
     void visualizePolyBelongsToArea();
 
   private:
+    /**
+     * Point collision classification result.
+     */
     enum pointCollisionType{
       FREE = 0,
       OCCUPIED = 1,
       UNKNOWN = 2,
       CONTACT_POLYGON = 3,
     };
+    /**
+     * Hash functor for Eigen::Vector3d keys.
+     */
     struct Vector3dHash {
       std::size_t operator()(const Eigen::Vector3d& vector) const {
         std::size_t h1 = std::hash<double>()(vector.x());
@@ -181,6 +235,9 @@ class SkeletonGenerator {
         return h1 ^ (h2 << 1) ^ (h3 << 2);
       }
     };
+    /**
+     * Hash functor for PolyHedronPtr keys (by origin center).
+     */
     struct polyhedronHash {
       std::size_t operator()(const PolyHedronPtr polyhedron) const {
         Eigen::Vector3d vector = polyhedron->origin_center_;
@@ -263,7 +320,7 @@ class SkeletonGenerator {
     deque<PolyhedronFtrPtr>                   expand_pending_frontiers_;                // frontiers waiting for expansion
 
     // temp data
-    // std::unordered_map<PolyHedronPtr, PolyHedronPtr, polyhedronHash>   cur_iter_polyhedrons_;    // 当前轮次迭代的多面体，用作loop back检查
+    // std::unordered_map<PolyHedronPtr, PolyHedronPtr, polyhedronHash>   cur_iter_polyhedrons_;    // polyhedron map for current iteration, used for loop-back check
 
     // ROS functions
     void cmdCallback(const std_msgs::Empty::ConstPtr &msg);
@@ -302,7 +359,7 @@ class SkeletonGenerator {
     bool checkInBoundingBox(const Eigen::Vector3d &point);
     bool checkInLocalUpdateRange(const Eigen::Vector3d &point);
     int  checkIfOnLocalFloorOrCeil(const Eigen::Vector3d &point);
-    bool checkIfPolyhedronTooDense(const Eigen::Vector3d &center_pt);                 // 检查待生成多面体的中心是否距离其他多面体太近
+    bool checkIfPolyhedronTooDense(const Eigen::Vector3d &center_pt);
     void getPolyhedronsInRange(const Eigen::Vector3d& pt, const double &radius, PolyHedronKDTreeVector & polyhedrons_in_range);
     void getPolyhedronsInRangeWithFixedCenter
       (const Eigen::Vector3d& pt, const double &radius, PolyHedronKDTree_FixedCenterVector & polyhedrons_in_range);

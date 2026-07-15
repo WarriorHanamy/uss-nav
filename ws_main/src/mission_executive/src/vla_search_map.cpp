@@ -14,7 +14,8 @@
 #include <set>
 #include <utility>
 
-namespace ego_planner {
+namespace mission_executive {
+using namespace ego_planner;
 namespace {
 
 cv::Rect roomRectFromWorld(const VLASearchRoom& room) {
@@ -29,7 +30,7 @@ double pointDistance(const cv::Point& lhs, const cv::Point& rhs) {
 
 }  // namespace
 
-VLASearchMap::VLASearchMap(ros::NodeHandle& nh, const MapInterface::Ptr& map)
+VLASearchMap::VLASearchMap(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map)
     : map_(map) {
   nh.param("vla_search/small_map_topic", image_topic_, image_topic_);
   nh.param("vla_search/small_map_frame", frame_id_, frame_id_);
@@ -883,4 +884,4 @@ std::string VLASearchMap::roomLabel(int id) {
   return label;
 }
 
-}  // namespace ego_planner
+}  // namespace mission_executive
