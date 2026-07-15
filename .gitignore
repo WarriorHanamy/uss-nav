@@ -222,3 +222,4 @@ ws_main/src/planner/uav_simulator/map_generator/pcd/20260629-magic1.pcd
 .data/
 *.pcd
 scene_graph_saved/
+bringup_temp/

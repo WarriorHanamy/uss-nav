@@ -84,14 +84,18 @@ uss-nav-{phase}-{GIT_SHA:-local}
 | `.artifacts/` | `/workspace/.artifacts/` | bind | 读写 | 测试产物、PCD/CSV 输出 |
 | `/tmp/.X11-unix/` | `/tmp/.X11-unix` | bind | 读写 | X11 显示 |
 
-**容器内可写路径（非主机挂载）** — build 阶段在容器内生成，生命周期随容器：
+**容器内可写路径（主机持久化 via .artifacts/）** — build 阶段产物持久化到主机 `.artifacts/`，跨容器复用：
 
 | 路径 | 说明 | 权限 |
 |------|------|------|
-| `/workspace/build/` | CMake 构建产物 | 可写（仅容器内） |
-| `/workspace/devel/` | ROS workspace devel 空间 | 可写（仅容器内） |
+| `/workspace/build/` | CMake 构建产物（持久化到 `.artifacts/build/`） | 可写 |
+| `/workspace/devel/` | ROS workspace devel 空间（持久化到 `.artifacts/devel/`） | 可写 |
 
-test/release 容器不得共享可变主机路径（只读源码挂载除外）。
+| 主机路径 | 容器路径 | 说明 |
+|---------|---------|------|
+| `./.data/` | `/workspace/.data/` | 运行时数据缓存（PCD 地图、场景图快照），被 devel/release 服务使用 |
+
+test/release 容器共享 `.artifacts/` 和 `.data/` 作为持久化路径的可控例外。其他可变主机路径不得共享。
 
 ### 清理命令
 
@@ -177,6 +181,67 @@ REAL_YOLOE=1 docker compose run --rm release
 ```
 
 当 `REAL_YOLOE=1` 且 `/workspace/.pretrained/yoloe-11m-seg-pf.pt` 存在时，自动启动 `predict_realtime_cam_sim.py`；否则回退到 `fake_realtime_cam_sim.py`。
+
+## Bringup 约定 — 强制约束
+
+**所有项目级 launch/config/params 文件必须位于 `bringup*` 目录下。** 禁止在 `ws_main/src/` 中放置独立的 launch 或 config yaml 目录。
+
+| 目录 | 角色 |
+|------|------|
+| `bringup_test/` | 当前活动的启动编排（被 build/test 容器使用）|
+| `bringup_temp/` | 未引用或历史遗留的配置暂存区（gitignored）|
+
+### bringup_test 结构
+
+```
+bringup_test/
+├── launch/
+│   ├── sim_*.launch              # 编排入口（场景树、随机地图）
+│   ├── planning/                 # 轨迹规划 dev 启动文件
+│   ├── mapping/                  # 地图 dev 启动文件
+│   ├── target_ekf/               # 目标跟踪 EKF
+│   ├── ego_planner/include/      # EGO Planner 组件（xml include，含 advanced_param_sim.xml）
+│   ├── uav_simulator/            # UAV 动力学仿真
+│   ├── box_odom_estimator/       # 包围盒里程计估计器
+│   └── mission_executive/        # global_box.yaml（由 map_interface C++ 运行时加载）
+├── params/
+│   ├── sim_ego_control.yaml      # 仿真控制参数
+│   ├── sim_ego_map.yaml          # 地图生成参数
+│   └── yoloe_pretrained.yaml     # YOLOE 权重路径（由 entrypoint-release.sh 加载）
+└── scripts/                      # TF 发布等辅助脚本
+```
+
+### 启动链
+
+```
+sim_scenegraph_main.launch / sim_random_main.launch
+  └─ sim_scenegraph_sim.launch / sim_random_sim.launch     ← 仿真：so3_quadrotor_simulator + so3_control + local_sensing_node
+  └─ sim_scenegraph_planner.launch / sim_random_planner.launch
+       └─ include advanced_param_sim.xml                   ← EGO Planner 完整参数（410 行）
+            └─ <node pkg="ego_planner" type="ego_planner_node">  ← 真正的 ego planner binary
+       └─ <node pkg="mission_executive" type="planner_cmd_mux">  ← 命令多路复用器
+```
+
+`advanced_param_sim.xml` 是 EGO Planner 的**权威参数源**，包含全部 410 行参数（FSM、grid_map、frontier、skeleton、obj、tracking、optimization 等）。`sim_scenegraph_planner.launch` 通过 `<arg>` 传入场景图自动加载参数覆盖。
+
+### 引用路径规则
+
+所有 `<include>` 和 `<rosparam>` 路径必须使用 `$(find bringup_test)`，并按子目录细分：
+
+```xml
+<!-- 引用同包其他 launch 文件 -->
+<include file="$(find bringup_test)/launch/sim_scenegraph_sim.launch"/>
+
+<!-- 引用已迁移的其他包配置 -->
+<rosparam command="load" file="$(find bringup_test)/params/mapping/camera.yaml"/>
+<include file="$(find bringup_test)/launch/uav_simulator/uav_simulator.launch"/>
+```
+
+### 维护规则
+
+- **添加强制在 `bringup*` 内**：新的 launch/params 文件必须创建在 `bringup_test/` 或 `bringup_temp/` 下
+- **删除**：清理 `bringup_temp/` 中的文件前需确认无任何引用（包括 C++ 硬编码路径）
+- **例外**：第三方模型配置（`ultralytics/cfg/`）和容器编排文件（`docker-compose.yml`）不受此约束
 
 ## 可视化 — 强制约束
 
