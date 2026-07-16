@@ -16,10 +16,9 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   geometry_msgs
   scene_graph
+  global_belief
   quadrotor_msgs
   traj_utils
-  exploration
-  # lkh_tsp_solver
   cv_bridge
   ego_planner
   mavros
@@ -27,7 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include
- CATKIN_DEPENDS exploration traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph # lkh_tsp_solver
+ CATKIN_DEPENDS global_belief traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph
  DEPENDS OpenCV
 )
 

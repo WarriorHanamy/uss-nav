@@ -1,3 +1,0 @@
-<launch>
-  <include file="$(find bringup_test)/launch/planning/ws_main_tracking_sim.launch"/>
-</launch>

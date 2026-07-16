@@ -73,13 +73,12 @@ COPY ws_main/src/uav_simulator /workspace/src/uav_simulator
 COPY ws_main/src/perception/camera_fov ./perception/camera_fov
 
 # LKH TSP solver
-COPY ws_main/src/utils/lkh_tsp_solver ./utils/lkh_tsp_solver
+# (removed - was only used by exploration)
 
-# Scene graph + exploration + mission executive
+# Scene graph + mission executive
+COPY ws_main/src/perception/global_belief    ./perception/global_belief
 COPY ws_main/src/perception/scene_graph     ./perception/scene_graph
-COPY ws_main/src/planners/exploration       ./planners/exploration
 COPY ws_main/src/mission_executive          ./mission_executive
-COPY ws_main/src/planners/tracker           ./planners/tracker
 
 # ── Layer 10: artifacts directory ──────────────────────────────────
 RUN mkdir -p /workspace/.artifacts/{pcd,csv}
@@ -92,8 +91,8 @@ RUN source /opt/ros/noetic/setup.bash && \
   quadrotor_msgs traj_utils \
   plan_env path_searching traj_opt map_interface \
   so3_quadrotor_simulator so3_control local_sensing_node map_generator \
-  camera_fov lkh_tsp_solver \
-  scene_graph exploration mission_executive \
+  camera_fov \
+  global_belief scene_graph mission_executive \
   ego_planner \
   --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-w" -DCMAKE_POLICY_DEFAULT_CMP0148=OLD -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 

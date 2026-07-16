@@ -7,7 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <mission_executive/mission_data.h>
-#include <map_interface/map_interface.hpp>
+#include <global_belief/map_interface.hpp>
 #include <ostream>
 #include <ros/console.h>
 #include <ros/duration.h>
@@ -67,7 +67,7 @@ std::string jsonEscape(const std::string& value) {
 }
 }  // namespace
 
-void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map)
+void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Ptr& map)
 {
   md_ = std::make_shared<MissionData>();
   fp_ = std::make_shared<FSMParam>();
@@ -95,11 +95,6 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   nh.param("fsm/scene_graph_load_name",     fp_->scene_graph_load_name_, std::string(""));
   nh.param("fsm/auto_init_delay_sec",        fp_->auto_init_delay_sec_, 2.0);
   nh.param("fsm/scene_graph_init_forward_dist", fp_->scene_graph_init_forward_dist_, 1.8);
-  nh.param("fsm/frontier_update_dt",          fp_->frontier_update_dt_, 0.5);
-  if (fp_->frontier_update_dt_ < 0.05) {
-    ROS_WARN("[ExploreFSM] fsm/frontier_update_dt is too small, clamp to 0.05s.");
-    fp_->frontier_update_dt_ = 0.05;
-  }
   nh.param("fsm/enable_yaw_scan", enable_yaw_scan_, false);
   nh.param("fsm/enable_scene_graph_update_after_load", enable_scene_graph_update_after_load_, true);
   double panorama_max_step_deg = 120.0;
@@ -118,13 +113,15 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   nh.param("tracking/finish_yaw_thresh",      fp_->track_finish_yaw_thresh_, 0.2);
   nh.param("tracking/backend",                 fp_->tracking_backend_, std::string("ego"));
   nh.param("tracking/target_odom_topic",       fp_->tracking_target_odom_topic_, std::string("/target_ekf_odom"));
+  nh.param("tracking/aim_dist",                fp_->track_aim_dist_, 1.5);
+  nh.param("tracking/replan_dist",             fp_->track_replan_dist_, 0.8);
+  nh.param("tracking/yaw_thr",                 fp_->track_yaw_thr_, 0.2);
+  nh.param("tracking/turn_yaw_dist",           fp_->track_turn_yaw_dist_, 1.5);
+  nh.param("tracking/fly_yaw_thr",             fp_->track_fly_yaw_thr_, 0.5);
+  nh.param("tracking/detect_error",            fp_->track_detect_error_, 0.5);
+  nh.param("tracking/radius_close",            fp_->radius_close_, 0.8);
   nh.param("planner_cmd_mux/input_timeout",    planner_cmd_mux_input_timeout_, 0.5);
   nh.param("planner_cmd_mux/ego_mode",         fp_->planner_cmd_mux_ego_mode_, std::string("ego"));
-  nh.param("planner_cmd_mux/elastic_mode",     fp_->planner_cmd_mux_elastic_mode_, std::string("elastic"));
-  nh.param("elastic_tracker/trigger_topic",    fp_->elastic_tracker_trigger_topic_, std::string("/triger"));
-  nh.param("elastic_tracker/finish_topic",     fp_->elastic_tracker_finish_topic_, std::string("/elastic_tracker/tracking_finish"));
-  nh.param("elastic_tracker/stop_topic",       fp_->elastic_tracker_stop_topic_, std::string("/elastic_tracker/stop"));
-  nh.param("elastic_tracker/replan_state_topic", fp_->elastic_tracker_replan_state_topic_, std::string("/drone_0/replanState"));
   // 卡死强制推进参数
   nh.param("topo_block/stuck_force_advance_enable",          fp_->stuck_force_advance_enable_, true);
   nh.param("topo_block/stuck_force_advance_vel_thresh",      fp_->stuck_force_advance_vel_thresh_, 0.1);
@@ -140,6 +137,10 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   nh.param("object_id_nav_replan/stuck_max_consecutive", fp_->object_id_nav_replan_stuck_max_consecutive_, 0);
   nh.param("object_id_nav_replan/mode2_stuck_fallback_delay", fp_->object_id_nav_replan_mode2_stuck_fallback_delay_, 10.0);
   nh.param("object_id_nav/require_final_yaw",             fp_->object_id_nav_require_final_yaw_, true);
+  nh.param("object_id_nav/autostart_enable", object_id_nav_autostart_enable_, false);
+  nh.param("object_id_nav/autostart_target_id", object_id_nav_autostart_target_id_, 2);
+  nh.param("object_id_nav/autostart_delay_sec", object_id_nav_autostart_delay_sec_, 1.0);
+  object_id_nav_autostart_delay_sec_ = std::max(0.0, object_id_nav_autostart_delay_sec_);
   nh.param("vla_search/enable",                  vla_search_enabled_, false);
   nh.param("vla_search/result_topic",            vla_search_result_topic_, std::string("/planning/vla_search_result"));
   nh.param("vla_search/bbox_topic",              vla_search_bbox_topic_, std::string("/vla_search/bbox"));
@@ -220,7 +221,6 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   scene_graph_        = std::make_shared<SceneGraph>(nh, map_);
   vla_search_map_      = std::make_shared<VLASearchMap>(nh, map_);
   counting_scene_graph_ = std::make_shared<CountingSceneGraph>(nh);
-  expl_manager_       = std::make_shared<ego_planner::FrontierManager>(nh, map, scene_graph_);
   traj_visualizer_    = std::make_shared<TrajectoryVisualizer>(nh);
 
   scene_graph_->setTargetAndPriorKnowledge(fd_->target_cmd_, fd_->prior_knowledge_);
@@ -270,10 +270,11 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   fd_->waypoint_target_yaw_ = 0.0;
   fd_->goal_replan_times_ = 0;
   fd_->warmup_start_time_ = ros::Time(0);
+  object_id_nav_autostart_triggered_ = false;
+  object_id_nav_autostart_ready_time_ = ros::Time(0);
 
   /* Ros sub, pub and timer */
   exec_timer_      = nh.createTimer(ros::Duration(0.1), &MissionFSM::FSMCallback, this);
-  frontier_timer_  = nh.createTimer(ros::Duration(fp_->frontier_update_dt_), &MissionFSM::frontierCallback, this);
   vla_search_map_timer_ = nh.createTimer(
       ros::Duration(vla_search_map_update_period_),
       &MissionFSM::vlaSearchMapCallback, this);
@@ -290,12 +291,6 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
                                     ros::TransportHints().tcpNoDelay());
   target_sub_ = nh.subscribe("/tracking_target", 2, &MissionFSM::targetCallbackReal, this,
                              ros::TransportHints().tcpNoDelay());
-  elastic_tracking_finish_sub_ = nh.subscribe(fp_->elastic_tracker_finish_topic_, 10,
-                                              &MissionFSM::elasticTrackingFinishCallback, this,
-                                              ros::TransportHints().tcpNoDelay());
-  elastic_tracker_replan_state_sub_ = nh.subscribe(fp_->elastic_tracker_replan_state_topic_, 10,
-                                                   &MissionFSM::elasticTrackerReplanStateCallback, this,
-                                                   ros::TransportHints().tcpNoDelay());
   emergency_stop_sub_ = nh.subscribe("/command/emergency_stop", 10,
                                      &MissionFSM::emergencyStopCallback, this,
                                      ros::TransportHints().tcpNoDelay());
@@ -328,11 +323,6 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   position_cmd_pub_ = nh.advertise<quadrotor_msgs::PositionCommand>("position_cmd", 20);
   ego_position_cmd_sub_ = nh.subscribe("ego_position_cmd", 20, &MissionFSM::egoPositionCmdCallback, this,
                                        ros::TransportHints().tcpNoDelay());
-  elastic_position_cmd_sub_ = nh.subscribe("elastic_position_cmd", 20, &MissionFSM::elasticPositionCmdCallback, this,
-                                            ros::TransportHints().tcpNoDelay());
-  elastic_tracker_trigger_pub_ = nh.advertise<geometry_msgs::PoseStamped>(fp_->elastic_tracker_trigger_topic_, 10);
-  elastic_tracker_stop_pub_ = nh.advertise<std_msgs::Empty>(fp_->elastic_tracker_stop_topic_, 10);
-  exploration_result_pub_ = nh.advertise<std_msgs::String>("/planning/exploration_result", 10);
   vla_search_result_pub_ = nh.advertise<std_msgs::String>(vla_search_result_topic_, 10);
   vla_search_bbox_pub_ =
       nh.advertise<quadrotor_msgs::VLASearchBBox>(vla_search_bbox_topic_, 10);
@@ -343,45 +333,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   switchPlannerCmdMuxToEgo("fsm_init");
 }
 
-void MissionFSM::applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg)
-{
-  std::vector<Eigen::Vector3d> polygon;
-  if (msg->has_exploration_region && msg->exploration_region.size() >= 3) {
-    polygon.reserve(msg->exploration_region.size());
-    for (const auto& point : msg->exploration_region) {
-      polygon.emplace_back(point.x, point.y, point.z);
-    }
-    expl_manager_->setExplorationRegion(polygon, true);
-    return;
-  }
-  expl_manager_->setExplorationRegion(polygon, false);
-}
 
-void MissionFSM::publishExplorationResult(bool success, const std::string& reason,
-                                                  const std::string& message)
-{
-  // Counting 专用对象图必须先冻结并发布，确保上层收到 exploration finished 时
-  // 对应 session 的 JSON 已经进入 ROS 发布队列。
-  if (counting_scene_graph_ != nullptr && counting_scene_graph_->active()) {
-    counting_scene_graph_->finishSessionAndPublish();
-  }
-
-  std_msgs::String msg;
-  std::ostringstream ss;
-  ss << "{"
-     << "\"finished\":true,"
-     << "\"success\":" << (success ? "true" : "false") << ","
-     << "\"reason\":\"" << jsonEscape(reason) << "\","
-     << "\"message\":\"" << jsonEscape(message) << "\","
-     << "\"instruction_type\":" << static_cast<int>(md_->instruction_) << ","
-     << "\"task_session_id\":" << active_instruction_session_id_ << ","
-     << "\"command\":\"" << jsonEscape(fd_->target_cmd_) << "\","
-     << "\"has_region\":" << (expl_manager_->hasExplorationRegion() ? "true" : "false") << ","
-     << "\"state\":\"" << md_->state_str_[md_->mission_state_] << "\""
-     << "}";
-  msg.data = ss.str();
-  exploration_result_pub_.publish(msg);
-}
 
 bool MissionFSM::isVlaSearchState(MISSION_FSM_STATE state) const
 {
@@ -482,8 +434,6 @@ void MissionFSM::startVlaSearchTask(const quadrotor_msgs::InstructionConstPtr& m
   fd_->target_cmd_ = msg->command;
 
   switchPlannerCmdMuxToEgo("startVlaSearchTask");
-  stopElasticTracker("startVlaSearchTask");
-  expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
   stopMotion();
   transitState(MISSION_FSM_STATE::VLA_SEARCH_PLAN_LOCAL, "startVlaSearchTask");
 }
@@ -607,8 +557,8 @@ bool MissionFSM::prepareVlaSearchPath(
     for (double offset = 0.0; offset <= 2.0; offset += 0.2) {
       Eigen::Vector3d candidate =
           requested_goal + direction_to_robot * offset;
-      if (map_->getInflateOccupancy(candidate) != ego_planner::MapInterface::OCCUPIED &&
-          map_->getOccupancy(candidate) != ego_planner::MapInterface::UNKNOWN) {
+      if (map_->getInflateOccupancy(candidate) != global_belief::MapInterface::OCCUPIED &&
+          map_->getOccupancy(candidate) != global_belief::MapInterface::UNKNOWN) {
         navigation_goal = candidate;
         goal_is_free = true;
         break;
@@ -1513,7 +1463,6 @@ void MissionFSM::handleGoalInstruction(const std::vector<geometry_msgs::Point>& 
                                                bool look_forward,
                                                const std::string& source) {
   switchPlannerCmdMuxToEgo(source + ":goal");
-  stopElasticTracker(source + ":goal");
 
   if (goals.empty()) {
     ROS_WARN_STREAM("[GOAL] Ignore empty goal instruction from " << source);
@@ -1530,9 +1479,7 @@ void MissionFSM::handleGoalInstruction(const std::vector<geometry_msgs::Point>& 
     fd_->track_init_ = false;
     resetTrackingFinishCandidate();
     fd_->track_finish_sent_ = false;
-    if (!useElasticTrackerBackend()) {
-      map_->setTarget(fd_->track_pos_, false);
-    }
+    map_->setTarget(fd_->track_pos_, false);
     if (md_->mission_state_ == MISSION_FSM_STATE::PLAN_TRACK ||
         md_->mission_state_ == MISSION_FSM_STATE::APPROACH_TRACK) {
       stopMotion();
@@ -1551,7 +1498,8 @@ void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& g
                                               const std::string& source,
                                               const ros::Time& stamp,
                                               const std::string& frame_id) {
-  expl_manager_->vis_ptr_->visualize_a_ball(fd_->track_pos_, 0.35, "track_pos", ego_planner::expl_vis::Color::blue);
+  (void)stamp;
+  (void)frame_id;
   if (global_poses.empty()) return;
 
   const auto& first_pose = global_poses.front();
@@ -1581,7 +1529,7 @@ void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& g
 
   const Eigen::Vector3d candidate = geoPt2Vec3d(global_poses[min_index]);
   const bool was_track_init = fd_->track_init_;
-  if (!fd_->track_init_ || min_dist < expl_manager_->ep_->track_detect_error_) {
+  if (!fd_->track_init_ || min_dist < fp_->track_detect_error_) {
     fd_->track_pos_ = candidate;
     fd_->track_init_ = true;
     if (!was_track_init) {
@@ -1591,12 +1539,6 @@ void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& g
   } else {
     ROS_WARN_STREAM_THROTTLE(1.0, "[TRACK] Ignore target jump, candidate: " << candidate.transpose()
                              << " previous: " << fd_->track_pos_.transpose());
-    return;
-  }
-
-  if (useElasticTrackerBackend()) {
-    publishTrackingTargetOdom(fd_->track_pos_, stamp, frame_id);
-    switchPlannerCmdMuxToElastic("tracking_target_update");
     return;
   }
 
@@ -1626,10 +1568,7 @@ void MissionFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstP
     resetTrackingFinishCandidate();
     fd_->track_finish_sent_ = false;
     switchPlannerCmdMuxToEgo("trackCommand:disable");
-    stopElasticTracker("trackCommand:disable");
-    if (!useElasticTrackerBackend()) {
-      map_->setTarget(fd_->track_pos_, false);
-    }
+    map_->setTarget(fd_->track_pos_, false);
     if (md_->mission_state_ == MISSION_FSM_STATE::PLAN_TRACK ||
         md_->mission_state_ == MISSION_FSM_STATE::APPROACH_TRACK)
     {
@@ -1640,10 +1579,6 @@ void MissionFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstP
   }
 
   const bool was_track_trigger = fd_->track_trigger_;
-  if (useElasticTrackerBackend() && fd_->track_finish_sent_ && !was_track_trigger) {
-    ROS_INFO_STREAM_THROTTLE(0.5, "[TRACK] ignore residual Elastic-Tracker enable after finish; waiting for disable/reset.");
-    return;
-  }
   fd_->track_trigger_ = true;
   if (!was_track_trigger) {
     resetTrackingFinishCandidate();
@@ -1653,75 +1588,15 @@ void MissionFSM::trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstP
   {
     fd_->track_pos_ = geoPt2Vec3d(msg->target_position);
   }
-  if (useElasticTrackerBackend()) {
-    if (msg->has_target_position) {
-      fd_->track_init_ = true;
-      publishTrackingTargetOdom(fd_->track_pos_, msg->header.stamp, msg->header.frame_id);
-    }
-    // Elastic-Tracker 的 /triger 表示新会话开始；持续重发会清空 traj_server 缓存并重置 hover 完成计时。
-    if (!was_track_trigger) {
-      publishElasticTrackerTrigger(msg->header.stamp, msg->header.frame_id);
-    }
-    switchPlannerCmdMuxToElastic("trackCommand:elastic_tracker_enable");
-    if (md_->mission_state_ != MISSION_FSM_STATE::WAIT_TRIGGER) {
-      stopMotion();
-      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "trackCommand:elastic_tracker_enable");
-    }
-    return;
-  }
 
   switchPlannerCmdMuxToEgo("trackCommand:ego_tracking_enable");
   map_->setTarget(fd_->track_pos_, false);
   transitState(MISSION_FSM_STATE::PLAN_TRACK, "trackCommand:enable");
 }
 
-void MissionFSM::elasticTrackingFinishCallback(const std_msgs::Bool::ConstPtr& msg) {
-  if (!msg->data || !useElasticTrackerBackend()) {
-    return;
-  }
 
-  std::unique_lock<std::mutex> lck(mtx_);
-  if (!fd_->track_trigger_) {
-    ROS_WARN_STREAM_THROTTLE(1.0, "[TRACK] Ignore Elastic-Tracker finish without active tracking session.");
-    return;
-  }
 
-  fd_->track_trigger_ = false;
-  fd_->track_init_ = false;
-  resetTrackingFinishCandidate();
-  stopMotion();
-  switchPlannerCmdMuxToEgo("elasticTrackingFinish");
-  publishTrackingFinish();
-  if (md_->mission_state_ != MISSION_FSM_STATE::INIT &&
-      md_->mission_state_ != MISSION_FSM_STATE::WARM_UP) {
-    transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "elasticTrackingFinish");
-  }
-}
 
-void MissionFSM::elasticTrackerReplanStateCallback(const quadrotor_msgs::ReplanStateConstPtr& msg) {
-  if (!useElasticTrackerBackend()) {
-    return;
-  }
-  // 2 = EMERGENCY_STOP: force_hover set, last traj invalid
-  if (msg->state == 2) {
-    ROS_WARN("[TRACK] Elastic-Tracker EMERGENCY_STOP detected, stopping elastic tracker.");
-    if (fd_->track_trigger_) {
-      fd_->track_trigger_ = false;
-      fd_->track_init_ = false;
-      resetTrackingFinishCandidate();
-      switchPlannerCmdMuxToEgo("elastic_replan_state:emergency_stop");
-      if (md_->mission_state_ != MISSION_FSM_STATE::INIT &&
-          md_->mission_state_ != MISSION_FSM_STATE::WARM_UP) {
-        transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "elastic_replan_state");
-      }
-    }
-    return;
-  }
-  // -2 = generation failed, 1 = replan failed hovering, 3 = executing last traj
-  if (msg->state == -2 || msg->state == 1 || msg->state == 3) {
-    ROS_WARN_STREAM_THROTTLE(1.0, "[TRACK] Elastic-Tracker replan state=" << static_cast<int>(msg->state));
-  }
-}
 
 void MissionFSM::targetCallbackReal(const quadrotor_msgs::DetectOut::ConstPtr& msg)
 {
@@ -1790,7 +1665,7 @@ bool MissionFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* 
     return false;
   }
 
-  if (map_->getInflateOccupancy(init_seed) == ego_planner::MapInterface::OCCUPIED) {
+  if (map_->getInflateOccupancy(init_seed) == global_belief::MapInterface::OCCUPIED) {
     if (reason != nullptr) *reason = "seed in occupied region";
     return false;
   }
@@ -1798,369 +1673,13 @@ bool MissionFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* 
   return true;
 }
 
-void MissionFSM::handelThingkingProcess() {
-  double t_cur = ros::Time::now().toSec() - think_start_time_;
-  if (stash_state_ == MISSION_FSM_STATE::THINKING && md_->mission_state_ != MISSION_FSM_STATE::WAIT_TRIGGER && !fd_->df_demo_mode_) {
-    transitState(LLM_PLAN_EXPLORE, "** fsm RECOVER !!!!!!!");
-    stash_state_ = LLM_PLAN_EXPLORE;
-  }
 
-  if (t_cur > think_duration_limit_) {
-    ROS_ERROR("thinking overtime ! skip this step ...");
-    transitState(stash_state_, "thinking overtime ! skip this step ...");
-    return ;
-  }
 
-  expl_manager_->visualize(fd_->odom_pos_);
-  unsigned cur_prompt_id = scene_graph_->wait_recv_id_;
 
-  if (scene_graph_->llm_ans_str_poll_.find(cur_prompt_id) != scene_graph_->llm_ans_str_poll_.end()) {
-    INFO_MSG_GREEN("LLM ANS \n" << scene_graph_->llm_ans_str_poll_[cur_prompt_id]);
 
-    if (scene_graph_->llm_prompts_[cur_prompt_id].prompt_type == scene_graph::PromptMsg::PROMPT_TYPE_ROOM_PREDICTION) {
-      scene_graph_->handleRoomPredictionResult(cur_prompt_id);
 
-    }else if (scene_graph_->llm_prompts_[cur_prompt_id].prompt_type == scene_graph::PromptMsg::PROMPT_TYPE_EXPL_PREDICTION) {
-      expl_area_id_ = scene_graph_->handelExplorationResult(cur_prompt_id);
-      if (expl_area_id_ == -100) {
-        transitState(MISSION_FSM_STATE::FIND_TERMINATE_TARGET, "Have found correct area !");
-        return ;
-      }
-      if (scene_graph_->skeleton_gen_->area_handler_->area_map_.find(expl_area_id_) != scene_graph_->skeleton_gen_->area_handler_->area_map_.end()) {
-        has_made_area_decision_ = (expl_area_id_ != -1);
-      }
 
-    }else if(scene_graph_->llm_prompts_[cur_prompt_id].prompt_type == scene_graph::PromptMsg::PROMPT_TYPE_TERMINATE_OBJ_ID){
-      fd_->object_target_id_ = scene_graph_->handelTerminateObjIdResult(cur_prompt_id);
-      if (fd_->object_target_id_ >= 0) {
-        transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "Recv Terminate Object ID !");
-        return ;
-      }else {
-        publishExplorationResult(false, "target_not_found", "terminate object id result is invalid");
-        transitState(MISSION_FSM_STATE::FINISH, "Recv Terminate Object ID Failed !");
-        return ;
-      }
 
-    }else if(scene_graph_->llm_prompts_[cur_prompt_id].prompt_type == scene_graph::PromptMsg::PROMPT_TYPE_DF_DEMO){
-      fd_->df_demo_target_id_ = scene_graph_->handelDFDemoResult(cur_prompt_id);
-      transitState(MISSION_FSM_STATE::DF_DEMO, "Recv DF Demo Result !");
-      return ;
-    }
-
-    transitState(stash_state_, "THINKING :D");
-  }
-}
-
-void MissionFSM::planLLMExplore() {
-  ROS_INFO("\033[1;31m\n\n ============== [Plan LLM Explore] ==============\033[0m");
-
-  if (waitForFreshMapAfterReset())
-    return;
-
-  // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
-  if (need_panorama_) {
-    handlePanoramaYaw();
-    return;
-  }
-
-  if (need_rotate_yaw_ && !enable_yaw_scan_)
-    need_rotate_yaw_ = false;
-
-  if (need_rotate_yaw_) {
-    auto yawLimit = [] (double yaw) {
-      while (yaw >= M_PI) yaw -= 2 * M_PI;
-      while (yaw < -M_PI) yaw += 2 * M_PI;
-      return yaw;
-    };
-    yawhandle_yaw_raw          = yawLimit(fd_->odom_yaw_);
-    yawhandle_yaw_target_left  = yawLimit(yawhandle_yaw_raw + 45 / 180.0 * M_PI);
-    yawhandle_yaw_target_right = yawLimit(yawhandle_yaw_raw - 45 / 180.0 * M_PI);
-    yawhandle_left_ok = yawhandle_right_ok = yawhandle_back_ok = false;
-    yawhandle_left_published = yawhandle_right_published = yawhandle_back_published = false;
-    stashCurStateAndTransit(MISSION_FSM_STATE::YAW_HANDLE, "rotate yaw before LLM explore");
-    INFO_MSG_YELLOW("[FSM] Plan LLM Explore : No Yaw Handle ... start yaw handle process");
-    return ;
-  }
-
-  scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
-
-  if (scene_graph_->needAreaPrediction()) {
-    expl_manager_->frontier_finder_->updateSceneGraphWithFtr();
-    INFO_MSG_YELLOW("[FSM] Plan LLM Explore : Area Need Prediction ... start area predict process");
-    std::string llm_prompt_str;
-    scene_graph_->newAreaPredictionPromptGen(llm_prompt_str);
-    cur_prompt_id_ = scene_graph_->getCurPromptId();
-    scene_graph_->sendPrompt(scene_graph_->getCurPromptIdAndPlusOne(),
-                             scene_graph::PromptMsg::PROMPT_TYPE_ROOM_PREDICTION,
-                             llm_prompt_str, std::chrono::seconds(20), 1);
-    stashCurStateAndTransit(MISSION_FSM_STATE::THINKING, "frontierCallback");
-    think_start_time_     = ros::Time::now().toSec();
-    think_duration_limit_ = 20.0 * 1.0;
-
-    has_made_area_decision_ = false;
-    return ;
-  }
-
-  if (!has_made_area_decision_) {
-    INFO_MSG_GREEN("[FSM]: check if current area need more exploration ...");
-    if (scene_graph_->cur_poly_ != nullptr) {
-      // step1 current area need more exploration
-      auto it = scene_graph_->skeleton_gen_->area_handler_->area_map_.find(scene_graph_->cur_poly_->area_id_);
-
-      if (it != scene_graph_->skeleton_gen_->area_handler_->area_map_.end() && it->second->room_label_ == "Unknown" && it->second->num_ftrs_ > 0) {
-        INFO_MSG_YELLOW("\n ********************************************************************************** ");
-        INFO_MSG_YELLOW(" [Plan LLM Expl]: Current Area Need More Exploration, Go to Current Area [" << it->second->id_ << "] ");
-        INFO_MSG_YELLOW(" **********************************************************************************\n");
-        expl_area_id_ = it->second->id_;
-        has_made_area_decision_ = true;
-
-      } else {
-        // step2 check nbr area need more exploration
-        if (!it->second->nbr_area_.empty()) {
-          for (auto nbr_area_id : it->second->nbr_area_) {
-            auto nbr_area = scene_graph_->skeleton_gen_->area_handler_->area_map_.find(nbr_area_id.first);
-            if(nbr_area != scene_graph_->skeleton_gen_->area_handler_->area_map_.end() && nbr_area->second->room_label_ == "Unknown" && nbr_area->second->num_ftrs_ > 0) {
-              INFO_MSG_YELLOW("[Plan LLM Expl]: Found Nbr Area with Unknown Room Label, Go to Nbr Area [" << nbr_area->second->id_ << "] ");
-              expl_area_id_ = nbr_area->second->id_;
-              has_made_area_decision_ = true;
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if(fd_->llm_plan_explore_counter_ == 1){
-    has_made_area_decision_ = true;
-    auto it = scene_graph_->skeleton_gen_->area_handler_->area_map_.find(scene_graph_->cur_poly_->area_id_);
-    expl_area_id_ = it->second->id_;
-    INFO_MSG_YELLOW("*** [FSM] Plan LLM Explore : Regular explore ...");
-  }
-
-  if (!has_made_area_decision_) {
-    INFO_MSG_YELLOW("[FSM] Plan LLM Explore : No Area Decision Made ... start llm-exploration process");
-    scene_graph_->history_visited_area_ids_.push_back(scene_graph_->cur_poly_->area_id_);
-
-    std::string prompt;
-    scene_graph_->chooseAreaToGoPromptGen(prompt);
-    scene_graph_->sendPrompt(scene_graph_->getCurPromptIdAndPlusOne(),
-                             scene_graph::PromptMsg::PROMPT_TYPE_EXPL_PREDICTION,
-                             prompt, std::chrono::seconds(10), 1);
-    stashCurStateAndTransit(MISSION_FSM_STATE::THINKING, "llm explore plan!");
-    think_start_time_     = ros::Time::now().toSec();
-    think_duration_limit_ = 10.0 * 1.0;
-    return ;
-  }
-
-  fd_->path_res_.clear();
-  int res = callExplorationLLMPlanner(fd_->aim_pos_, fd_->aim_vel_, fd_->aim_yaw_, fd_->path_res_);
-
-  fd_->llm_plan_explore_counter_ ++;
-  if(fd_->llm_plan_explore_counter_ >= 2){
-    has_made_area_decision_ = false;
-    fd_->llm_plan_explore_counter_ = 0;
-  }
-
-  if (res == ego_planner::NO_FRONTIER) {
-    has_made_area_decision_ = false;
-    publishExplorationResult(false, "target_not_found", "target area has no frontier");
-    transitState(FINISH, "LLM Plan No Frontier");
-    return;
-
-  } else if (res == ego_planner::FAIL) {
-    has_made_area_decision_ = false;
-    planRegularExplore();
-    INFO_MSG_RED(" !!!!!!!!!!!!!!!!!!!! LLM Plan Explore Failed !!!!!!!!!!!!!!!!!!!!!!");
-    INFO_MSG_RED("                     PLan Regular Explore Once ");
-    return ;
-
-  }else {
-    has_made_area_decision_ = false;
-    double dis_2_aim       = (fd_->aim_pos_ - fd_->odom_pos_).norm();
-    double dis_2_aim_2d    = (fd_->aim_pos_ - fd_->odom_pos_).head(2).norm();
-    bool look_forward      = dis_2_aim >= expl_manager_->ep_->radius_close_;
-    fd_->path_inx_ = 0;
-
-    getAndPublishNextAim(fd_->path_res_, look_forward, fd_->aim_yaw_);
-    fd_->is_lookforward_ = look_forward;
-    fd_->has_rotated_ = !look_forward;
-    fd_->last_pub_time_ = ros::Time::now();
-    INFO_MSG_GREEN("[EXP-FSM] [look_forward = " << look_forward << "] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
-    transitState(APPROACH_EXPLORE, "LLM Plan Success");
-  }
-}
-
-void MissionFSM::planRegularExplore() {
-  ROS_INFO("\033[1;31mPlan Regular Explore!\033[0m");  //红
-
-  if (waitForFreshMapAfterReset())
-    return;
-
-  // 全景旋转优先：task_id=2/8 启动阶段先360°旋转一圈再探索
-  if (need_panorama_) {
-    handlePanoramaYaw();
-    return;
-  }
-
-  if (need_rotate_yaw_ && !enable_yaw_scan_)
-    need_rotate_yaw_ = false;
-
-  if (need_rotate_yaw_ && fd_->df_demo_mode_) {
-    auto yawLimit = [] (double yaw) {
-      while (yaw >= M_PI) yaw -= 2 * M_PI;
-      while (yaw < -M_PI) yaw += 2 * M_PI;
-      return yaw;
-    };
-    yawhandle_yaw_raw          = yawLimit(fd_->odom_yaw_);
-    yawhandle_yaw_target_left  = yawLimit(yawhandle_yaw_raw + 45.0 / 180.0 * M_PI);
-    yawhandle_yaw_target_right = yawLimit(yawhandle_yaw_raw - 45.0 / 180.0 * M_PI);
-    yawhandle_left_ok = yawhandle_right_ok = yawhandle_back_ok = false;
-    yawhandle_left_published = yawhandle_right_published = yawhandle_back_published = false;
-    stashCurStateAndTransit(MISSION_FSM_STATE::YAW_HANDLE, "rotate yaw before LLM explore");
-    INFO_MSG_YELLOW("[FSM] Plan Regular Explore : No Yaw Handle ... start yaw handle process");
-    need_rotate_yaw_ = false;
-    return ;
-  }
-
-  fd_->path_res_.clear();
-  int res = callExplorationPlanner(fd_->aim_pos_, fd_->aim_vel_, fd_->aim_yaw_, fd_->path_res_);
-
-  if (fd_->df_demo_mode_)
-    need_rotate_yaw_ = enable_yaw_scan_;
-
-  if (res == ego_planner::SUCCEED)
-  {
-    double dis_2_aim       = (fd_->aim_pos_ - fd_->odom_pos_).norm();
-    double dis_2_aim_2d    = (fd_->aim_pos_ - fd_->odom_pos_).head(2).norm();
-    bool look_forward = dis_2_aim >= expl_manager_->ep_->radius_close_;
-    fd_->path_inx_ = 0;
-
-    getAndPublishNextAim(fd_->path_res_, look_forward, fd_->aim_yaw_);
-    fd_->is_lookforward_ = look_forward;
-    fd_->has_rotated_ = !look_forward;
-    INFO_MSG_GREEN("[EXP-FSM] [look_forward = " << look_forward << "] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
-    fd_->last_pub_time_ = ros::Time::now();
-
-    transitState(APPROACH_EXPLORE, "FSM");
-    need_rotate_yaw_ = enable_yaw_scan_;
-    // ROS_ERROR_STREAM("[Plan_Traj] start_pos: " << fd_->start_pt_.transpose());
-    // ROS_ERROR_STREAM("[Plan_Traj] odom_pos: " << fd_->odom_pos_.transpose());
-    // ROS_ERROR_STREAM("[Plan_Traj] start_vel: " << fd_->start_vel_.transpose());
-    // ROS_ERROR_STREAM("[Plan_Traj] odom_vel: " << fd_->odom_vel_.transpose());
-  }
-  else if (res == ego_planner::NO_FRONTIER)
-  {
-    const std::string reason = expl_manager_->hasExplorationRegion() ? "region_explored" : "global_explored";
-    publishExplorationResult(true, reason, "no frontier remains");
-    transitState(FINISH, "FSM");
-    // clearVisMarker();
-  }
-  else if (res == ego_planner::FAIL)
-  {
-    // Still in PLAN_TRAJ state, keep replanning
-    ROS_ERROR("\n\n ======================== [FSM] Plan fail! ==========================");
-    INFO_MSG_RED("================================================================================");
-    INFO_MSG_RED("[EXPL-FSM] : Can't reach frontier, delete this frontier and add it to blacklist!");
-    INFO_MSG_RED("================================================================================");
-    // expl_manager_->frontier_finder_->addFtrBlacklist(expl_manager_->ed_->frontier_to_explore_.average_);
-    INFO_MSG_RED("add to blacklist: " << expl_manager_->ed_->frontier_to_explore_.average_.transpose());
-    expl_manager_->forceDeleteFrontier(expl_manager_->ed_->frontier_to_explore_);
-  }
-  expl_manager_->visualize(fd_->odom_pos_);
-}
-
-void MissionFSM::approachRegularExplore() {
-
-  double dis_2_aim       = (fd_->aim_pos_       - fd_->odom_pos_).norm();
-  double dis_2_aim_2d    = (fd_->aim_pos_       - fd_->odom_pos_).head(2).norm();
-  double dis_2_local_aim = (fd_->local_aim_pos_ - fd_->odom_pos_).norm();
-  double dis_yaw         = fd_->aim_yaw_ - fd_->odom_yaw_;
-
-  double t_cur = (ros::Time::now() - fd_->last_pub_time_).toSec();
-  std::string ego_plan_status_str_   = fd_->ego_plan_status_ ? "True" : "False";
-  std::string ego_modify_status_str_ = fd_->ego_modify_status_ ? "True" : "False";
-
-  ROS_INFO_STREAM_THROTTLE(0.5, "\033[1;33mApproach EXPLORE...\033[0m \n"
-                                "   * Dis to Aim: " << dis_2_aim_2d << "\n"
-                                "   * Dis to LocalAim: " << dis_2_local_aim << "\n"
-                                "   * Dis to yaw: " << dis_yaw);  // 黄
-  ROS_INFO_STREAM_THROTTLE(0.5, "[EXPL-FSM] : ego local goal -> (" << fd_->ego_local_goal_.transpose() << ")");
-  ROS_INFO_STREAM_THROTTLE(0.5, "[EXPL-FSM] : ego plan times: " << fd_->ego_plan_times_
-                                                                << "  ego plan statue: " << ego_plan_status_str_
-                                                                << "  ego modify status: " << ego_modify_status_str_);
-  // ! bad frontier delete
-  bool bad_frontier = false;
-  Eigen::Vector3d cur_viewpoint = fd_->path_res_.back();
-  if (fd_->ego_plan_times_ > 40) {
-    INFO_MSG_RED("[EXPL-FSM] : replan time out, delete this frontier and add it to blacklist, replan!");
-    bad_frontier = true;
-  }
-
-  if (fd_->ego_modify_status_ && fd_->ego_exec_finished_
-      && (fd_->odom_pos_ - fd_->ego_local_goal_).norm() < 0.1
-      && map_->isInLocalMap(cur_viewpoint) && t_cur > 8.0) {
-    INFO_MSG_RED("[EXPL-FSM] : ego modify status, delete this frontier and add it to blacklist, replan!");
-    bad_frontier = true;
-  }
-
-  // replan judgement
-  MISSION_FSM_STATE replan_target_state =
-        fd_->regular_explore_ ? MISSION_FSM_STATE::PLAN_EXPLORE : MISSION_FSM_STATE::LLM_PLAN_EXPLORE;
-
-  if (fd_->df_demo_mode_)
-    replan_target_state = MISSION_FSM_STATE::DF_DEMO;
-
-  if (bad_frontier){
-    INFO_MSG_RED("===========================================================================================");
-    INFO_MSG_RED("[EXPL-FSM] : Can't reach frontier, delete this frontier and add it to blacklist, replan!");
-    INFO_MSG_RED("===========================================================================================");
-    // expl_manager_->frontier_finder_->addFtrBlacklist(expl_manager_->ed_->frontier_to_explore_.average_);
-    INFO_MSG_RED("Ftr [" << expl_manager_->ed_->frontier_to_explore_.id_ << "] pos : "<< expl_manager_->ed_->frontier_to_explore_.average_.transpose());
-    expl_manager_->forceDeleteFrontier(expl_manager_->ed_->frontier_to_explore_);
-    transitState(replan_target_state, "FSM");
-  }
-
-  if (dis_2_aim_2d < fp_->replan_dis_thresh_ && fabs(fd_->odom_yaw_ - fd_->aim_yaw_) < 10.0 / 180.0f * M_PI) {
-    ROS_WARN("\n-------------> Replan: [Reach Both Pos&Yaw Aim] <-------------\n");
-    ros::Duration(0.5).sleep();
-    ROS_INFO_STREAM("t_cur: " << t_cur);
-    transitState(replan_target_state, "FSM");
-    return;
-  }
-
-  // Replan after some time
-  if (t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
-    ROS_WARN("\n-------------> Replan: periodic call <-------------\n");
-    ROS_WARN("t_cur: %f s", t_cur);
-    transitState(replan_target_state, "FSM");
-    return;
-  }
-
-  // Close to aim, rotate yaw
-  if ((fd_->path_inx_ == fd_->path_res_.size() - 1 || fd_->path_res_.size() == 2) &&
-      dis_2_aim_2d < expl_manager_->ep_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_){
-    INFO_MSG_CYAN("\n[Approach EXPLORE] Close to Aim Position, Rotate Yaw to Aim Yaw!\n");
-    pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
-                 quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
-    fd_->has_rotated_ = true;
-    INFO_MSG_GREEN("[EXP-FSM] [Rotate Yaw] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
-    return;
-  }
-
-  // Local goal
-  if (fd_->path_res_.size() > 2 && dis_2_local_aim < 2.0){
-    if (fd_->path_inx_ >= fd_->path_res_.size() - 1 &&
-    fd_->ego_exec_finished_ && fd_->ego_modify_status_) {
-      INFO_MSG_RED("\n[Approach EXPLORE] Force Replan, because local goal can't reach!\n");
-      transitState(MISSION_FSM_STATE::PLAN_EXPLORE, "can't reach local goal");
-      return ;
-    }
-    getAndPublishNextAim(fd_->path_res_, true);
-    fd_->last_pub_time_ = ros::Time::now();
-    INFO_MSG_GREEN("[EXP-FSM] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
-  }
-}
 
 void MissionFSM::resetTrackingFinishCandidate() {
   fd_->track_finish_candidate_active_ = false;
@@ -2173,7 +1692,7 @@ void MissionFSM::resetTrackingFinishCandidate() {
 
 bool MissionFSM::updateTrackingFinishCandidate(double dis_2_aim, double angle_2_aim) {
   const bool near_aim = dis_2_aim < fp_->arrive_dis_thr_;
-  const bool yaw_ok = angle_2_aim < expl_manager_->ep_->track_yaw_thr_;
+  const bool yaw_ok = angle_2_aim < fp_->track_yaw_thr_;
   if (!near_aim || !yaw_ok || fd_->track_finish_sent_) {
     resetTrackingFinishCandidate();
     return false;
@@ -2229,30 +1748,15 @@ void MissionFSM::publishTrackingFinish() {
   ROS_INFO("[TRACK] publish /tracking_finish=true");
 }
 
-bool MissionFSM::useElasticTrackerBackend() const {
-  return fp_->tracking_backend_ == "elastic_tracker" ||
-         fp_->tracking_backend_ == "tracker";
-}
 
 void MissionFSM::switchPlannerCmdMuxToEgo(const std::string& source) {
   const std::string next_mode = fp_->planner_cmd_mux_ego_mode_;
   if (next_mode == planner_cmd_mux_active_mode_) return;
   planner_cmd_mux_active_mode_ = next_mode;
-  blocked_elastic_traj_id_ = -1;
   ROS_INFO_STREAM("[planner_cmd_mux] switch mode to " << planner_cmd_mux_active_mode_ << " from " << source);
   publishLastForMode(source);
 }
 
-void MissionFSM::switchPlannerCmdMuxToElastic(const std::string& source) {
-  const std::string next_mode = fp_->planner_cmd_mux_elastic_mode_;
-  if (next_mode == planner_cmd_mux_active_mode_) return;
-  planner_cmd_mux_active_mode_ = next_mode;
-  elastic_mode_start_time_ = ros::Time::now();
-  blocked_elastic_traj_id_ = has_elastic_cmd_ ? last_elastic_cmd_.trajectory_id : -1;
-  has_elastic_cmd_ = false;
-  ROS_INFO_STREAM("[planner_cmd_mux] switch mode to " << planner_cmd_mux_active_mode_ << " from " << source);
-  publishLastForMode(source);
-}
 
 bool MissionFSM::isFresh(const ros::Time& stamp) const {
   if (planner_cmd_mux_input_timeout_ <= 0.0) return true;
@@ -2260,12 +1764,6 @@ bool MissionFSM::isFresh(const ros::Time& stamp) const {
   return (ros::Time::now() - stamp).toSec() <= planner_cmd_mux_input_timeout_;
 }
 
-bool MissionFSM::isElasticCmdUsable() const {
-  if (!has_elastic_cmd_ || !isFresh(elastic_cmd_stamp_)) return false;
-  if (!elastic_mode_start_time_.isZero() && elastic_cmd_stamp_ < elastic_mode_start_time_) return false;
-  if (blocked_elastic_traj_id_ >= 0 && last_elastic_cmd_.trajectory_id == blocked_elastic_traj_id_) return false;
-  return true;
-}
 
 void MissionFSM::publishIfActive(const quadrotor_msgs::PositionCommand& cmd,
                                           const std::string& source_mode) {
@@ -2280,14 +1778,6 @@ void MissionFSM::publishLastForMode(const std::string& source) {
     } else {
       ROS_WARN_STREAM_THROTTLE(1.0, "[planner_cmd_mux] no fresh ego cmd after switch from " << source);
     }
-    return;
-  }
-  if (planner_cmd_mux_active_mode_ == fp_->planner_cmd_mux_elastic_mode_) {
-    if (isElasticCmdUsable()) {
-      position_cmd_pub_.publish(last_elastic_cmd_);
-    } else {
-      ROS_WARN_STREAM_THROTTLE(1.0, "[planner_cmd_mux] no fresh elastic cmd after switch from " << source);
-    }
   }
 }
 
@@ -2298,64 +1788,9 @@ void MissionFSM::egoPositionCmdCallback(const quadrotor_msgs::PositionCommand::C
   publishIfActive(last_ego_cmd_, fp_->planner_cmd_mux_ego_mode_);
 }
 
-void MissionFSM::elasticPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg) {
-  if (planner_cmd_mux_active_mode_ == fp_->planner_cmd_mux_elastic_mode_ && blocked_elastic_traj_id_ >= 0) {
-    if (msg->trajectory_id == blocked_elastic_traj_id_) {
-      ROS_WARN_STREAM_THROTTLE(0.5, "[planner_cmd_mux] drop stale elastic trajectory_id="
-                                        << msg->trajectory_id << " after mode switch");
-      return;
-    }
-    blocked_elastic_traj_id_ = -1;
-  }
-  last_elastic_cmd_ = *msg;
-  elastic_cmd_stamp_ = ros::Time::now();
-  has_elastic_cmd_ = true;
-  publishIfActive(last_elastic_cmd_, fp_->planner_cmd_mux_elastic_mode_);
-}
 
-void MissionFSM::publishElasticTrackerTrigger(const ros::Time& stamp,
-                                                      const std::string& frame_id) {
-  geometry_msgs::PoseStamped trigger;
-  trigger.header.stamp = stamp.isZero() ? ros::Time::now() : stamp;
-  trigger.header.frame_id = frame_id.empty() ? "world" : frame_id;
-  trigger.pose.position.x = 0.0;
-  trigger.pose.position.y = 0.0;
-  trigger.pose.position.z = 0.0;
-  trigger.pose.orientation.w = 1.0;
-  elastic_tracker_trigger_pub_.publish(trigger);
-  ROS_INFO_STREAM_THROTTLE(0.5, "[TRACK] publish Elastic-Tracker trigger -> "
-                           << fp_->elastic_tracker_trigger_topic_);
-}
 
-void MissionFSM::stopElasticTracker(const std::string& source) {
-  if (!useElasticTrackerBackend()) {
-    return;
-  }
-  std_msgs::Empty msg;
-  elastic_tracker_stop_pub_.publish(msg);
-  ROS_INFO_STREAM("[TRACK] publish Elastic-Tracker stop -> "
-                  << fp_->elastic_tracker_stop_topic_ << " from " << source);
-}
 
-void MissionFSM::publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
-                                                   const ros::Time& stamp,
-                                                   const std::string& frame_id) {
-  nav_msgs::Odometry target_odom;
-  target_odom.header.stamp = stamp.isZero() ? ros::Time::now() : stamp;
-  target_odom.header.frame_id = frame_id.empty() ? "world" : frame_id;
-  target_odom.child_frame_id = "target";
-  target_odom.pose.pose.position.x = target_pos.x();
-  target_odom.pose.pose.position.y = target_pos.y();
-  target_odom.pose.pose.position.z = target_pos.z();
-  target_odom.pose.pose.orientation.w = 1.0;
-  target_odom.twist.twist.linear.x = 0.0;
-  target_odom.twist.twist.linear.y = 0.0;
-  target_odom.twist.twist.linear.z = 0.0;
-  tracking_target_odom_pub_.publish(target_odom);
-  ROS_INFO_STREAM_THROTTLE(0.5, "[TRACK] publish target odom for Elastic-Tracker: "
-                           << target_pos.transpose() << " -> "
-                           << fp_->tracking_target_odom_topic_);
-}
 
 void MissionFSM::planTrack() {
   ROS_INFO("\033[1;31mPlan TRACK!\033[0m");
@@ -2380,7 +1815,7 @@ void MissionFSM::planTrack() {
   }
 
   fd_->path_res_.clear();
-  fd_->aim_pos_ = fd_->track_pos_ - target_vec.normalized() * expl_manager_->ep_->track_dist_;
+  fd_->aim_pos_ = fd_->track_pos_ - target_vec.normalized() * fp_->track_aim_dist_;
   fd_->aim_pos_.z() = 1.0;
   fd_->aim_yaw_ = atan2(target_vec.y(), target_vec.x());
 
@@ -2391,8 +1826,8 @@ void MissionFSM::planTrack() {
 
   const double pos_err = (fd_->aim_pos_ - fd_->odom_pos_).norm();
   const double yaw_err = std::fabs(normalizeAngle(fd_->aim_yaw_ - fd_->odom_yaw_));
-  if (pos_err < expl_manager_->ep_->track_replan_dist_ &&
-      yaw_err < expl_manager_->ep_->track_yaw_thr_) {
+  if (pos_err < fp_->track_replan_dist_ &&
+      yaw_err < fp_->track_yaw_thr_) {
     if (updateTrackingFinishCandidate(pos_err, yaw_err)) {
       publishTrackingFinish();
       return;
@@ -2406,7 +1841,7 @@ void MissionFSM::planTrack() {
   }
 
   const int res = callTrackPlanner(fd_->aim_pos_, fd_->aim_vel_, fd_->aim_yaw_, fd_->path_res_);
-  if (res != ego_planner::SUCCEED) {
+  if (res != 0) {
     resetTrackingFinishCandidate();
     ROS_WARN_THROTTLE(1.0, "[TRACK] Tracking target not directly reachable yet.");
     return;
@@ -2417,8 +1852,8 @@ void MissionFSM::planTrack() {
 
   const double dis_2_aim_2d = (fd_->aim_pos_ - fd_->odom_pos_).head(2).norm();
   // 远距离 yaw 偏差过大时提前按目标方向边飞边转；近距离 yaw-lock 保持快速转向以尽快找回目标视野。
-  const bool near_yaw_lock = dis_2_aim_2d < expl_manager_->ep_->track_turn_yaw_dist_;
-  const bool far_yaw_align = !near_yaw_lock && yaw_err > expl_manager_->ep_->track_fly_yaw_thr_;
+  const bool near_yaw_lock = dis_2_aim_2d < fp_->track_turn_yaw_dist_;
+  const bool far_yaw_align = !near_yaw_lock && yaw_err > fp_->track_fly_yaw_thr_;
   const bool look_forward = !(near_yaw_lock || far_yaw_align);
   const bool yaw_low_speed = far_yaw_align;
 
@@ -2480,9 +1915,9 @@ void MissionFSM::approachTrack() {
     return;
   }
 
-  Eigen::Vector3d aim_pos_new = fd_->track_pos_ - target_vec.normalized() * expl_manager_->ep_->track_dist_;
+  Eigen::Vector3d aim_pos_new = fd_->track_pos_ - target_vec.normalized() * fp_->track_aim_dist_;
   aim_pos_new.z() = 1.0;
-  if ((fd_->aim_pos_ - aim_pos_new).norm() > expl_manager_->ep_->track_replan_dist_) {
+  if ((fd_->aim_pos_ - aim_pos_new).norm() > fp_->track_replan_dist_) {
     INFO_MSG_GREEN("[TRACK] aim_pos_old: " << fd_->aim_pos_.transpose()
                    << " aim_pos_new: " << aim_pos_new.transpose());
     resetTrackingFinishCandidate();
@@ -2491,7 +1926,7 @@ void MissionFSM::approachTrack() {
   }
 
   const double current_dir = atan2(target_vec.y(), target_vec.x());
-  if (!fd_->has_rotated_ && dis_2_aim_2d < expl_manager_->ep_->track_turn_yaw_dist_) {
+  if (!fd_->has_rotated_ && dis_2_aim_2d < fp_->track_turn_yaw_dist_) {
     fd_->has_rotated_ = true;
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
@@ -2503,7 +1938,7 @@ void MissionFSM::approachTrack() {
   }
 
   if (fd_->has_rotated_ &&
-      std::fabs(normalizeAngle(current_dir - fd_->aim_yaw_)) > expl_manager_->ep_->track_yaw_thr_) {
+      std::fabs(normalizeAngle(current_dir - fd_->aim_yaw_)) > fp_->track_yaw_thr_) {
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
     pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
@@ -2729,20 +2164,36 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
       }
 
       transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "FSM");
-      expl_manager_->visualize(fd_->odom_pos_);
       break;
     }
 
     case WAIT_TRIGGER:
     {
-      // Do nothing but wait for trigger
-      if (!fd_->trigger_) {
-        ROS_WARN_THROTTLE(10.0, "[EXP-FSM] Wait Trigger For Plan Explore ... ");
-        return ;
+      if (object_id_nav_autostart_enable_ && !object_id_nav_autostart_triggered_) {
+        if (object_id_nav_autostart_ready_time_.isZero()) {
+          object_id_nav_autostart_ready_time_ = ros::Time::now();
+        }
+        const double ready_sec = (ros::Time::now() - object_id_nav_autostart_ready_time_).toSec();
+        if (ready_sec >= object_id_nav_autostart_delay_sec_) {
+          if (scene_graph_ == nullptr || scene_graph_->object_factory_ == nullptr) {
+            ROS_WARN_THROTTLE(2.0, "[ObjIdNavAuto] SceneGraph object factory is not ready.");
+          } else if (scene_graph_->object_factory_->object_map_.find(object_id_nav_autostart_target_id_) ==
+                     scene_graph_->object_factory_->object_map_.end()) {
+            ROS_WARN_THROTTLE(2.0, "[ObjIdNavAuto] target object id %d is not registered yet.",
+                              object_id_nav_autostart_target_id_);
+          } else {
+            object_id_nav_autostart_triggered_ = true;
+            ROS_WARN("[ObjIdNavAuto] start object-id navigation to target id %d.",
+                     object_id_nav_autostart_target_id_);
+            startObjectIdNav(object_id_nav_autostart_target_id_,
+                             quadrotor_msgs::Instruction::SOURCE_TASK_EXPLORATION,
+                             0, "object_id_nav_autostart");
+          }
+        }
       }
-      fd_->trigger_ = false;
-      transitState(MISSION_FSM_STATE::LLM_PLAN_EXPLORE, "FSM");
-      expl_manager_->visualize(fd_->odom_pos_);
+      if (fd_->trigger_) {
+        fd_->trigger_ = false;
+      }
       break;
     }
 
@@ -2767,19 +2218,17 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
     }
 
     case THINKING: {
-      ROS_INFO_STREAM_THROTTLE(0.5, "\033[1;31mTHINKING!\033[0m");  //red
-      handelThingkingProcess();
+      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "thinking_removed");
       break;
     }
 
     case LLM_PLAN_EXPLORE: {
-      if (need_panorama_ || fd_->ego_exec_finished_)
-        planLLMExplore();
+      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "llm_plan_explore_removed");
       break;
     }
 
     case PLAN_EXPLORE: {
-      planRegularExplore();
+      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "plan_explore_removed");
       break;
     }
 
@@ -2789,7 +2238,7 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
     }
 
     case APPROACH_EXPLORE: {
-      approachRegularExplore();
+      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "approach_explore_removed");
       break;
     }
 
@@ -2869,7 +2318,6 @@ void MissionFSM::goTargetObject() {
     }else {
       fd_->go_object_process_phase = 0;
       if(fd_->find_terminate_target_mode_) {
-        publishExplorationResult(false, "target_path_failed", "failed to plan path to target object");
         transitState(FINISH, "** FIND TERMINATE TARGET PATH FAILED **");
       }
       else transitState(WAIT_TRIGGER, "** FIND OBJECT PATH FAILED **");
@@ -2902,7 +2350,6 @@ void MissionFSM::goTargetObject() {
       ROS_INFO_STREAM("t_cur: " << t_cur);
       fd_->go_object_process_phase = 0;
       if (fd_->find_terminate_target_mode_) {
-        publishExplorationResult(true, "target_found", "reached target object");
         transitState(FINISH, "Find Terminate Target Finish");
       }
       else transitState(WAIT_TRIGGER, "Go Target Object Finish");
@@ -3056,7 +2503,7 @@ void MissionFSM::goTargetObject() {
     // Close to aim, rotate yaw (仅 require_final_yaw_=true 时执行)
     if (fp_->object_id_nav_require_final_yaw_ &&
         (fd_->path_inx_ >= fd_->path_res_.size() - 1 || fd_->path_res_.size() == 2) &&
-        dis_2_aim_2d < expl_manager_->ep_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_){
+        dis_2_aim_2d < fp_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_){
       INFO_MSG_GREEN("[TARG Obj] [Rotate Yaw] yaw: " << fd_->odom_yaw_ << ", target yaw: " << fd_->aim_yaw_
           << ", err : " << (fd_->odom_yaw_ - fd_->aim_yaw_) / 3.14 * 180.0f << "deg");
 
@@ -3176,7 +2623,7 @@ void MissionFSM::goTargetWithWaypoint() {
     }
 
     if ((fd_->path_inx_ >= fd_->path_res_.size() - 1 || fd_->path_res_.size() == 2) &&
-        dis_2_aim_2d < expl_manager_->ep_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_) {
+        dis_2_aim_2d < fp_->radius_close_ && !fd_->has_rotated_ && fd_->ego_exec_finished_) {
       INFO_MSG_GREEN("[TARG Wpt] [Rotate Yaw] yaw: " << fd_->odom_yaw_ << ", target yaw: " << fd_->aim_yaw_
           << ", err : " << (fd_->odom_yaw_ - fd_->aim_yaw_) / 3.14 * 180.0f << "deg");
 
@@ -3204,7 +2651,6 @@ void MissionFSM::execDFDemo() {
   if(fd_->df_demo_phase_ == 0){
 
     if (fd_->df_demo_target_id_ >= 0){
-      fd_->explore_count_ = 0;
       fd_->df_demo_phase_ = 1;
       fd_->df_demo_mode_  = false;
       fd_->object_target_id_ = fd_->df_demo_target_id_;
@@ -3212,7 +2658,7 @@ void MissionFSM::execDFDemo() {
       return;
     }
 
-    if (fd_->explore_count_ == 0 && fd_->df_demo_target_id_ == -100){
+    if (fd_->df_demo_target_id_ == -100){
       std::string prompt;
       scene_graph_->DFDemoPromptGen(prompt);
       scene_graph_->sendPrompt(scene_graph_->getCurPromptIdAndPlusOne(),
@@ -3224,25 +2670,16 @@ void MissionFSM::execDFDemo() {
       return ;
     }
 
-    if(fd_->explore_count_ > 2){
-      fd_->explore_count_     = 0;
-      fd_->df_demo_target_id_ = -100;
-      return ;
-    }
-
     if (fd_->df_demo_target_id_ == -1){
 
       int cur_area_id = scene_graph_->cur_poly_->area_id_;
       if (scene_graph_->skeleton_gen_->area_handler_->areas_need_predict_[cur_area_id]){
-        INFO_MSG_CYAN("[DF Demo] | current area need llm predict, reset explore count");
-        fd_->explore_count_ = 0;
+        INFO_MSG_CYAN("[DF Demo] | current area need llm predict, reset");
         fd_->df_demo_target_id_ = -100;
         return ;
       }
 
       transitState(MISSION_FSM_STATE::PLAN_EXPLORE, "DF Demo[1] plan explore");
-      INFO_MSG_CYAN("Do Regular Explore iter [" << fd_->explore_count_ << "]");
-      fd_->explore_count_ ++;
       return ;
     }
   }
@@ -3281,10 +2718,10 @@ double MissionFSM::adjustTerminateHeightFindingObject(ObjectNode::Ptr target_obj
     check_pos.z() = adjusted_height;
     if (map_->isInLocalMap(check_pos) &&
         map_->isVisible(fd_->odom_pos_, check_pos) &&
-        map_->getInflateOccupancy(check_pos) == ego_planner::MapInterface::FREE) {
+        map_->getInflateOccupancy(check_pos) == global_belief::MapInterface::FREE) {
       Eigen::Vector3d check_floor = check_pos;
       check_floor.z() -= 0.5;
-      if(map_->getInflateOccupancy(check_floor) == ego_planner::MapInterface::FREE){
+      if(map_->getInflateOccupancy(check_floor) == global_belief::MapInterface::FREE){
         INFO_MSG_CYAN("[FSM] Adjust Terminate Height Finding Object: from " << ideal_terminate_height
           << " to " << adjusted_height << " m");
         return adjusted_height;
@@ -3331,7 +2768,7 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         Eigen::Vector3d cand = path_res[i];
         // inflate 守卫: 候选点落入膨胀层时, 先尝试 C0 投影到最近 inflate-free 且可达点;
         // 投影趋向下一个路径点(避免回飞); 投影失败才判为真障碍, 去抖标记不可达并跳过(严格不进膨胀层)
-        if (map_->getInflateOccupancy(cand) == ego_planner::MapInterface::OCCUPIED)
+        if (map_->getInflateOccupancy(cand) == global_belief::MapInterface::OCCUPIED)
         {
           // 前向参考: 路径上更靠近目标的下一个点(末点则取自身, 退化为无方向)
           Eigen::Vector3d toward = (i + 1 < (int)path_res.size()) ? path_res[i + 1] : path_res.back();
@@ -3435,7 +2872,7 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
       fd_->aim_pos_[2] = fd_->local_aim_pos_[2];
     }
     pubLocalGoal(fd_->local_aim_pos_, aim_yaw, look_forward);
-    cout << "[EXP-FM][getAndPubNextAim][look_forward = "<< look_forward << "] Pub aim:" << path_res.back().transpose() << ", yaw: " << aim_yaw << endl;
+    std::cout << "[EXP-FM][getAndPubNextAim][look_forward = "<< look_forward << "] Pub aim:" << path_res.back().transpose() << ", yaw: " << aim_yaw << std::endl;
     return true;
   }
   else
@@ -3452,7 +2889,7 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         }
       }
       pubLocalGoal(fd_->local_aim_pos_, aim_yaw, true);
-      cout << "[EXP-FM][getAndPubNextAim][look_forward = 1]" << " Pub local aim: " << fd_->local_aim_pos_.transpose() << endl;
+      std::cout << "[EXP-FM][getAndPubNextAim][look_forward = 1]" << " Pub local aim: " << fd_->local_aim_pos_.transpose() << std::endl;
       return true;
     }
     return false;
@@ -3481,27 +2918,7 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
   ego_goal_pub_.publish(msg);
 }
 
-// return aim_pose aim_vel, aim_yaw and path_res
-int MissionFSM::callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw, vector<Eigen::Vector3d>& path_res)
-{
-  // mode 1在TSP前同步消费累计雷达更新盒，完成新frontier生成。
-  expl_manager_->updateFrontiersForPlanning(fd_->odom_pos_, fd_->odom_yaw_);
 
-  map_->Lock();
-  ros::Time time_r = ros::Time::now() + ros::Duration(fp_->replan_time_);
-
-  int res = expl_manager_->planExploreTSP(fd_->odom_pos_, fd_->odom_vel_, fd_->odom_yaw_,
-                                          aim_pose, aim_vel, aim_yaw, path_res);
-
-  map_->Unlock();
-  return res;
-}
-
-int MissionFSM::callExplorationLLMPlanner(Eigen::Vector3d &aim_pose, Eigen::Vector3d &aim_vel, double &aim_yaw, vector<Eigen::Vector3d> &path_res) {
-  int res = expl_manager_->planLLMExploration(expl_area_id_, fd_->odom_pos_, fd_->odom_vel_, fd_->odom_yaw_,
-                                              scene_graph_->getCurPoly(), aim_pose, aim_yaw, aim_vel, path_res);
-  return res;
-}
 
 int MissionFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel,
                                          double& aim_yaw, vector<Eigen::Vector3d>& path_res)
@@ -3509,7 +2926,7 @@ int MissionFSM::callTrackPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim
   (void)aim_vel;
   (void)aim_yaw;
   map_->Lock();
-  int res = expl_manager_->planTrackGoal(fd_->odom_pos_, fd_->odom_vel_, aim_pose, path_res);
+  int res = map_->searchPath(fd_->odom_pos_, aim_pose, path_res, 0.2) ? 0 : -1;
   map_->Unlock();
   return res;
 }
@@ -3526,93 +2943,7 @@ void MissionFSM::vlaSearchMapCallback(const ros::TimerEvent&)
   }
 }
 
-void MissionFSM::frontierCallback(const ros::TimerEvent& e) {
-  static int delay = 0;
-  if (!scene_graph_->skeleton_gen_->ready()) {
-    ROS_WARN_THROTTLE(2.0, "[ExploreFSM] | skeleton has not been generated, skip once!");
-    return ;
-  }
 
-  if (++delay < 5) return;
-  if (md_->mission_state_ == INIT) return;
-  if (waitForFreshMapAfterReset()) return;
-
-  ros::Time t1 = ros::Time::now();
-  auto ft = expl_manager_->frontier_finder_;
-  auto ed = expl_manager_->ed_;
-
-  bool new_topo = false;
-  scene_graph_->updateSceneGraph(fd_->odom_pos_, fd_->odom_yaw_, new_topo);
-
-  if (new_topo && fp_->enable_area_prediction_ && fd_->new_topo_need_predict_immediately_) {
-    std::string llm_prompt_str;
-    scene_graph_->newAreaPredictionPromptGen(llm_prompt_str);
-    cur_prompt_id_ = scene_graph_->getCurPromptId();
-    scene_graph_->sendPrompt(scene_graph_->getCurPromptIdAndPlusOne(),
-                             scene_graph::PromptMsg::PROMPT_TYPE_ROOM_PREDICTION,
-                             llm_prompt_str, std::chrono::seconds(10), 1);
-    if (scene_graph_->skeleton_gen_->cur_iter_first_poly_ != nullptr) {
-      // double aim_direction = atan2(fd_->odom_pos_.y() - scene_graph_->skeleton_gen_->cur_iter_first_poly_->center_.y(),
-      //                         fd_->odom_pos_.x() - scene_graph_->skeleton_gen_->cur_iter_first_poly_->center_.x()) + M_PI;
-
-      double aim_direction = fd_->odom_yaw_;
-
-      if (aim_direction > M_PI)
-        aim_direction -= 2 * M_PI;
-      if (aim_direction < -M_PI)
-        aim_direction += 2 * M_PI;
-
-      Eigen::Vector3d aim_pos = scene_graph_->skeleton_gen_->cur_iter_first_poly_->center_;
-      pubLocalGoal(aim_pos, aim_direction, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
-      // pubLocalGoal(fd_->odom_pos_, fd_->odom_yaw_, false, false);
-      INFO_MSG_GREEN("Get New skeleton info, stop motion & predict new area");
-    }
-    if (md_->mission_state_ == MISSION_FSM_STATE::WAIT_TRIGGER)
-      return ;
-    transitState(MISSION_FSM_STATE::LLM_PLAN_EXPLORE, "ftr_callback -> New Topo Found -> Replan");
-    stashCurStateAndTransit(MISSION_FSM_STATE::THINKING, "frontierCallback -> New Topo Found -> Predict!");
-    think_start_time_        = ros::Time::now().toSec();
-    think_duration_limit_    = 10.0;
-    has_made_area_decision_  = false;
-    need_rotate_yaw_         = enable_yaw_scan_;
-  }
-
-  expl_manager_->setCurrentTopoNode(scene_graph_->skeleton_gen_->mountCurTopoPoint(fd_->odom_pos_, fd_->odom_yaw_));
-  scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
-  if (new_topo) {
-    ft->reCalculateAllFtrTopo(fd_->odom_pos_);
-  }
-  ft->searchFrontiers(fd_->odom_pos_, fd_->odom_yaw_,
-                      expl_manager_->ep_->frontier_tsp_mode_ == 1);
-  ft->computeFrontiersToVisit(fd_->odom_pos_);
-  ft->updateFrontierCostMatrix();
-  ft->updateSceneGraphWithFtr();
-
-  //! Update HGrid
-  expl_manager_->updateHgrid();
-
-  // int area_id = scene_graph_->getAreaFromPoly(scene_graph_->getCurPoly());
-  // expl_manager_->planLLMExploration(area_id, fd_->odom_pos_, fd_->odom_vel_, fd_->odom_yaw_,
-  //                                   scene_graph_->getCurPoly(), fd_->aim_pos_, fd_->aim_yaw_, fd_->aim_vel_, fd_->path_res_);
-
-  // ft->vp_handler_->updateVPWellObserved(fd_->odom_pos_, fd_->odom_yaw_, 2.0);
-  // ft->vp_handler_->updateCostMatrix(scene_graph_->cur_areas_[area_id]);
-  // Eigen::MatrixXd cost_mat;
-  // std::vector<Viewpoint::Ptr> vp_list;
-  // ft->vp_handler_->calCurrentAreaCostMatrix(scene_graph_->cur_areas_[area_id], fd_->odom_pos_, fd_->odom_yaw_, fd_->odom_vel_, cost_mat);
-  // expl_manager_->findVPGlobalTour(ft->vp_handler_->vps_candidate_, cost_mat, fd_->odom_pos_, fd_->odom_yaw_, fd_->odom_vel_);
-
-  ros::Time t2 = ros::Time::now();
-  expl_manager_->visualize(fd_->odom_pos_);
-  scene_graph_->visualizeSceneGraph();
-  ros::Time t3 = ros::Time::now();
-
-  double vis_time        = (t3 - t2).toSec() * 1e3;
-  double perception_time = (t2 - t1).toSec() * 1e3;
-  if (perception_time > 20.0 || vis_time > 10.0 )
-    ROS_WARN_STREAM("[FtrCallback] : Update time: " << perception_time << " + Vis spend time : " << vis_time << "ms");
-}
 
 void MissionFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg) {
   fd_->odom_pos_(0) = msg->pose.pose.position.x;
@@ -3726,15 +3057,12 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
   fd_->instruct_directly_to_goal = false; // [gwq] 防止从turn_ego_plan状态切出的时候其他状态依旧使用强制ego规划
   if (msg->instruction_type != quadrotor_msgs::Instruction::TURN_TRACKING) {
     switchPlannerCmdMuxToEgo("instructionCallback:non_tracking");
-    stopElasticTracker("instructionCallback:non_tracking");
     std::unique_lock<std::mutex> lck(mtx_);
     fd_->track_trigger_ = false;
     fd_->track_init_ = false;
     resetTrackingFinishCandidate();
     fd_->track_finish_sent_ = false;
-    if (!useElasticTrackerBackend()) {
-      map_->setTarget(fd_->track_pos_, false);
-    }
+    map_->setTarget(fd_->track_pos_, false);
   }
 
   // load map !
@@ -3745,15 +3073,14 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
       fd_->path_res_.clear();
       fd_->path_inx_ = 0;
       fd_->trigger_ = false;
-      fd_->regular_explore_ = false;
+      //fd_->regular_explore_ = false;
       fd_->df_demo_mode_ = false;
       fd_->find_terminate_target_mode_ = false;
       fd_->new_topo_need_predict_immediately_ = false;
       fd_->llm_plan_explore_counter_ = 0;
       has_made_area_decision_ = false;
       need_rotate_yaw_ = false;
-      expl_area_id_ = -1;
-      hardResetExploreArea(false, false);
+      map_->resetGlobalBox();
       scene_graph_->object_factory_->runThisModule();
       scene_graph_->refreshLoadedMapVisualization();
       // 根据配置决定是否冻结场景图增量更新
@@ -3807,24 +3134,12 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
       break;
 
     case quadrotor_msgs::Instruction::TURN_OBJECT_ID_NAV:
-      // 存储最新消息（先清空, 再存储）
-      fd_->stored_object_id_nav_instruction_ = *msg;
-      fd_->has_stored_object_id_nav_instruction_ = true;
-      fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 新任务重置卡死计时
-      fd_->object_id_nav_replan_topic_triggered_ = false;
-      fd_->object_id_nav_replan_stuck_count_ = 0;           // 新任务重置replan计数
-
-      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
-      fd_->object_target_id_ = msg->target_obj_id;
-      fd_->path_inx_        = 0;
-      fd_->go_object_process_phase = 0;
-      fd_->find_terminate_target_mode_ = false;
-      scene_graph_->clearAllBlocked();     // 新导航任务: 清除上次遗留的不可达标记, 不跨任务持久
-      transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "instructionCallback");
+      object_id_nav_autostart_triggered_ = true;
+      startObjectIdNav(msg->target_obj_id, msg->source_task_id, msg->task_session_id,
+                       "instructionCallback", msg.get());
       break;
 
     case quadrotor_msgs::Instruction::TURN_WAYPOINT_NAV: {
-      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       if (msg->nav_waypoint.empty()) {
         INFO_MSG_RED("[InstructionCallback]: TURN_WAYPOINT_NAV has empty nav_waypoint, switch to WAIT_TRIGGER");
         transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback:empty_waypoint");
@@ -3843,15 +3158,15 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
     }
 
     case quadrotor_msgs::Instruction::TURN_OBJECT_NAV:
-      applyExplorationRegionFromInstruction(msg);
-      fd_->regular_explore_ = false;
+      //fd_->regular_explore_ = false;
       if (msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING &&
           msg->task_session_id > 0) {
         counting_scene_graph_->startSession(msg->task_session_id, fd_->odom_pos_);
       }
       if (source_requires_panorama && msg->clear_local_map) {
         stopMotion();
-        hardResetExploreArea(true, false);
+        map_->resetOccupancyToUnknown();
+        map_->resetGlobalBox();
         map_reset_update_seq_ = map_->getOccupancyUpdateSeq();
         wait_fresh_map_after_reset_ = true;
       } else if (source_requires_panorama) {
@@ -3866,30 +3181,13 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
       break;
 
     case quadrotor_msgs::Instruction::TURN_REGULAR_EXPLORATION:
-      applyExplorationRegionFromInstruction(msg);
-      fd_->regular_explore_ = true;
-      if (msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_COUNTING &&
-          msg->task_session_id > 0) {
-        counting_scene_graph_->startSession(msg->task_session_id, fd_->odom_pos_);
-      }
-      if (source_requires_panorama && msg->clear_local_map) {
-        stopMotion();
-        hardResetExploreArea(true, false);
-        map_reset_update_seq_ = map_->getOccupancyUpdateSeq();
-        wait_fresh_map_after_reset_ = true;
-      } else if (source_requires_panorama) {
-        startPanoramaRotation();
-      }
-      fd_->df_demo_mode_    = false;
-      fd_->find_terminate_target_mode_ = false;
-      transitState(MISSION_FSM_STATE::PLAN_EXPLORE, "instructionCallback");
+      transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback:regular_exploration_removed");
       break;
 
     case quadrotor_msgs::Instruction::TURN_DF_DEMO:
-      expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
       fd_->df_demo_mode_ = true;
       fd_->df_demo_phase_ = 0;
-      fd_->explore_count_ = 0;
+      //fd_->explore_count_ = 0;
       fd_->df_demo_target_id_ = -100;
       for (auto& area_iter : scene_graph_->skeleton_gen_->area_handler_->areas_need_predict_)
         area_iter.second = true;
@@ -3911,10 +3209,7 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
         resetTrackingFinishCandidate();
         fd_->track_finish_sent_ = false;
         switchPlannerCmdMuxToEgo("instructionCallback:tracking_disable");
-        stopElasticTracker("instructionCallback:tracking_disable");
-        if (!useElasticTrackerBackend()) {
-          map_->setTarget(fd_->track_pos_, false);
-        }
+        map_->setTarget(fd_->track_pos_, false);
         if (md_->mission_state_ == MISSION_FSM_STATE::PLAN_TRACK ||
             md_->mission_state_ == MISSION_FSM_STATE::APPROACH_TRACK)
         {
@@ -3927,10 +3222,6 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
       {
         std::unique_lock<std::mutex> lck(mtx_);
         const bool was_track_trigger = fd_->track_trigger_;
-        if (useElasticTrackerBackend() && fd_->track_finish_sent_ && !was_track_trigger) {
-          ROS_INFO_STREAM_THROTTLE(0.5, "[TRACK] ignore residual Elastic-Tracker instruction enable after finish; waiting for disable/reset.");
-          break;
-        }
         fd_->track_trigger_ = true;
         if (!was_track_trigger) {
           resetTrackingFinishCandidate();
@@ -3940,28 +3231,12 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
         {
           fd_->track_pos_ = geoPt2Vec3d(msg->target_position);
         }
-        if (useElasticTrackerBackend()) {
-          if (msg->has_target_position) {
-            fd_->track_init_ = true;
-            publishTrackingTargetOdom(fd_->track_pos_, msg->header.stamp, msg->header.frame_id);
-          }
-          // Elastic-Tracker 的 /triger 只用于打开新 session，后续目标更新只走 target odom。
-          if (!was_track_trigger) {
-            publishElasticTrackerTrigger(msg->header.stamp, msg->header.frame_id);
-          }
-          switchPlannerCmdMuxToElastic("instructionCallback:elastic_tracker_enable");
-          if (md_->mission_state_ != MISSION_FSM_STATE::WAIT_TRIGGER) {
-            stopMotion();
-            transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "instructionCallback:elastic_tracker_enable");
-          }
-        } else {
-          switchPlannerCmdMuxToEgo("instructionCallback:ego_tracking_enable");
-          map_->setTarget(fd_->track_pos_, false);
-          if (md_->mission_state_ != MISSION_FSM_STATE::PLAN_TRACK &&
-              md_->mission_state_ != MISSION_FSM_STATE::APPROACH_TRACK)
-          {
-            transitState(MISSION_FSM_STATE::PLAN_TRACK, "instructionCallback:tracking_enable");
-          }
+        switchPlannerCmdMuxToEgo("instructionCallback:ego_tracking_enable");
+        map_->setTarget(fd_->track_pos_, false);
+        if (md_->mission_state_ != MISSION_FSM_STATE::PLAN_TRACK &&
+            md_->mission_state_ != MISSION_FSM_STATE::APPROACH_TRACK)
+        {
+          transitState(MISSION_FSM_STATE::PLAN_TRACK, "instructionCallback:tracking_enable");
         }
       }
 
@@ -3989,6 +3264,41 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
   }
 }
 
+void MissionFSM::startObjectIdNav(int target_obj_id, uint8_t source_task_id,
+                                  uint32_t session_id, const std::string& reason,
+                                  const quadrotor_msgs::Instruction* source_msg,
+                                  bool reset_replan_count) {
+  if (source_msg != nullptr) {
+    fd_->stored_object_id_nav_instruction_ = *source_msg;
+  } else {
+    quadrotor_msgs::Instruction stored;
+    stored.header.stamp = ros::Time::now();
+    stored.robot_id = md_->drone_id_;
+    stored.instruction_type = quadrotor_msgs::Instruction::TURN_OBJECT_ID_NAV;
+    stored.source_task_id = source_task_id;
+    stored.task_session_id = session_id;
+    stored.target_obj_id = static_cast<uint16_t>(std::max(0, target_obj_id));
+    fd_->stored_object_id_nav_instruction_ = stored;
+  }
+
+  fd_->has_stored_object_id_nav_instruction_ = true;
+  fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;
+  fd_->object_id_nav_replan_topic_triggered_ = false;
+  if (reset_replan_count) {
+    fd_->object_id_nav_replan_stuck_count_ = 0;
+  }
+
+  active_instruction_task_id_ = source_task_id;
+  active_instruction_session_id_ = session_id;
+  fd_->object_target_id_ = target_obj_id;
+  fd_->path_inx_ = 0;
+  fd_->go_object_process_phase = 0;
+  fd_->find_terminate_target_mode_ = false;
+  scene_graph_->clearAllBlocked();
+  switchPlannerCmdMuxToEgo("startObjectIdNav:" + reason);
+  transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, reason);
+}
+
 void MissionFSM::triggerObjectIdNavReplan(const std::string& reason) {
   if (!fd_->has_stored_object_id_nav_instruction_) {
     ROS_WARN("[ObjIdNavReplan] No stored instruction, cannot replan");
@@ -4001,18 +3311,8 @@ void MissionFSM::triggerObjectIdNavReplan(const std::string& reason) {
   ROS_WARN("[ObjIdNavReplan] Replanning (target_obj_id=%d, reason=%s, count=%d)",
            msg.target_obj_id, reason.c_str(), fd_->object_id_nav_replan_stuck_count_);
 
-  // 重置卡死状态
-  fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;
-  fd_->object_id_nav_replan_topic_triggered_ = false;
-
-  // 直接执行重初始化逻辑（与 instructionCallback 中 TURN_OBJECT_ID_NAV 一致）
-  expl_manager_->setExplorationRegion(std::vector<Eigen::Vector3d>(), false);
-  fd_->object_target_id_ = msg.target_obj_id;
-  fd_->path_inx_ = 0;
-  fd_->go_object_process_phase = 0;
-  fd_->find_terminate_target_mode_ = false;
-  scene_graph_->clearAllBlocked();
-  transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, "object_id_nav_replan:" + reason);
+  startObjectIdNav(msg.target_obj_id, msg.source_task_id, msg.task_session_id,
+                   "object_id_nav_replan:" + reason, &msg, false);
 }
 
 void MissionFSM::objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg) {
@@ -4150,54 +3450,13 @@ void MissionFSM::displayMissionState()
 
 void MissionFSM::visualize(const ros::TimerEvent& e)
 {
+  (void)e;
   displayMissionState();
-  expl_manager_->visHgrid(fd_->odom_pos_);
 }
 
 void MissionFSM::stopMotion()
 {
   pubLocalGoal(fd_->odom_pos_, fd_->odom_yaw_, true);
-}
-
-void MissionFSM::hardResetExploreArea(bool clear_occupancy, bool clear_posegraph) {
-  (void)clear_posegraph;
-  if (clear_occupancy)
-    map_->resetOccupancyToUnknown();
-
-  // 重置探索边界及所有由地图派生的探索状态，保留scene graph和topo map。
-  map_->resetGlobalBox();
-  Eigen::Vector3d global_box_min, global_box_max;
-  map_->getGlobalBox(global_box_min, global_box_max);
-  expl_manager_->frontier_finder_->frontierForceDeleteAll();
-  expl_manager_->hgrid_->init(global_box_min, global_box_max);
-  expl_manager_->ed_->frontiers_.clear();
-  expl_manager_->ed_->frontiers_with_info_.clear();
-  expl_manager_->ed_->dead_frontiers_.clear();
-  expl_manager_->ed_->frontier_boxes_.clear();
-  expl_manager_->ed_->global_tour_.clear();
-  expl_manager_->ed_->global_tour_map_.clear();
-  expl_manager_->ed_->path_next_goal_.clear();
-  expl_manager_->ed_->last_grid_ids_.clear();
-  expl_manager_->ed_->last_frontiers_with_info_.clear();
-  expl_manager_->ed_->last_indices_.clear();
-  expl_manager_->ed_->refined_ids_.clear();
-  expl_manager_->ed_->n_points_.clear();
-  expl_manager_->ed_->unrefined_points_.clear();
-  expl_manager_->ed_->refined_points_.clear();
-  expl_manager_->ed_->refined_views_.clear();
-  expl_manager_->ed_->refined_views1_.clear();
-  expl_manager_->ed_->refined_views2_.clear();
-  expl_manager_->ed_->refined_tour_.clear();
-
-  fd_->path_res_.clear();
-  fd_->path_inx_ = 0;
-  fd_->llm_plan_explore_counter_ = 0;
-  fd_->explore_count_ = 0;
-  has_made_area_decision_ = false;
-  expl_area_id_ = -1;
-  INFO_MSG_GREEN("=================================");
-  INFO_MSG_GREEN("[FSM] : Explore Area Reset Done .");
-  INFO_MSG_GREEN("=================================");
 }
 
 inline void MissionFSM::geoPt2Vec3d(const geometry_msgs::Point &p_in, Eigen::Vector3d &p_out) {

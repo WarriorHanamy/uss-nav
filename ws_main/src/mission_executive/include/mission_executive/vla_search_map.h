@@ -2,7 +2,7 @@
 #define VLA_SEARCH_MAP_H
 
 #include <Eigen/Eigen>
-#include <map_interface/map_interface.hpp>
+#include <global_belief/map_interface.hpp>
 #include <nlohmann/json.hpp>
 #include <opencv2/core.hpp>
 #include <ros/ros.h>
@@ -53,7 +53,7 @@ class VLASearchMap {
    * @param[in] nh   ROS node handle
    * @param[in] map  Map interface pointer
    */
-  VLASearchMap(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map);
+  VLASearchMap(ros::NodeHandle& nh, const global_belief::MapInterface::Ptr& map);
   /**
    * Update the 2D semantic map from the current occupancy grid.
    *
@@ -221,7 +221,7 @@ class VLASearchMap {
    */
   static std::string roomLabel(int id);
 
-  ego_planner::MapInterface::Ptr map_;
+  global_belief::MapInterface::Ptr map_;
   ros::Publisher image_pub_;
   std::string image_topic_{"/vla_search/small_map"};
   std::string frame_id_{"world"};

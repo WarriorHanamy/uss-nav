@@ -29,7 +29,7 @@ double pointDistance(const cv::Point& lhs, const cv::Point& rhs) {
 
 }  // namespace
 
-VLASearchMap::VLASearchMap(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map)
+VLASearchMap::VLASearchMap(ros::NodeHandle& nh, const global_belief::MapInterface::Ptr& map)
     : map_(map) {
   nh.param("vla_search/small_map_topic", image_topic_, image_topic_);
   nh.param("vla_search/small_map_frame", frame_id_, frame_id_);
@@ -550,8 +550,8 @@ void VLASearchMap::buildOccupancyImage(
       for (double z = sample_height_min_; z <= sample_height_max_ + 1e-6;
            z += sample_height_step_) {
         const int occupancy = map_->getOccupancy(Eigen::Vector3d(world_x, world_y, z));
-        occupied = occupied || occupancy == ego_planner::MapInterface::OCCUPIED;
-        free = free || occupancy == ego_planner::MapInterface::FREE;
+        occupied = occupied || occupancy == global_belief::MapInterface::OCCUPIED;
+        free = free || occupancy == global_belief::MapInterface::FREE;
       }
       if (occupied) {
         image.at<cv::Vec3b>(row, col) = cv::Vec3b(0, 0, 0);

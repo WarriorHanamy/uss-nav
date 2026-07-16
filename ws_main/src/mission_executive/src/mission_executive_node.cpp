@@ -1,5 +1,7 @@
 #include <ros/ros.h>
 #include <visualization_msgs/Marker.h>
+#include <global_belief/grid_map.h>
+#include <global_belief/map_interface.hpp>
 #include <plan_manage/ego_replan_fsm.h>
 #include <mission_executive/mission_fsm.h>
 
@@ -8,9 +10,10 @@
 using namespace mission_executive;
 
 /**
- * ROS node entry point for the exploration FSM.
+ * ROS node entry point for the mission executive FSM.
  *
- * Initializes the EGO replan FSM, map interface, and exploration FSM.
+ * Initializes GlobalBelief for high-level scene understanding,
+ * EGO replan FSM for trajectory execution, and mission FSM.
  *
  * @param[in] argc  Argument count
  * @param[in] argv  Argument vector
@@ -21,14 +24,17 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "mission_executive_node");
   ros::NodeHandle nh("~");
 
+  global_belief::MapManager::Ptr global_mm = std::make_shared<global_belief::MapManager>();
+  global_mm->initMapManager(nh);
+
+  global_belief::MapInterface::Ptr map_;
+  map_ = std::make_shared<global_belief::MapInterface>(nh, global_mm);
+
   ego_planner::EGOReplanFSM rebo_replan;
   rebo_replan.init(nh);
 
-  ego_planner::MapInterface::Ptr map_;
-  map_ = std::make_shared<ego_planner::MapInterface>(nh, rebo_replan.getMapPtr());
-
-  MissionFSM expl_fsm;
-  expl_fsm.init(nh, map_);
+  MissionFSM fsm;
+  fsm.init(nh, map_);
 
   ros::spin();
   return 0;

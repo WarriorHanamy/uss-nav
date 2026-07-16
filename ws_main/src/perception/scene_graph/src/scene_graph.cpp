@@ -168,8 +168,8 @@ bool SceneGraph::isInflateBlocked(const Eigen::Vector3d &p) {
     // a point is only "bad" when it is within the local map AND inflate-occupied AND underlying occupancy is not UNKNOWN
     // UNKNOWN occupancy -> area not yet observed, should not block topo node; out-of-bounds does not count
     if (!map_interface_->isInLocalMap(p)) return false;
-    if (map_interface_->getOccupancy(p) == ego_planner::MapInterface::UNKNOWN) return false;
-    return (map_interface_->getInflateOccupancy(p) == ego_planner::MapInterface::OCCUPIED);
+    if (map_interface_->getOccupancy(p) == global_belief::MapInterface::UNKNOWN) return false;
+    return (map_interface_->getInflateOccupancy(p) == global_belief::MapInterface::OCCUPIED);
 }
 
 bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out) {
@@ -191,8 +191,8 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
     for (double d = 0.0; d <= R; d += step) {
         Eigen::Vector3d probe = p + d * fwd;
         if (!map_interface_->isInLocalMap(probe)) continue;
-        if (map_interface_->getInflateOccupancy(probe) != ego_planner::MapInterface::FREE) continue;
-        if (map_interface_->getOccupancy(probe) == ego_planner::MapInterface::UNKNOWN) continue;
+        if (map_interface_->getInflateOccupancy(probe) != global_belief::MapInterface::FREE) continue;
+        if (map_interface_->getOccupancy(probe) == global_belief::MapInterface::UNKNOWN) continue;
         // record first inflate-free known point as fallback anchor for mode 2
         if (!anchor_fallback_found) {
             anchor_fallback = probe;
@@ -224,8 +224,8 @@ bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vec
                 Eigen::Vector3d c = anchor + Eigen::Vector3d(dx, dy, dz);
                 if ((c - anchor).norm() > refine) continue;
                 if (!map_interface_->isInLocalMap(c)) continue;
-                if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
-                if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
+                if (map_interface_->getInflateOccupancy(c) != global_belief::MapInterface::FREE) continue;
+                if (map_interface_->getOccupancy(c) == global_belief::MapInterface::UNKNOWN) continue;
                 double sc = (c - anchor).norm();
                 // record best fallback point (ignoring isVisible)
                 if (sc < best_fallback_dist) {
@@ -280,8 +280,8 @@ bool SceneGraph::findIntersectionMidpoint(const Eigen::Vector3d &probe, const Ei
             if ((c - probe).norm() > sphere_radius + 1e-3) continue;
             if ((c - toward).norm() > sphere_radius + 1e-3) continue;
             if (!map_interface_->isInLocalMap(c)) continue;
-            if (map_interface_->getInflateOccupancy(c) != ego_planner::MapInterface::FREE) continue;
-            if (map_interface_->getOccupancy(c) == ego_planner::MapInterface::UNKNOWN) continue;
+            if (map_interface_->getInflateOccupancy(c) != global_belief::MapInterface::FREE) continue;
+            if (map_interface_->getOccupancy(c) == global_belief::MapInterface::UNKNOWN) continue;
             // bidirectional isVisible check
             if (!map_interface_->isVisible(probe, c)) continue;
             if (!map_interface_->isVisible(c, toward)) continue;

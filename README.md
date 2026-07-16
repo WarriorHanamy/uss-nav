@@ -106,6 +106,13 @@ cp -r /path/to/J30V2_snapshot .data/scene_graph/
 | 6 | `TURN_TRACKING` | 跟踪 |
 | 7 | `TURN_WAYPOINT_NAV` | 给定目标点导航 |
 
+手动触发默认快照中的 `fake_object`（object id 2）导航：
+
+```bash
+rostopic pub -1 /bridge/Instruct quadrotor_msgs/Instruction \
+  "{instruction_type: 2, target_obj_id: 2, source_task_id: 2}"
+```
+
 详情见 `ws_main/src/utils/quadrotor_msgs/msg/Instruction.msg` 和 `instruction_description.md`。
 
 ## 核心模块

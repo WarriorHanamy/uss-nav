@@ -46,7 +46,7 @@ void SkeletonGenerator::getROSParams(){
   readParam("skeleton/visualize_black_polygon",                _visualize_black_polygon, false);
 }
 
-SkeletonGenerator::SkeletonGenerator(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr& map_interface){
+SkeletonGenerator::SkeletonGenerator(ros::NodeHandle& nh, global_belief::MapInterface::Ptr& map_interface){
   nh_ = nh;
   map_interface_    = map_interface;
   skeleton_astar_   = std::make_shared<skeleton_astar::SkeletonAstar>(nh);
@@ -1357,7 +1357,7 @@ void SkeletonGenerator::sampleUnitSphere(){
 //   double min_dis = 9999.0;
 //
 // #ifdef _MAP_TYPE_MAP_INTERFACE
-//   if (map_interface_->getInflateOccupancy(point) == ego_planner::MapInterface::OCCUPIED){
+//   if (map_interface_->getInflateOccupancy(point) == global_belief::MapInterface::OCCUPIED){
 //     return make_pair(min_dis, min_dis_node_index);
 //   }
 //   // check if have collision with polyhedron
@@ -1709,7 +1709,7 @@ SkeletonGenerator::rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction
   while (length <= max_ray_length + 1e-2 && length <= min_dis){
     Eigen::Vector3d pt_check_body_frame = transPointToBodyFrame(pt_check);
     inflate_res = map_interface_->getRawInflateOccupancy(pt_check);
-    if (inflate_res.first == ego_planner::MapInterface::OCCUPIED){
+    if (inflate_res.first == global_belief::MapInterface::OCCUPIED){
       return std::make_tuple(pt_check, -1, min_dis_node_index);
     }
     if (pt_check_body_frame.z() < _local_z_min || pt_check_body_frame.z() > _local_z_max){
@@ -1721,8 +1721,8 @@ SkeletonGenerator::rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction
 
   if (is_collision_with_Poly) return std::make_tuple(pt_collision, 0, min_dis_node_index);
 
-  if (inflate_res.first == ego_planner::MapInterface::OCCUPIED &&
-      inflate_res.second == ego_planner::MapInterface::FREE)
+  if (inflate_res.first == global_belief::MapInterface::OCCUPIED &&
+      inflate_res.second == global_belief::MapInterface::FREE)
     return std::make_tuple(orin_point + max_ray_length * direction / 1.5, -2, min_dis_node_index);
 
   return std::make_tuple(orin_point + max_ray_length * direction, -2, min_dis_node_index);
@@ -1750,8 +1750,8 @@ bool SkeletonGenerator::searchPathInRawMap(Eigen::Vector3d start_point, Eigen::V
   }
   bool res = false;
   try {
-    if (map_interface_->getRawInflateOccupancy(start_point).second == ego_planner::MapInterface::OCCUPIED ||
-        map_interface_->getRawInflateOccupancy(end_point).second == ego_planner::MapInterface::OCCUPIED)
+    if (map_interface_->getRawInflateOccupancy(start_point).second == global_belief::MapInterface::OCCUPIED ||
+        map_interface_->getRawInflateOccupancy(end_point).second == global_belief::MapInterface::OCCUPIED)
       return false;
     if (consider_uk) res = map_interface_->searchPathConsiderUKRegion(start_point, end_point, path, step_size);
     else             res = map_interface_->searchPath(start_point, end_point, path, step_size);

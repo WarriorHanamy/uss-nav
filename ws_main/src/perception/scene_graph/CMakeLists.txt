@@ -14,7 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
     nav_msgs
     sensor_msgs
     cv_bridge
-    map_interface
+    global_belief
     quadrotor_msgs
     tf
     message_generation 
@@ -67,7 +67,7 @@ catkin_package(
     nav_msgs
     sensor_msgs
     cv_bridge
-    map_interface
+    global_belief
     quadrotor_msgs
     tf
     message_runtime

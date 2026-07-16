@@ -8,7 +8,7 @@ source /workspace/devel/setup.bash
 # catkin devel space was built with flattened paths (e.g. /bringup_test).
 # Override ROS_PACKAGE_PATH to point to the actual source locations.
 export ROS_PACKAGE_PATH="/workspace/src/mission_executive:\
-/workspace/src/utils/lkh_tsp_solver:\
+/workspace/src/perception/global_belief:\
 /workspace/src/planners/ego_planner/plan_env:\
 /workspace/src/planners/ego_planner/path_searching:\
 /workspace/src/planners/ego_planner/traj_opt:\

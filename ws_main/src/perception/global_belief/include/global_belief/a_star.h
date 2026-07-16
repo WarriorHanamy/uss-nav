@@ -1,0 +1,167 @@
+#ifndef GLOBAL_BELIEF_A_STAR_H_
+#define GLOBAL_BELIEF_A_STAR_H_
+
+#include <iostream>
+#include <ros/ros.h>
+#include <ros/console.h>
+#include <Eigen/Eigen>
+#include <global_belief/grid_map.h>
+#include <queue>
+
+namespace gb_astar
+{
+
+	constexpr double inf = 1 >> 20;
+	struct GridNode;
+	typedef GridNode *GridNodePtr;
+
+	enum ASTAR_RET
+	{
+		SUCCESS,
+		INIT_ERR,
+		SEARCH_ERR,
+		NO_PATH,
+		TIME_LIM
+	};
+
+	struct GridNode
+	{
+		enum enum_state
+		{
+			OPENSET = 1,
+			CLOSEDSET = 2,
+			UNDEFINED = 3
+		};
+
+		int rounds{0}; // Distinguish every call
+		enum enum_state state
+		{
+			UNDEFINED
+		};
+		Eigen::Vector3i index;
+
+		double gScore{inf}, fScore{inf};
+		GridNodePtr cameFrom{NULL};
+	};
+
+	class NodeComparator
+	{
+	public:
+		bool operator()(GridNodePtr node1, GridNodePtr node2)
+		{
+			return node1->fScore > node2->fScore;
+		}
+	};
+
+	/**
+	 * Dynamic A* path search on the occupancy grid.
+	 *
+	 * Finds collision-free paths using standard A* with Manhattan heuristic
+	 * on a 3D grid. Supports start/end point adjustment for obstacle clearance
+	 * and an unknown-region-aware mode for exploration planning.
+	 */
+	class AStar
+	{
+	private:
+		global_belief::MapManager::Ptr map_;
+
+		inline void coord2gridIndexFast(const double x, const double y, const double z, int &id_x, int &id_y, int &id_z);
+
+		double getDiagHeu(GridNodePtr node1, GridNodePtr node2);
+		double getManhHeu(GridNodePtr node1, GridNodePtr node2);
+		double getEuclHeu(GridNodePtr node1, GridNodePtr node2);
+		inline double getHeu(GridNodePtr node1, GridNodePtr node2);
+
+		bool ConvertToIndexAndAdjustStartEndPoints(const Eigen::Vector3d start_pt, const Eigen::Vector3d end_pt,
+			                                         Eigen::Vector3i &start_idx, Eigen::Vector3i &end_idx);
+		bool ConvertToIndexAndAdjustStartEndPointsConsideredUKRegion(const Eigen::Vector3d start_pt, const Eigen::Vector3d end_pt,
+			                                                             Eigen::Vector3i &start_idx, Eigen::Vector3i &end_idx);
+
+		inline Eigen::Vector3d Index2Coord(const Eigen::Vector3i &index) const;
+		inline bool Coord2Index(const Eigen::Vector3d &pt, Eigen::Vector3i &idx) const;
+
+		inline bool checkOccupancy(const Eigen::Vector3d &pos) { return map_->cur_->getInflateOccupancy(pos) > 0; }
+		inline bool checkRawOccupancy(const Eigen::Vector3d &pos) { return map_->cur_->getRawInflateOccupancy(pos) != 0; }
+
+		std::vector<GridNodePtr> retrievePath(GridNodePtr current);
+
+		double step_size_, inv_step_size_; // grid step size [m], inverse step size [1/m]
+		Eigen::Vector3d center_;           // grid center position [m]
+		Eigen::Vector3i CENTER_IDX_, POOL_SIZE_;
+		const double tie_breaker_ = 1.0 + 1.0 / 10000;
+
+		std::vector<GridNodePtr> gridPath_;
+
+		GridNodePtr ***GridNodeMap_;
+		std::priority_queue<GridNodePtr, std::vector<GridNodePtr>, NodeComparator> openSet_;
+
+		int rounds_{0};
+
+	public:
+		typedef std::shared_ptr<AStar> Ptr;
+
+		AStar(){};
+		~AStar();
+
+		/**
+		 * Initialize the A* path planner.
+		 *
+		 * @param[in] map        Map manager instance
+		 * @param[in] pool_size  Grid node pool dimensions [voxel]
+		 */
+		void initAstar(global_belief::MapManager::Ptr map, const Eigen::Vector3i pool_size);
+
+		/**
+		 * Run A* search between start and end points.
+		 *
+		 * @param[in] step_size  Grid resolution / step size [m]
+		 * @param[in] start_pt   Start position [m]
+		 * @param[in] end_pt     End position [m]
+		 * @return Search result (SUCCESS / INIT_ERR / SEARCH_ERR / NO_PATH / TIME_LIM)
+		 */
+		ASTAR_RET AstarSearch(const double step_size, Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+		/**
+		 * Run A* search with unknown-region awareness (treats unknown as free).
+		 *
+		 * @param[in] step_size  Grid resolution / step size [m]
+		 * @param[in] start_pt   Start position [m]
+		 * @param[in] end_pt     End position [m]
+		 * @return Search result
+		 */
+		ASTAR_RET AstarSearchConsideredUKRegion(const double step_size, Eigen::Vector3d start_pt, Eigen::Vector3d end_pt);
+
+		/**
+		 * Retrieve the last found path.
+		 *
+		 * @return Vector of path waypoints [m]
+		 */
+		std::vector<Eigen::Vector3d> getPath();
+	};
+
+	inline double AStar::getHeu(GridNodePtr node1, GridNodePtr node2)
+	{
+		return tie_breaker_ * getManhHeu(node1, node2);
+	}
+
+	inline Eigen::Vector3d AStar::Index2Coord(const Eigen::Vector3i &index) const
+	{
+		return ((index - CENTER_IDX_).cast<double>() * step_size_) + center_;
+	};
+
+	inline bool AStar::Coord2Index(const Eigen::Vector3d &pt, Eigen::Vector3i &idx) const
+	{
+		idx = ((pt - center_) * inv_step_size_ + Eigen::Vector3d(0.5, 0.5, 0.5)).array().floor().cast<int>() + CENTER_IDX_.array();
+
+		if (idx(0) < 0 || idx(0) >= POOL_SIZE_(0) || idx(1) < 0 || idx(1) >= POOL_SIZE_(1) || idx(2) < 0 || idx(2) >= POOL_SIZE_(2))
+		{
+			ROS_ERROR("Ran out of pool, pt=%f, %f, %f, index=%d %d %d, center_=%f, %f, %f",
+					  pt(0), pt(1), pt(2), idx(0), idx(1), idx(2), center_(0), center_(1), center_(2));
+			return false;
+		}
+
+		return true;
+	};
+
+} // namespace gb_astar
+
+#endif

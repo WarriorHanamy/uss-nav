@@ -50,7 +50,7 @@ struct VLASearchPromptResult {
 class SceneGraph {
 public:
     typedef std::shared_ptr<SceneGraph> Ptr;
-    SceneGraph(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr& map_interface) {
+    SceneGraph(ros::NodeHandle& nh, global_belief::MapInterface::Ptr& map_interface) {
         nh_ = nh;
         map_interface_      = map_interface;
         scene_graph_pub_    = nh_.advertise<visualization_msgs::MarkerArray>("/scene_graph/vis", 2, true);
@@ -432,7 +432,7 @@ private:
     std::mutex             mutex_;
 
     // topo-block unreachable detection //
-    ego_planner::MapInterface::Ptr map_interface_;       // occupancy/inflate query interface
+    global_belief::MapInterface::Ptr map_interface_;       // occupancy/inflate query interface
     std::vector<PolyHedronPtr>     last_poly_path_;      // polyhedron sequence from last getPathToObjectWithId (for center-based marking)
     std::vector<PolyHedronPtr>     blocked_list_;        // currently blocked polyhedra (for TTL revalidation/clear)
     bool   topo_block_enable_               = true;

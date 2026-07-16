@@ -3,8 +3,7 @@
 
 #include <Eigen/Eigen>
 #include <Eigen/Geometry>
-#include <exploration/expl_data.h>
-#include <exploration/ftr_data_structure.h>
+
 #include <sys/types.h>
 #include <string>
 #include <vector>
@@ -98,12 +97,10 @@ struct FSMData
   bool object_id_nav_replan_topic_triggered_{false};
   int  object_id_nav_replan_stuck_count_{0};
   bool new_topo_need_predict_immediately_{false};
-  bool regular_explore_{false};
   bool find_terminate_target_mode_{false};
   u_int8_t llm_plan_explore_counter_{0};
 
   u_int8_t df_demo_phase_{0};
-  u_int8_t explore_count_{0};
   int      df_demo_target_id_{-100};
   bool     df_demo_mode_{false};
 };
@@ -127,18 +124,19 @@ struct FSMParam
   std::string             scene_graph_load_name_;
   double                  auto_init_delay_sec_{2.0};
   double                  scene_graph_init_forward_dist_{1.8};
-  double                  frontier_update_dt_{0.5};
   double                  track_finish_hold_time_{3.0};
   double                  track_finish_move_thresh_{0.2};
   double                  track_finish_yaw_thresh_{0.2};
   std::string             tracking_backend_{"ego"};
   std::string             tracking_target_odom_topic_{"/target_ekf_odom"};
+  double                  track_aim_dist_{1.5};
+  double                  track_replan_dist_{0.8};
+  double                  track_yaw_thr_{0.2};
+  double                  track_turn_yaw_dist_{1.5};
+  double                  track_fly_yaw_thr_{0.5};
+  double                  track_detect_error_{0.5};
+  double                  radius_close_{0.8};
   std::string             planner_cmd_mux_ego_mode_{"ego"};
-  std::string             planner_cmd_mux_elastic_mode_{"elastic"};
-  std::string             elastic_tracker_trigger_topic_{"/triger"};
-  std::string             elastic_tracker_finish_topic_{"/elastic_tracker/tracking_finish"};
-  std::string             elastic_tracker_stop_topic_{"/elastic_tracker/stop"};
-  std::string             elastic_tracker_replan_state_topic_{"/drone_0/replanState"};
 
   bool   stuck_force_advance_enable_{true};
   double stuck_force_advance_vel_thresh_{0.1};

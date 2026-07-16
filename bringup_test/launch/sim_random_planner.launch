@@ -21,7 +21,6 @@
     <arg name="max_sna" value="5.0"/>
     <arg name="use_multitopology_trajs" value="false"/>
     <arg name="flight_type" value="$(arg flight_type)"/>
-    <arg name="tracking_backend" value="ego"/>
     <arg name="tracking_target_odom_topic" value="/target_ekf_odom"/>
   </include>
 

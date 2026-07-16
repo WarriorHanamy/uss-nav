@@ -15,7 +15,6 @@
 #include <quadrotor_msgs/EgoPlannerResult.h>
 #include <quadrotor_msgs/MultiPoseGraph.h>
 #include <quadrotor_msgs/HgridMsg.h>
-#include <quadrotor_msgs/FrontierMsg.h>
 #include <quadrotor_msgs/PerceptionMsg.h>
 #include <quadrotor_msgs/EgoGoalSet.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
@@ -24,7 +23,6 @@
 #include <quadrotor_msgs/TrackCommand.h>
 #include <quadrotor_msgs/VLASearchBBox.h>
 #include <quadrotor_msgs/VLASearchTarget.h>
-#include <quadrotor_msgs/ReplanState.h>
 
 #include <algorithm>
 #include <iostream>
@@ -34,8 +32,7 @@
 #include <thread>
 #include <deque>
 #include <mutex>
-#include <map_interface/map_interface.hpp>
-#include <exploration/frontier_manager.h>
+#include <global_belief/map_interface.hpp>
 #include <mission_executive/mission_data.h>
 #include <mission_executive/vla_search_map.h>
 #include <scene_graph/object_factory.h>
@@ -55,7 +52,6 @@ using std::string;
 
 namespace mission_executive {
 class Tabv;
-// FrontierManager is in exploration package under ego_planner namespace
 struct FSMParam;
 struct FSMData;
 class EkfEstimator;
@@ -65,8 +61,7 @@ class PerceptionDataMsgFactory;
 class MissionFSM {
 private:
   /* planning utils */
-  ego_planner::MapInterface::Ptr                                 map_;
-  shared_ptr<ego_planner::FrontierManager>                       expl_manager_;
+  global_belief::MapInterface::Ptr                                 map_;
   shared_ptr<SceneGraph>                            scene_graph_;
   CountingSceneGraph::Ptr                           counting_scene_graph_;
   shared_ptr<TrajectoryVisualizer>                  traj_visualizer_;
@@ -82,37 +77,27 @@ private:
 
   /* ROS utils */
   ros::NodeHandle node_;
-  ros::Timer exec_timer_, frontier_timer_, vla_search_map_timer_;
+  ros::Timer exec_timer_, vla_search_map_timer_;
   ros::Subscriber trigger_sub_, odom_sub_, ego_exec_finish_sub_;
-  ros::Subscriber track_command_sub_, target_sub_, elastic_tracking_finish_sub_;
-  ros::Subscriber elastic_tracker_replan_state_sub_;
+  ros::Subscriber track_command_sub_, target_sub_;
   ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
   ros::Subscriber vla_search_target_sub_, vla_search_camera_sub_;
   ros::Subscriber vla_search_ego_state_trigger_sub_;
   ros::Subscriber object_id_nav_replan_sub_;    // 订阅 /object_id_nav_replan
   // Planner command mux (integrated)
   ros::Subscriber ego_position_cmd_sub_;
-  ros::Subscriber elastic_position_cmd_sub_;
   ros::Publisher position_cmd_pub_;
   std::string planner_cmd_mux_active_mode_{"ego"};
   double planner_cmd_mux_input_timeout_{0.5};
   bool has_ego_cmd_{false};
-  bool has_elastic_cmd_{false};
-  int blocked_elastic_traj_id_{-1};
-  ros::Time elastic_mode_start_time_;
   ros::Time ego_cmd_stamp_;
-  ros::Time elastic_cmd_stamp_;
   quadrotor_msgs::PositionCommand last_ego_cmd_;
-  quadrotor_msgs::PositionCommand last_elastic_cmd_;
 
   ros::Publisher ego_goal_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
   ros::Publisher fsm_state_pub_;
   ros::Publisher tracking_finish_pub_;
   ros::Publisher tracking_target_odom_pub_;
-  ros::Publisher elastic_tracker_trigger_pub_;
-  ros::Publisher elastic_tracker_stop_pub_;
-  ros::Publisher exploration_result_pub_;
   ros::Publisher vla_search_result_pub_;
   ros::Publisher vla_search_bbox_pub_;
   ros::Publisher vla_search_observation_pub_;
@@ -138,7 +123,6 @@ private:
   double panorama_extend_angle_{0.6981317007977318};
   bool wait_fresh_map_after_reset_{false};
   uint64_t map_reset_update_seq_{0};
-  int expl_area_id_{-1};
   double think_duration_limit_;
   double think_start_time_;
 
@@ -216,30 +200,14 @@ private:
   std::map<int, std::string> vla_search_room_descriptions_;
   bool vla_search_enable_room_description_{false};
 
+  bool object_id_nav_autostart_enable_{false};
+  bool object_id_nav_autostart_triggered_{false};
+  int object_id_nav_autostart_target_id_{2};
+  double object_id_nav_autostart_delay_sec_{1.0};
+  ros::Time object_id_nav_autostart_ready_time_;
+
  private:
   /* helper functions */
-  /**
-   * Dispatch to exploration planner and compute the aim pose, velocity, yaw and path.
-   *
-   * @param[out] aim_pose  Target position [m]
-   * @param[out] aim_vel   Target velocity [m/s]
-   * @param[out] aim_yaw   Target yaw [rad]
-   * @param[out] path_res  Planned global path points
-   * @return 0 on success, non-zero on failure
-   */
-  int callExplorationPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
-                             vector<Eigen::Vector3d>& path_res);
-  /**
-   * Dispatch to LLM-guided exploration planner.
-   *
-   * @param[out] aim_pose  Target position [m]
-   * @param[out] aim_vel   Target velocity [m/s]
-   * @param[out] aim_yaw   Target yaw [rad]
-   * @param[out] path_res  Planned global path points
-   * @return 0 on success, non-zero on failure
-   */
-  int callExplorationLLMPlanner(Eigen::Vector3d& aim_pose, Eigen::Vector3d& aim_vel, double& aim_yaw,
-                                vector<Eigen::Vector3d>& path_res);
   /**
    * Dispatch to tracking planner for target following.
    *
@@ -268,62 +236,11 @@ private:
    */
   void publishTrackingFinish();
   /**
-   * Check whether the elastic tracker backend is currently in use.
-   *
-   * @return True if elastic tracker backend is active
-   */
-  bool useElasticTrackerBackend() const;
-  /**
    * Switch planner command mux to EGO planner mode.
    *
    * @param[in] source  Source identifier for logging
    */
   void switchPlannerCmdMuxToEgo(const std::string& source);
-  /**
-   * Switch planner command mux to elastic tracker mode.
-   *
-   * @param[in] source  Source identifier for logging
-   */
-  void switchPlannerCmdMuxToElastic(const std::string& source);
-  /**
-   * Publish elastic tracker trigger command.
-   *
-   * @param[in] stamp    Timestamp [s]
-   * @param[in] frame_id Reference frame
-   */
-  void publishElasticTrackerTrigger(const ros::Time& stamp = ros::Time(),
-                                    const std::string& frame_id = "world");
-  /**
-   * Stop elastic tracker and switch to EGO planner.
-   *
-   * @param[in] source  Source identifier for logging
-   */
-  void stopElasticTracker(const std::string& source);
-  /**
-   * Publish tracking target as odometry message for the elastic tracker.
-   *
-   * @param[in] target_pos Target position [m]
-   * @param[in] stamp      Timestamp [s]
-   * @param[in] frame_id   Reference frame
-   */
-  void publishTrackingTargetOdom(const Eigen::Vector3d& target_pos,
-                                 const ros::Time& stamp = ros::Time(),
-                                 const std::string& frame_id = "world");
-  /**
-   * Apply exploration region constraint from an instruction message.
-   *
-   * @param[in] msg  Instruction message containing region polygon
-   */
-  void applyExplorationRegionFromInstruction(const quadrotor_msgs::InstructionConstPtr& msg);
-  /**
-   * Publish exploration result with status and message.
-   *
-   * @param[in] success Whether exploration completed successfully
-   * @param[in] reason  Reason string
-   * @param[in] message Detail message
-   */
-  void publishExplorationResult(bool success, const std::string& reason,
-                                const std::string& message = "");
   /**
    * Check whether the given FSM state belongs to VLA swarm states.
    *
@@ -436,6 +353,20 @@ private:
    */
   void triggerObjectIdNavReplan(const std::string& reason);
   /**
+   * Start object-id navigation through the common MissionFSM path.
+   *
+   * @param[in] target_obj_id  SceneGraph object ID [--]
+   * @param[in] source_task_id Instruction source task ID [--]
+   * @param[in] session_id     Instruction session ID [--]
+   * @param[in] reason         Transition/log reason
+   * @param[in] source_msg     Optional original instruction to preserve for replan
+   * @param[in] reset_replan_count Whether to reset object-id replan counter
+   */
+  void startObjectIdNav(int target_obj_id, uint8_t source_task_id,
+                        uint32_t session_id, const std::string& reason,
+                        const quadrotor_msgs::Instruction* source_msg = nullptr,
+                        bool reset_replan_count = true);
+  /**
    * Publish a command only if the mode matches the active mux mode.
    *
    * @param[in] cmd          Position command
@@ -449,12 +380,6 @@ private:
    * @param[in] source  Caller identifier for logging
    */
   void publishLastForMode(const std::string& source);
-  /**
-   * Check whether the elastic tracker command is usable (fresh + current session).
-   *
-   * @return True if elastic command can be forwarded
-   */
-  bool isElasticCmdUsable() const;
   /**
    * Check whether a timestamp is within the input timeout window.
    *
@@ -479,12 +404,6 @@ private:
    */
   void FSMCallback(const ros::TimerEvent& e);
   /**
-   * Periodic frontier update timer callback.
-   *
-   * @param[in] e  Timer event
-   */
-  void frontierCallback(const ros::TimerEvent& e);
-  /**
    * Periodic VLA swarm map update timer callback.
    *
    * @param[in] e  Timer event
@@ -508,18 +427,6 @@ private:
    * @param[in] msg  Track command message
    */
   void trackCommandCallback(const quadrotor_msgs::TrackCommand::ConstPtr& msg);
-  /**
-   * Callback for elastic tracking finish signal.
-   *
-   * @param[in] msg  Bool indicating tracking finished
-   */
-  void elasticTrackingFinishCallback(const std_msgs::Bool::ConstPtr& msg);
-  /**
-   * Callback for elastic tracker replan state updates.
-   *
-   * @param[in] msg  Replan state message
-   */
-  void elasticTrackerReplanStateCallback(const quadrotor_msgs::ReplanStateConstPtr& msg);
   /**
    * Callback for real target detection output.
    *
@@ -559,12 +466,6 @@ private:
    * @param[in] msg  Position command from EGO planner
    */
   void egoPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg);
-  /**
-   * Callback for elastic tracker position commands (mux input B).
-   *
-   * @param[in] msg  Position command from elastic tracker
-   */
-  void elasticPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg);
   /**
    * Handle goal instruction for exploration or object search.
    *
@@ -646,22 +547,6 @@ private:
   void stopMotion();
 
   /**
-   * Handle the LLM thinking process before exploration planning.
-   */
-  void handelThingkingProcess();
-  /**
-   * Plan exploration using LLM-guided scene graph.
-   */
-  void planLLMExplore();
-  /**
-   * Plan regular exploration via frontier-based method.
-   */
-  void planRegularExplore();
-  /**
-   * Approach the next frontier during regular exploration.
-   */
-  void approachRegularExplore();
-  /**
    * Plan the next target tracking path.
    */
   void planTrack();
@@ -726,14 +611,6 @@ private:
   double yawhandle_yaw_target_right ;
   bool   yawhandle_left_published, yawhandle_right_published, yawhandle_back_published;
   bool   yawhandle_left_ok, yawhandle_right_ok, yawhandle_back_ok;
-
-  /**
-   * Hard-reset the exploration area, optionally clearing occupancy and posegraph.
-   *
-   * @param[in] clear_occupancy Whether to clear occupancy grid
-   * @param[in] clear_posegraph Whether to clear posegraph
-   */
-  void hardResetExploreArea(bool clear_occupancy, bool clear_posegraph);
 
   /**
    * Display current mission state via ROS logging.
@@ -803,7 +680,7 @@ public:
    * @param[in] nh   ROS node handle
    * @param[in] map  Map interface pointer
    */
-  void init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map);
+  void init(ros::NodeHandle& nh, const global_belief::MapInterface::Ptr& map);
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 

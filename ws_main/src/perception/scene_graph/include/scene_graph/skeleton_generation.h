@@ -9,7 +9,7 @@
 #include <iostream>
 #include <tuple>
 #include <unordered_map>
-#include <map_interface/map_interface.hpp>
+#include <global_belief/map_interface.hpp>
 #include <std_msgs/Empty.h>
 
 #include "../include/scene_graph/skeleton_astar.h"
@@ -58,7 +58,7 @@ class SkeletonGenerator {
     SpectralCluster::Ptr spectral_cluster_; ///< Spectral clustering for area detection
     AreaHandler::Ptr area_handler_;         ///< Area (room) handler
 
-    SkeletonGenerator(ros::NodeHandle& nh, ego_planner::MapInterface::Ptr &map_interface);
+    SkeletonGenerator(ros::NodeHandle& nh, global_belief::MapInterface::Ptr &map_interface);
     ~SkeletonGenerator();
     /**
      * Check if the skeleton generator is initialized and ready.
@@ -159,7 +159,7 @@ class SkeletonGenerator {
      *
      * @return Map interface pointer
      */
-    ego_planner::MapInterface::Ptr getMapInterface(){ return map_interface_; }
+    global_belief::MapInterface::Ptr getMapInterface(){ return map_interface_; }
     /**
      * Insert a new polyhedron node at the given position and register it in the KD-tree.
      *
@@ -258,7 +258,7 @@ class SkeletonGenerator {
     ros::Subscriber map_inflate_sub_, cmd_sub_;
 
     //  ------- Utils -------
-    ego_planner::MapInterface::Ptr      map_interface_;
+    global_belief::MapInterface::Ptr      map_interface_;
     skeleton_astar::SkeletonAstar::Ptr  skeleton_astar_;
 
     //  ------- Parameters -------

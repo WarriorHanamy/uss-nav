@@ -22,12 +22,14 @@
     <arg name="max_sna" value="5.0"/>
     <arg name="use_multitopology_trajs" value="false"/>
     <arg name="flight_type" value="$(arg flight_type)"/>
-    <arg name="tracking_backend" value="ego"/>
     <arg name="tracking_target_odom_topic" value="/target_ekf_odom"/>
     <!-- Scene graph auto-load -->
     <arg name="auto_load_scene_graph" value="true"/>
     <arg name="scene_graph_data_path" value="/workspace/.data/scene_graph"/>
     <arg name="scene_graph_load_name" value="$(arg scene_graph_name)"/>
+    <arg name="object_id_nav_autostart_enable" value="true"/>
+    <arg name="object_id_nav_autostart_target_id" value="2"/>
+    <arg name="object_id_nav_autostart_delay_sec" value="1.0"/>
   </include>
 
 </launch>
