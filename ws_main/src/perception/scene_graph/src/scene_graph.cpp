@@ -2,6 +2,7 @@
 // Created by gwq on 8/14/25.
 //
 #include "../include/scene_graph/scene_graph.h"
+#include <decision_trace/decision_trace.h>
 #include "quadrotor_msgs/Instruction.h"
 #include "scene_graph/PromptMsg.h"
 #include <json_fwd.hpp>
@@ -87,19 +88,38 @@ void SceneGraph::updateObjectToSceneGraph() {
 // remember to mount current poly before calling this function!
 bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3d> &path, Eigen::Vector3d & aim_pos, double &aim_yaw) {
 
+    decision_trace::log("scene_graph", "path_to_object_start", {
+        decision_trace::num("target_obj_id", id),
+        decision_trace::boolean("skeleton_ready", skeleton_gen_->ready()),
+        decision_trace::boolean("has_cur_poly", cur_poly_ != nullptr)});
+
     if (!skeleton_gen_->ready()) {
+        decision_trace::log("scene_graph", "path_to_object_result", {
+            decision_trace::boolean("success", false),
+            decision_trace::num("target_obj_id", id),
+            decision_trace::str("reason", "skeleton_not_ready")});
         INFO_MSG_RED("[SceneGraph] | [Query Object Info] Scene Graph has not been initialized yet!");
         return false;
     }
 
     auto obj_map = object_factory_->object_map_;
     if (obj_map.find(id) == obj_map.end()) {
+        decision_trace::log("scene_graph", "path_to_object_result", {
+            decision_trace::boolean("success", false),
+            decision_trace::num("target_obj_id", id),
+            decision_trace::str("reason", "object_id_not_found")});
         INFO_MSG_RED("[SceneGraph] | [Query Object Info] Invalid object id (%d) for path searching.");
         return false;
     }
     ObjectNode::Ptr obj = obj_map.find(id)->second;
 
     if (cur_poly_ == nullptr || obj->edge.polyhedron_father == nullptr) {
+        decision_trace::log("scene_graph", "path_to_object_result", {
+            decision_trace::boolean("success", false),
+            decision_trace::num("target_obj_id", id),
+            decision_trace::boolean("has_cur_poly", cur_poly_ != nullptr),
+            decision_trace::boolean("has_object_poly", obj->edge.polyhedron_father != nullptr),
+            decision_trace::str("reason", "missing_poly_father")});
         if (cur_poly_ == nullptr)
             INFO_MSG_RED("[SceneGraph] | [Query Object Info] UAV poly father is null, skip searching !");
         if (obj->edge.polyhedron_father == nullptr)
@@ -117,6 +137,12 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
         if (topo_block_enable_) revalidateBlocked();                 // strategy A: clear expired marks
         double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
         skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
+        decision_trace::log("scene_graph", "topo_path_iteration", {
+            decision_trace::num("target_obj_id", id),
+            decision_trace::num("iter", iter),
+            decision_trace::num("distance", dis),
+            decision_trace::num("path_size", static_cast<int>(path.size())),
+            decision_trace::num("poly_path_size", static_cast<int>(last_poly_path_.size()))});
         if (path.empty() || dis >= 99998.0) break;                   // degenerate direct path (search failure) unacceptable
 
         // first pass (iter=0) accepts scene-graph topology path directly, no inflate check
@@ -129,6 +155,10 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
             if (poly == nullptr)              continue;
             if (poly == cur_poly_ || poly == father) continue;       // allow start/goal
             if (isInflateBlocked(poly->center_)) {
+                decision_trace::log("scene_graph", "topo_path_poly_blocked", {
+                    decision_trace::num("target_obj_id", id),
+                    decision_trace::num("iter", iter),
+                    decision_trace::vec3("poly_center", poly->center_)});
                 markPolyhedronBlocked(poly->center_, true);          // occupancy signal during planning is reliable, mark immediately
                 any_blocked = true;
             }
@@ -139,13 +169,22 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
 
     // strategy B: when A* cannot find a clean path, clear marks and retry once (prevent permanent deadlock from false positives)
     if (!ok && topo_block_revalidate_on_fail_) {
+        decision_trace::log("scene_graph", "topo_path_retry", {
+            decision_trace::num("target_obj_id", id),
+            decision_trace::str("reason", "all_routes_blocked")});
         INFO_MSG_YELLOW("[SceneGraph] | all topo routes blocked, clear marks and retry once.");
         clearAllBlocked();
         double dis = skeleton_gen_->astarSearch(cur_poly_, father, path);
         skeleton_gen_->getLastAstarPolyPath(last_poly_path_);
         ok = (!path.empty() && dis < 99998.0);   // still unacceptable if degenerate direct path
     }
-    if (!ok) return false;
+    if (!ok) {
+        decision_trace::log("scene_graph", "path_to_object_result", {
+            decision_trace::boolean("success", false),
+            decision_trace::num("target_obj_id", id),
+            decision_trace::str("reason", "astar_failed")});
+        return false;
+    }
 
     aim_pos = father->center_;
 
@@ -157,6 +196,13 @@ bool SceneGraph::getPathToObjectWithId(const int &id, std::vector<Eigen::Vector3
     if (aim_direction_ < -M_PI)
         aim_direction_ += 2 * M_PI;
     aim_yaw = aim_direction_;
+    decision_trace::log("scene_graph", "path_to_object_result", {
+        decision_trace::boolean("success", true),
+        decision_trace::num("target_obj_id", id),
+        decision_trace::num("path_size", static_cast<int>(path.size())),
+        decision_trace::num("poly_path_size", static_cast<int>(last_poly_path_.size())),
+        decision_trace::vec3("aim_pos", aim_pos),
+        decision_trace::num("aim_yaw", aim_yaw)});
     return true;
 }
 
@@ -167,9 +213,20 @@ bool SceneGraph::isInflateBlocked(const Eigen::Vector3d &p) {
     if (map_interface_ == nullptr) return false;
     // a point is only "bad" when it is within the local map AND inflate-occupied AND underlying occupancy is not UNKNOWN
     // UNKNOWN occupancy -> area not yet observed, should not block topo node; out-of-bounds does not count
-    if (!map_interface_->isInLocalMap(p)) return false;
-    if (map_interface_->getOccupancy(p) == global_belief::MapInterface::UNKNOWN) return false;
-    return (map_interface_->getInflateOccupancy(p) == global_belief::MapInterface::OCCUPIED);
+    const bool in_local = map_interface_->isInLocalMap(p);
+    if (!in_local) return false;
+    const int occ = map_interface_->getOccupancy(p);
+    if (occ == global_belief::MapInterface::UNKNOWN) return false;
+    const int inflate_occ = map_interface_->getInflateOccupancy(p);
+    const bool blocked = inflate_occ == global_belief::MapInterface::OCCUPIED;
+    if (blocked) {
+        decision_trace::log("scene_graph", "inflate_block_check", {
+            decision_trace::boolean("blocked", true),
+            decision_trace::vec3("point", p),
+            decision_trace::num("occupancy", occ),
+            decision_trace::num("inflate_occupancy", inflate_occ)});
+    }
+    return blocked;
 }
 
 bool SceneGraph::projectToInflateFree(const Eigen::Vector3d &p, const Eigen::Vector3d &toward, Eigen::Vector3d &p_out) {

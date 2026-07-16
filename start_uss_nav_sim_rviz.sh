@@ -10,6 +10,8 @@ FALLBACK_MAP_PCD="${SCRIPT_DIR}/2026-06-28-all-120.pcd"
 DEFAULT_SCENE_GRAPH="${SCRIPT_DIR}/.data/scene_graph/J30V2_snapshot"
 FALLBACK_SCENE_GRAPH="${SCRIPT_DIR}/scene_graph_saved/J30V2_whole-20260626-9"
 RVIZ_DEVEL_SETUP="${RVIZ_WS_DIR}/.artifacts/devel/setup.bash"
+export TRACE_ENABLE="${TRACE_ENABLE:-1}"
+export TRACE_ID="${TRACE_ID:-scenegraph-$(date +%Y%m%d-%H%M%S)}"
 
 # ── check prerequisites ────────────────────────────────────────────
 if [[ -z "${DISPLAY:-}" ]]; then
@@ -59,6 +61,9 @@ cleanup() {
     echo ""
     echo "Stopping uss-nav devel container..."
     docker compose --project-directory "${SCRIPT_DIR}" stop devel 2>/dev/null || true
+    if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
+        docker compose --project-directory "${SCRIPT_DIR}" stop fluent-bit 2>/dev/null || true
+    fi
     echo "Done."
 }
 trap cleanup EXIT
@@ -66,6 +71,11 @@ trap cleanup EXIT
 # ── start simulation container ──────────────────────────────────────
 echo "Starting uss-nav simulation (devel)..."
 docker compose --project-directory "${SCRIPT_DIR}" up --build --force-recreate -d devel
+if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
+    if ! docker compose --project-directory "${SCRIPT_DIR}" up --force-recreate -d fluent-bit; then
+        echo "Warning: Fluent Bit sidecar did not start; decision.jsonl and run.bag will still be written." >&2
+    fi
+fi
 
 # ── wait for ROS master ─────────────────────────────────────────────
 echo "Waiting for roscore on localhost:11311..."
@@ -103,6 +113,9 @@ echo ""
 echo "=== USS-NAV Simulation + RViz ==="
 echo "  devel:  localhost:11311"
 echo "  rviz:   ${RVIZ_WS_DIR}/bringup/config/ego_planner/uss_nav_sim.rviz"
+if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
+    echo "  trace:  ${SCRIPT_DIR}/.artifacts/traces/${TRACE_ID}"
+fi
 echo "  Ctrl+C to stop all"
 echo ""
 

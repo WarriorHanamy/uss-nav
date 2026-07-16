@@ -15,6 +15,11 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:99}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - TRACE_ENABLE=${TRACE_ENABLE:-0}
+      - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
+      - LAUNCH_MODE=${LAUNCH_MODE:-scenegraph}
+      - MAP_PCD=${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}
     volumes:
       - type: bind
         source: ./ws_main/src
@@ -81,6 +86,9 @@ services:
       - OBS_NUM=${OBS_NUM:-30}
       - X_SIZE=${X_SIZE:-50}
       - Y_SIZE=${Y_SIZE:-30}
+      - TRACE_ENABLE=${TRACE_ENABLE:-0}
+      - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
     volumes:
       - type: bind
         source: ./ws_main/src
@@ -114,6 +122,9 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:99}
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - TRACE_ENABLE=${TRACE_ENABLE:-0}
+      - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
     volumes:
       - type: bind
         source: ./ws_main/src
@@ -141,3 +152,16 @@ services:
         source: ./.pretrained
         target: /workspace/.pretrained
     entrypoint: ["/entrypoint-release.sh"]
+
+  fluent-bit:
+    image: fluent/fluent-bit:3.1
+    container_name: uss-nav-fluent-bit-${GIT_SHA:-local}
+    volumes:
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
+      - type: bind
+        source: ./docker/fluent-bit.conf
+        target: /fluent-bit/etc/fluent-bit.conf
+        read_only: true
+    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]

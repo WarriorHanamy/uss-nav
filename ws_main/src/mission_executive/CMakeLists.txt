@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   scene_graph
   global_belief
+  decision_trace
   quadrotor_msgs
   traj_utils
   cv_bridge
@@ -26,7 +27,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
  INCLUDE_DIRS include
- CATKIN_DEPENDS global_belief traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph
+ CATKIN_DEPENDS global_belief decision_trace traj_utils ego_planner mavros sensor_msgs cv_bridge scene_graph
  DEPENDS OpenCV
 )
 
