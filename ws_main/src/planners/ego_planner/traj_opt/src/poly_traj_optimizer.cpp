@@ -253,6 +253,9 @@ namespace ego_planner
         else
         {
           PRINTF_COND("iter=%d/%d, time(ms)=%f, action=%s->FAILED_RET, error\n", iter_num_, total_iter_num_, time_ms, state.show().c_str());
+          ROS_WARN("[EGOOptimizer] ego_optimizer_solver_error lbfgs_result=%d lbfgs_error=%s piece_num=%d variable_num=%d total_iter_num=%d restart_nums=%d rebound_times=%d",
+                   result, lbfgs::lbfgs_strerror(result), piece_num_, variable_num_,
+                   total_iter_num_, restart_nums, rebound_times);
           ROS_WARN_COND(VERBOSE_OUTPUT, "Solver error. Return = %d, %s. Skip this planning.", result, lbfgs::lbfgs_strerror(result));
           state.act = OptFsm::FAILED_RET;
         }
@@ -260,6 +263,13 @@ namespace ego_planner
       else
       {
         state.act = OptFsm::FAILED_RET;
+        ROS_WARN_STREAM("[EGOOptimizer] ego_optimizer_solver_diverged piece_num=" << piece_num_
+                        << " variable_num=" << variable_num_
+                        << " total_iter_num=" << total_iter_num_
+                        << " restart_nums=" << restart_nums
+                        << " rebound_times=" << rebound_times
+                        << " force_stop_type=" << static_cast<int>(force_stop_type_)
+                        << " start_jerk=" << start_jerk_.transpose());
         ROS_WARN_COND(VERBOSE_OUTPUT, "Solver diverged. Skip this planning.");
       }
 
@@ -268,7 +278,11 @@ namespace ego_planner
 
     } while (state.act != OptFsm::SUCCESS_RET && state.act != OptFsm::FAILED_RET);
 
-    return state.act == OptFsm::SUCCESS_RET;
+    const bool success = state.act == OptFsm::SUCCESS_RET;
+    ROS_INFO("[EGOOptimizer] ego_optimizer_result success=%d final_action=%s piece_num=%d variable_num=%d total_iter_num=%d restart_nums=%d rebound_times=%d force_stop_type=%d",
+             static_cast<int>(success), state.show().c_str(), piece_num_, variable_num_,
+             total_iter_num_, restart_nums, rebound_times, static_cast<int>(force_stop_type_));
+    return success;
   }
 
   bool PolyTrajOptimizer::optimizeTrajectoryShapeOnly(
@@ -528,6 +542,13 @@ namespace ego_planner
         double piece_dist = (cps_.points.col(cps_id) - cps_.points.col(cps_id - K)).norm();
         if (piece_len > RATIO_LIM * piece_dist)
         {
+          ROS_ERROR_STREAM("[EGOOptimizer] ego_optimizer_abnormal_shape cps_id=" << cps_id
+                           << " cps_num_pre_piece=" << K
+                           << " piece_dist=" << piece_dist
+                           << " piece_len=" << piece_len
+                           << " ratio=" << (piece_dist > 1e-6 ? piece_len / piece_dist : -1.0)
+                           << " piece_start=" << cps_.points.col(cps_id - K).transpose()
+                           << " piece_end=" << cps_.points.col(cps_id).transpose());
           ROS_ERROR("Abnormal trajectory shape. piece_dist=%f, piece_len=%f", piece_dist, piece_len);
           return false;
         }

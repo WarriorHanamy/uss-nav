@@ -2,7 +2,6 @@
 #define GLOBAL_BELIEF_MAP_INTERFACE_H
 
 #include <Eigen/Eigen>
-#include <decision_trace/decision_trace.h>
 #include <iostream>
 #include <ros/console.h>
 #include <ros/ros.h>
@@ -259,10 +258,8 @@ inline void MapInterface::resetGlobalBox(const Eigen::Vector3d &box_min, const E
 
 inline void MapInterface::resetOccupancyToUnknown()
 {
-  decision_trace::log("global_belief", "occupancy_reset", {
-      decision_trace::str("scope", "local_map_output"),
-      decision_trace::num("resolution", resolution_)});
   map_->resetAllMapsToUnknown();
+  ROS_INFO("[GlobalBelief] occupancy_reset scope=local_map_output resolution=%.3f", resolution_);
 }
 
 inline uint64_t MapInterface::getOccupancyUpdateSeq() const
@@ -315,10 +312,9 @@ inline void MapInterface::resetGlobalBox()
     map_max_[2] = 2.0;
   }
   INFO_MSG_GREEN("[GlobalBelief] resetGlobalBox map_min_: " << map_min_.transpose() << " map_max_: " << map_max_.transpose());
-  decision_trace::log("global_belief", "global_box_reset", {
-      decision_trace::vec3("box_min", map_min_),
-      decision_trace::vec3("box_max", map_max_),
-      decision_trace::num("drone_id", drone_id_)});
+  ROS_INFO_STREAM("[GlobalBelief] global_box_reset drone_id=" << drone_id_
+                  << " box_min=" << map_min_.transpose()
+                  << " box_max=" << map_max_.transpose());
 }
 
 inline void MapInterface::getGlobalBox(Eigen::Vector3d &box_min, Eigen::Vector3d &box_max) const{
@@ -481,37 +477,25 @@ inline bool MapInterface::searchPath(const Eigen::Vector3d& start_pos, const Eig
   path.clear();
   if ((start_pos - end_pos).norm() < 4.0 && isVisible(start_pos, end_pos)){
     path.push_back(start_pos); path.push_back(end_pos);
-    decision_trace::log("global_belief", "search_path_result", {
-        decision_trace::boolean("success", true),
-        decision_trace::str("mode", "direct_visible"),
-        decision_trace::vec3("start", start_pos),
-        decision_trace::vec3("end", end_pos),
-        decision_trace::num("path_size", static_cast<int>(path.size())),
-        decision_trace::num("step_size", step_size)});
+    ROS_INFO_STREAM("[GlobalBelief] search_path_result success=1 mode=direct_visible start="
+                    << start_pos.transpose() << " end=" << end_pos.transpose()
+                    << " path_size=" << path.size() << " step_size=" << step_size);
     return true;
   }
 
   gb_astar::ASTAR_RET res = a_star_->AstarSearch(step_size, start_pos, end_pos);
   if (res == gb_astar::ASTAR_RET::SUCCESS){
     path = a_star_->getPath();
-    decision_trace::log("global_belief", "search_path_result", {
-        decision_trace::boolean("success", true),
-        decision_trace::str("mode", "astar"),
-        decision_trace::vec3("start", start_pos),
-        decision_trace::vec3("end", end_pos),
-        decision_trace::num("path_size", static_cast<int>(path.size())),
-        decision_trace::num("step_size", step_size)});
+    ROS_INFO_STREAM("[GlobalBelief] search_path_result success=1 mode=astar start="
+                    << start_pos.transpose() << " end=" << end_pos.transpose()
+                    << " path_size=" << path.size() << " step_size=" << step_size);
     return true;
   }
 
   path = {start_pos, end_pos};
-  decision_trace::log("global_belief", "search_path_result", {
-      decision_trace::boolean("success", false),
-      decision_trace::str("mode", "astar"),
-      decision_trace::vec3("start", start_pos),
-      decision_trace::vec3("end", end_pos),
-      decision_trace::num("path_size", static_cast<int>(path.size())),
-      decision_trace::num("step_size", step_size)});
+  ROS_WARN_STREAM("[GlobalBelief] search_path_result success=0 mode=astar start="
+                  << start_pos.transpose() << " end=" << end_pos.transpose()
+                  << " path_size=" << path.size() << " step_size=" << step_size);
   return false;
 }
 
@@ -520,37 +504,25 @@ inline bool MapInterface::searchPathConsiderUKRegion(const Eigen::Vector3d& star
   path.clear();
   if ((start_pos - end_pos).norm() < 4.0 && isVisible(start_pos, end_pos)){
     path.push_back(start_pos); path.push_back(end_pos);
-    decision_trace::log("global_belief", "search_path_unknown_region_result", {
-        decision_trace::boolean("success", true),
-        decision_trace::str("mode", "direct_visible"),
-        decision_trace::vec3("start", start_pos),
-        decision_trace::vec3("end", end_pos),
-        decision_trace::num("path_size", static_cast<int>(path.size())),
-        decision_trace::num("step_size", step_size)});
+    ROS_INFO_STREAM("[GlobalBelief] search_path_unknown_region_result success=1 mode=direct_visible start="
+                    << start_pos.transpose() << " end=" << end_pos.transpose()
+                    << " path_size=" << path.size() << " step_size=" << step_size);
     return true;
   }
 
   gb_astar::ASTAR_RET res = a_star_->AstarSearchConsideredUKRegion(step_size, start_pos, end_pos);
   if (res == gb_astar::ASTAR_RET::SUCCESS){
     path = a_star_->getPath();
-    decision_trace::log("global_belief", "search_path_unknown_region_result", {
-        decision_trace::boolean("success", true),
-        decision_trace::str("mode", "astar"),
-        decision_trace::vec3("start", start_pos),
-        decision_trace::vec3("end", end_pos),
-        decision_trace::num("path_size", static_cast<int>(path.size())),
-        decision_trace::num("step_size", step_size)});
+    ROS_INFO_STREAM("[GlobalBelief] search_path_unknown_region_result success=1 mode=astar start="
+                    << start_pos.transpose() << " end=" << end_pos.transpose()
+                    << " path_size=" << path.size() << " step_size=" << step_size);
     return true;
   }
 
   path = {start_pos, end_pos};
-  decision_trace::log("global_belief", "search_path_unknown_region_result", {
-      decision_trace::boolean("success", false),
-      decision_trace::str("mode", "astar"),
-      decision_trace::vec3("start", start_pos),
-      decision_trace::vec3("end", end_pos),
-      decision_trace::num("path_size", static_cast<int>(path.size())),
-      decision_trace::num("step_size", step_size)});
+  ROS_WARN_STREAM("[GlobalBelief] search_path_unknown_region_result success=0 mode=astar start="
+                  << start_pos.transpose() << " end=" << end_pos.transpose()
+                  << " path_size=" << path.size() << " step_size=" << step_size);
   return false;
 }
 

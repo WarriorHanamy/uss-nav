@@ -25,7 +25,6 @@
   <build_depend>nav_msgs</build_depend>
   <build_depend>cv_bridge</build_depend>
   <build_depend>global_belief</build_depend>
-  <build_depend>decision_trace</build_depend>
   <build_depend>quadrotor_msgs</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>message_generation</build_depend>
@@ -40,7 +39,6 @@
   <build_export_depend>nav_msgs</build_export_depend>
   <build_export_depend>cv_bridge</build_export_depend>
   <build_export_depend>global_belief</build_export_depend>
-  <build_export_depend>decision_trace</build_export_depend>
   <build_export_depend>quadrotor_msgs</build_export_depend>
   <build_export_depend>tf</build_export_depend>
   <build_export_depend>message_runtime</build_export_depend>
@@ -54,7 +52,6 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>global_belief</exec_depend>
-  <exec_depend>decision_trace</exec_depend>
   <exec_depend>quadrotor_msgs</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>message_runtime</exec_depend>

@@ -8,6 +8,26 @@ using namespace std;
 
 namespace ego_planner
 {
+  namespace
+  {
+    const char *planRetName(const PLAN_RET ret)
+    {
+      switch (ret)
+      {
+      case PLAN_RET::SUCCESS:
+        return "SUCCESS";
+      case PLAN_RET::LOCAL_TGT_FAIL:
+        return "LOCAL_TGT_FAIL";
+      case PLAN_RET::INIT_FAIL:
+        return "INIT_FAIL";
+      case PLAN_RET::DEFAULT_FAIL:
+        return "DEFAULT_FAIL";
+      default:
+        return "UNKNOWN";
+      }
+    }
+  }
+
   void EGOReplanFSM::init(ros::NodeHandle &nh)
   {
     exec_state_             = FSM_EXEC_STATE::INIT;
@@ -430,6 +450,15 @@ namespace ego_planner
     static string state_str[10] = {"INIT", "WAIT_TARGET", "HANDLE_YAW", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP", "SEQUENTIAL_START", "CRASH_RECOVER", "WAIT_YAW"};
     int pre_s = int(exec_state_);
     exec_state_ = new_state;
+    ROS_INFO_STREAM("[EGOPlanner] ego_fsm_state_transition drone_id=" << planner_manager_->pp_.drone_id
+                    << " from=" << state_str[pre_s]
+                    << " to=" << state_str[int(new_state)]
+                    << " reason=" << pos_call
+                    << " have_target=" << have_target_
+                    << " have_trigger=" << have_trigger_
+                    << " have_odom=" << have_odom_
+                    << " odom_pos=" << odom_pos_.transpose()
+                    << " final_goal=" << final_goal_.transpose());
     cout << "[" + pos_call + "]"
          << "Drone:" << planner_manager_->pp_.drone_id << ", from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
   }
@@ -748,6 +777,15 @@ namespace ego_planner
     ros::Time t_s = ros::Time::now();
 
     planner_manager_->computePlanningParams(planner_manager_->pp_.max_vel_);
+    ROS_INFO_STREAM("[EGOPlanner] ego_replan_start drone_id=" << planner_manager_->pp_.drone_id
+                    << " state=callReboundReplan"
+                    << " start_pt=" << start_pt_.transpose()
+                    << " start_vel=" << start_vel_.transpose()
+                    << " final_goal=" << final_goal_.transpose()
+                    << " use_last_optimal=" << flag_use_last_optimal
+                    << " random_init=" << flag_random_init
+                    << " pathes_size=" << (pathes ? static_cast<int>(pathes->size()) : -1)
+                    << " touch_goal=" << touch_goal_);
     // ROS_WARN("Map Lock try");
     planner_manager_->map_->cur_->LockCopyToOutputAllMap(true); // to avoid map change during planning
     // ROS_WARN("Map Lock done");
@@ -760,7 +798,17 @@ namespace ego_planner
     planner_manager_->map_->cur_->LockCopyToOutputAllMap(false); // allow map change
 
     ROS_WARN("Map Use=%d", planner_manager_->map_->getMapUse());
-
+    ROS_INFO_STREAM("[EGOPlanner] ego_replan_result drone_id=" << planner_manager_->pp_.drone_id
+                    << " ret=" << planRetName(plan_success)
+                    << " ret_code=" << static_cast<int>(plan_success)
+                    << " elapsed_sec=" << (ros::Time::now() - t_s).toSec()
+                    << " map_use=" << planner_manager_->map_->getMapUse()
+                    << " start_pt=" << start_pt_.transpose()
+                    << " final_goal=" << final_goal_.transpose()
+                    << " use_last_optimal=" << flag_use_last_optimal
+                    << " random_init=" << flag_random_init
+                    << " touch_goal=" << touch_goal_);
+    
     if (plan_success == PLAN_RET::SUCCESS)
     {
       cur_traj_to_cur_target_ = true;
@@ -885,6 +933,13 @@ namespace ego_planner
                                       const bool look_forward, const uint8_t yaw_mode,
                                       const uint8_t yaw_path_mode)
   {
+    ROS_INFO_STREAM("[EGOPlanner] ego_plan_next_waypoint drone_id=" << planner_manager_->pp_.drone_id
+                    << " odom_pos=" << odom_pos_.transpose()
+                    << " next_wp=" << next_wp.transpose()
+                    << " next_yaw=" << next_yaw
+                    << " look_forward=" << look_forward
+                    << " yaw_mode=" << static_cast<unsigned int>(yaw_mode)
+                    << " yaw_path_mode=" << static_cast<unsigned int>(yaw_path_mode));
     final_goal_ = next_wp;
     glb_start_pt_ = odom_pos_;
     have_target_ = true;
@@ -1012,6 +1067,12 @@ namespace ego_planner
           final_goal_ = pt;
           ROS_WARN("Current in-collision waypoint (%.3f, %.3f %.3f) has been modified to (%.3f, %.3f %.3f)",
                    orig_goal(0), orig_goal(1), orig_goal(2), final_goal_(0), final_goal_(1), final_goal_(2));
+          ROS_WARN_STREAM("[EGOPlanner] ego_goal_modified_for_collision mode=full_clearance original_goal="
+                          << orig_goal.transpose()
+                          << " modified_goal=" << final_goal_.transpose()
+                          << " global_start=" << glb_start_pt_.transpose()
+                          << " shift_distance=" << (final_goal_ - orig_goal).norm()
+                          << " resolution=" << map->cur_->getResolution());
           in_obs_goal_clear = true;
           flag_goal_modified = true;
           break;
@@ -1030,6 +1091,12 @@ namespace ego_planner
             final_goal_ = pt;
             ROS_WARN("[Weak check]Current in-collision waypoint (%.3f, %.3f %.3f) has been modified to (%.3f, %.3f %.3f)",
                      orig_goal(0), orig_goal(1), orig_goal(2), final_goal_(0), final_goal_(1), final_goal_(2));
+            ROS_WARN_STREAM("[EGOPlanner] ego_goal_modified_for_collision mode=weak_check original_goal="
+                            << orig_goal.transpose()
+                            << " modified_goal=" << final_goal_.transpose()
+                            << " global_start=" << glb_start_pt_.transpose()
+                            << " shift_distance=" << (final_goal_ - orig_goal).norm()
+                            << " resolution=" << map->cur_->getResolution());
             in_obs_goal_clear = true;
             flag_goal_modified = true;
             break;
@@ -1042,7 +1109,11 @@ namespace ego_planner
           // can't find any goal with enough clearance, just ignore
         }
         else
+        {
+          ROS_ERROR_STREAM("[EGOPlanner] ego_goal_collision_repair_failed goal=" << final_goal_.transpose()
+                           << " global_start=" << glb_start_pt_.transpose());
           ROS_ERROR_THROTTLE(1.0, "Can't find any collision-free point on global path.");
+        }
       }
     }
 
@@ -1180,6 +1251,12 @@ namespace ego_planner
       return;
 
     std::cout << "[Ego]: <<<<<<<<<<<<<<<<<< New Goal <<<<<<<<<<<<<<<<<< " << std::endl;
+    ROS_INFO("[EGOPlanner] ego_goal_received drone_id=%d source_task_id=%d goal=%.3f %.3f %.3f yaw=%.3f look_forward=%d yaw_mode=%u yaw_path_mode=%u state=aimCallback",
+             msg->drone_id, msg->source_task_id,
+             msg->goal[0], msg->goal[1], msg->goal[2],
+             msg->yaw, static_cast<int>(msg->look_forward),
+             static_cast<unsigned int>(msg->yaw_mode),
+             static_cast<unsigned int>(msg->yaw_path_mode));
     initEgoPlanResult();
     target_pos_ = Eigen::Vector3d(msg->goal[0], msg->goal[1], msg->goal[2]);
     double yaw = msg->yaw;

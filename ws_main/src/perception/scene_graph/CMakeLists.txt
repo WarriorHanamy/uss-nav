@@ -15,8 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
     sensor_msgs
     cv_bridge
     global_belief
-    decision_trace
-    quadrotor_msgs
+      quadrotor_msgs
     tf
     message_generation 
     message_runtime
@@ -69,8 +68,7 @@ catkin_package(
     sensor_msgs
     cv_bridge
     global_belief
-    decision_trace
-    quadrotor_msgs
+      quadrotor_msgs
     tf
     message_runtime
 )

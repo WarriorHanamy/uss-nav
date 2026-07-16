@@ -6,6 +6,25 @@ using namespace std;
 
 namespace ego_planner
 {
+  namespace
+  {
+    const char *planRetName(const PLAN_RET ret)
+    {
+      switch (ret)
+      {
+      case PLAN_RET::SUCCESS:
+        return "SUCCESS";
+      case PLAN_RET::LOCAL_TGT_FAIL:
+        return "LOCAL_TGT_FAIL";
+      case PLAN_RET::INIT_FAIL:
+        return "INIT_FAIL";
+      case PLAN_RET::DEFAULT_FAIL:
+        return "DEFAULT_FAIL";
+      default:
+        return "UNKNOWN";
+      }
+    }
+  }
 
   // SECTION interfaces for setup and query
 
@@ -55,7 +74,20 @@ namespace ego_planner
     ros::Duration t_init, t_opt;
 
     static int count = 0;
-    cout << "\033[47;30m\n[" << t_start << "] Drone " << pp_.drone_id << " Replan " << count++ << "\033[0m" << endl;
+    const int replan_id = count++;
+    cout << "\033[47;30m\n[" << t_start << "] Drone " << pp_.drone_id << " Replan " << replan_id << "\033[0m" << endl;
+    ROS_INFO_STREAM("[EGOPlanner] ego_rebound_replan_pipeline_start drone_id=" << pp_.drone_id
+                    << " replan_id=" << replan_id
+                    << " start_pt=" << start_pt.transpose()
+                    << " start_vel=" << start_vel.transpose()
+                    << " start_acc=" << start_acc.transpose()
+                    << " global_start=" << glb_start_pt.transpose()
+                    << " final_goal=" << final_goal.transpose()
+                    << " use_last_optimal=" << flag_use_last_optimial
+                    << " random_init=" << flag_random_init
+                    << " pathes_size=" << (pathes ? static_cast<int>(pathes->size()) : -1)
+                    << " touch_goal=" << touch_goal
+                    << " continuous_failures=" << continous_failures_count_);
     // cout.precision(3);
     // cout << "start: " << start_pt.transpose() << " || " << start_vel.transpose() << " final_goal:" << final_goal.transpose() << endl;
     // cout << "init type: " << flag_use_last_optimial << " " << flag_random_init << " touch goal: " << touch_goal << endl;
@@ -77,6 +109,12 @@ namespace ego_planner
     {
       continous_failures_count_++;
       failure_cnt_++;
+      ROS_WARN_STREAM("[EGOPlanner] ego_rebound_replan_pipeline_result drone_id=" << pp_.drone_id
+                      << " replan_id=" << replan_id
+                      << " ret=" << planRetName(PLAN_RET::INIT_FAIL)
+                      << " stage=compute_init_state"
+                      << " continuous_failures=" << continous_failures_count_
+                      << " elapsed_sec=" << (ros::Time::now() - t_start).toSec());
       return PLAN_RET::INIT_FAIL;
     }
 
@@ -92,6 +130,13 @@ namespace ego_planner
     {
       continous_failures_count_++;
       failure_cnt_++;
+      ROS_WARN_STREAM("[EGOPlanner] ego_rebound_replan_pipeline_result drone_id=" << pp_.drone_id
+                      << " replan_id=" << replan_id
+                      << " ret=" << planRetName(PLAN_RET::INIT_FAIL)
+                      << " stage=constraint_points_check"
+                      << " check_ret=" << static_cast<int>(ret)
+                      << " continuous_failures=" << continous_failures_count_
+                      << " elapsed_sec=" << (ros::Time::now() - t_start).toSec());
       return PLAN_RET::INIT_FAIL;
     }
 
@@ -233,9 +278,31 @@ namespace ego_planner
     }
 
     if (flag_success)
+    {
+      ROS_INFO_STREAM("[EGOPlanner] ego_rebound_replan_pipeline_result drone_id=" << pp_.drone_id
+                      << " replan_id=" << replan_id
+                      << " ret=" << planRetName(PLAN_RET::SUCCESS)
+                      << " stage=optimize"
+                      << " init_ms=" << t_init.toSec() * 1000.0
+                      << " opt_ms=" << t_opt.toSec() * 1000.0
+                      << " continuous_failures=" << continous_failures_count_
+                      << " success_count=" << success_cnt_
+                      << " failure_count=" << failure_cnt_);
       return PLAN_RET::SUCCESS;
+    }
     else
+    {
+      ROS_WARN_STREAM("[EGOPlanner] ego_rebound_replan_pipeline_result drone_id=" << pp_.drone_id
+                      << " replan_id=" << replan_id
+                      << " ret=" << planRetName(PLAN_RET::DEFAULT_FAIL)
+                      << " stage=optimize"
+                      << " init_ms=" << t_init.toSec() * 1000.0
+                      << " opt_ms=" << t_opt.toSec() * 1000.0
+                      << " continuous_failures=" << continous_failures_count_
+                      << " success_count=" << success_cnt_
+                      << " failure_count=" << failure_cnt_);
       return PLAN_RET::DEFAULT_FAIL;
+    }
   }
 
   double EGOPlannerManager::computeInitDuration(

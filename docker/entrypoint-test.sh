@@ -37,35 +37,46 @@ Y_SIZE="${Y_SIZE:-30}"
 TRACE_ENABLE="${TRACE_ENABLE:-0}"
 TRACE_ID="${TRACE_ID:-${TEST_ID}}"
 TRACE_DIR="${TRACE_DIR:-/workspace/.artifacts/traces/${TRACE_ID}}"
-DEFAULT_TRACE_BAG_TOPICS="/tf /tf_static /bridge/Instruct /Instruct_res /planner/fsm_state /tracking_finish /drone_0_visual_slam/odom /drone_0_ego_planner_node/local_goal /drone_0_planning/pos_cmd /planning/fsm_vis /planning/fsm_path /map_generator/global_cloud /drone_0_ego_planner_node/grid_map/occupancy_inflate /drone_0_ego_planner_node/grid_map/occupancy_inflateBig"
+TRACE_BAG_PROFILE="${TRACE_BAG_PROFILE:-core}"
+CORE_TRACE_BAG_TOPICS="/tf /tf_static /bridge/Instruct /Instruct_res /planner/fsm_state /tracking_finish /planning/ego_plan_result /planning/ego_state_trigger /drone_0_visual_slam/odom /drone_0_ego_planner_node/local_goal /drone_0_planning/pos_cmd"
+VIZ_TRACE_BAG_TOPICS="${CORE_TRACE_BAG_TOPICS} /planning/fsm_vis /planning/fsm_path /map_generator/global_cloud /drone_0_ego_planner_node/grid_map/occupancy_inflate /drone_0_ego_planner_node/grid_map/occupancy_inflateBig"
+if [ "${TRACE_BAG_PROFILE}" = "viz" ]; then
+  DEFAULT_TRACE_BAG_TOPICS="${VIZ_TRACE_BAG_TOPICS}"
+else
+  DEFAULT_TRACE_BAG_TOPICS="${CORE_TRACE_BAG_TOPICS}"
+fi
 TRACE_BAG_TOPICS="${TRACE_BAG_TOPICS:-$DEFAULT_TRACE_BAG_TOPICS}"
 ROSLAUNCH_LOG="/tmp/roslaunch.log"
 BRIDGE_LOG="/tmp/bridge.log"
 ROSBAG_PID=""
+TRACE_IS_ENABLED=0
 
 echo "=== EGO Planner Test [$TEST_ID] ==="
 echo "  duration=${DURATION}s  flight_type=${FLIGHT_TYPE}  max_vel=${MAX_VEL}  max_acc=${MAX_ACC}"
 echo "  obs_num=${OBS_NUM}  x_size=${X_SIZE}  y_size=${Y_SIZE}"
 
 if [ "$TRACE_ENABLE" = "1" ] || [ "$TRACE_ENABLE" = "true" ] || [ "$TRACE_ENABLE" = "TRUE" ]; then
-  mkdir -p "$TRACE_DIR"
-  export TRACE_ID TRACE_DIR DECISION_TRACE_FILE="${TRACE_DIR}/decision.jsonl"
+  TRACE_IS_ENABLED=1
+  mkdir -p "$TRACE_DIR/ros"
+  export TRACE_ID TRACE_DIR
+  export ROS_LOG_DIR="${TRACE_DIR}/ros"
+  export ROSCONSOLE_FORMAT='[${severity}] [${time}] [${node}] [${logger}]: ${message}'
   ROSLAUNCH_LOG="${TRACE_DIR}/roslaunch.log"
   BRIDGE_LOG="${TRACE_DIR}/bridge.log"
   cat > "${TRACE_DIR}/manifest.json" <<EOF
-{"trace_id":"${TRACE_ID}","mode":"test","test_id":"${TEST_ID}","started_at":"$(date -Is)","bag":"${TRACE_DIR}/run.bag","decision_log":"${TRACE_DIR}/decision.jsonl","bag_topics":"${TRACE_BAG_TOPICS}","status":"starting"}
+{"trace_id":"${TRACE_ID}","mode":"test","test_id":"${TEST_ID}","bag_profile":"${TRACE_BAG_PROFILE}","started_at":"$(date -Is)","bag":"${TRACE_DIR}/run.bag","roslaunch_log":"${ROSLAUNCH_LOG}","ros_log_dir":"${ROS_LOG_DIR}","fluentbit_log":"${TRACE_DIR}/fluentbit_roslog.log","bag_topics":"${TRACE_BAG_TOPICS}","status":"starting"}
 EOF
   echo "Trace enabled: ${TRACE_DIR}"
 fi
 
 cleanup_trace() {
   if [ -n "${ROSBAG_PID}" ]; then
-    kill "${ROSBAG_PID}" 2>/dev/null || true
+    kill -INT "${ROSBAG_PID}" 2>/dev/null || true
     wait "${ROSBAG_PID}" 2>/dev/null || true
   fi
-  if [ "$TRACE_ENABLE" = "1" ] || [ "$TRACE_ENABLE" = "true" ] || [ "$TRACE_ENABLE" = "TRUE" ]; then
+  if [ "$TRACE_IS_ENABLED" = "1" ]; then
     cat > "${TRACE_DIR}/manifest.json" <<EOF
-{"trace_id":"${TRACE_ID}","mode":"test","test_id":"${TEST_ID}","finished_at":"$(date -Is)","bag":"${TRACE_DIR}/run.bag","decision_log":"${TRACE_DIR}/decision.jsonl","bag_topics":"${TRACE_BAG_TOPICS}","status":"finished"}
+{"trace_id":"${TRACE_ID}","mode":"test","test_id":"${TEST_ID}","bag_profile":"${TRACE_BAG_PROFILE}","finished_at":"$(date -Is)","bag":"${TRACE_DIR}/run.bag","roslaunch_log":"${ROSLAUNCH_LOG}","ros_log_dir":"${ROS_LOG_DIR}","fluentbit_log":"${TRACE_DIR}/fluentbit_roslog.log","bag_topics":"${TRACE_BAG_TOPICS}","status":"finished"}
 EOF
   fi
 }
@@ -110,13 +121,13 @@ for i in $(seq 1 30); do
   fi
   if rostopic info /drone_0_planning/pos_cmd 2>/dev/null | grep -q "Publishers:"; then
     echo "✅ Planner ready (t=${i}s)"
-    if [ "$TRACE_ENABLE" = "1" ] || [ "$TRACE_ENABLE" = "true" ] || [ "$TRACE_ENABLE" = "TRUE" ]; then
+    if [ "$TRACE_IS_ENABLED" = "1" ]; then
       if command -v rosbag >/dev/null 2>&1; then
         rosbag record -O "${TRACE_DIR}/run.bag" ${TRACE_BAG_TOPICS} >"${TRACE_DIR}/rosbag.log" 2>&1 &
         ROSBAG_PID=$!
         echo "Trace bag recording: ${TRACE_DIR}/run.bag"
       else
-        echo "rosbag not found; decision trace will still be collected." | tee "${TRACE_DIR}/rosbag.log"
+        echo "rosbag not found; ROS logs will still be collected." | tee "${TRACE_DIR}/rosbag.log"
       fi
     fi
     break

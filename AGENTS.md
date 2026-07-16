@@ -182,6 +182,52 @@ REAL_YOLOE=1 docker compose run --rm release
 
 当 `REAL_YOLOE=1` 且 `/workspace/.pretrained/yoloe-11m-seg-pf.pt` 存在时，自动启动 `predict_realtime_cam_sim.py`；否则回退到 `fake_realtime_cam_sim.py`。
 
+## Trace / ROS Logging Rules — 强制约束
+
+**项目诊断 trace 的文本事实来源只能是 ROS log。** 禁止新增或依赖 `decision.jsonl`、自定义旁路 trace 文件作为主要诊断依据；如果 ROS log 信息缺失，应在对应模块补充 `ROS_INFO` / `ROS_WARN` / `ROS_ERROR`。
+
+### Trace 目录结构
+
+每次 trace 必须对应一个独立目录：
+
+```
+.artifacts/traces/<TRACE_ID>/
+├── manifest.json
+├── roslaunch.log
+├── ros/                       # ROS_LOG_DIR
+├── fluentbit_roslog.log       # Fluent Bit 结构化 key=value 输出
+├── rosbag.log
+└── run.bag
+```
+
+entrypoint 在 `TRACE_ENABLE=1` 时必须设置：
+
+```bash
+TRACE_DIR=/workspace/.artifacts/traces/<TRACE_ID>
+ROS_LOG_DIR=${TRACE_DIR}/ros
+ROSCONSOLE_FORMAT='[${severity}] [${time}] [${node}] [${logger}]: ${message}'
+```
+
+### 模块日志要求
+
+- high-level FSM、SceneGraph、global_belief、EGO planner 的关键决策必须写 ROS log，使用稳定前缀：`[MissionFSM]`、`[SceneGraph]`、`[GlobalBelief]`、`[EGOPlanner]`、`[EGOOptimizer]`
+- 关键决策包括：Instruction 收发/拒绝、FSM 状态迁移、object-id nav start/replan、scenegraph path request/result、local occ block/repair/reject、ego goal publish/receive、EGO replan start/result、optimizer failure/divergence/stuck reason
+- 新增节点不得只用 `cout` / `printf` 记录关键决策；raw stdout 只能作为兼容信息进入 `roslaunch.log`
+- Fluent Bit 只采集 ROS 相关日志并结构化输出；bag 只用于点云、轨迹、RViz 等可视化分析。文本能判断的问题不依赖 bag
+- 可选检索后端使用 OpenSearch。默认 `fluent-bit` 只输出本地文件；需要跨 trace 检索时启动 `trace-search` profile 和 `fluent-bit-search`，将同一批 ROS log 字段化写入 OpenSearch
+- 禁止生成 `decision*.txt` 或 `decision*.jsonl` 作为诊断产物；干净阅读和检索应基于 OpenSearch/Dashboards 或 `fluentbit_roslog.log`
+
+### OpenSearch Trace Search
+
+启动可检索 trace：
+
+```bash
+TRACE_ENABLE=1 TRACE_ID=<trace-id> LAUNCH_MODE=scenegraph \
+  docker compose --profile trace-search up --force-recreate devel fluent-bit-search opensearch opensearch-dashboards
+```
+
+OpenSearch API: `http://localhost:9200`；Dashboards: `http://localhost:5601`。索引名为 `uss-nav-roslog-<TRACE_ID>`，常用字段包括 `trace_id`、`severity`、`node`、`module`、`event`、`target_obj_id`、`source_task_id`、`ret`、`ret_code`、`replan_id`、`continuous_failures`。
+
 ## Bringup 约定 — 强制约束
 
 **所有项目级 launch/config/params 文件必须位于 `bringup*` 目录下。** 禁止在 `ws_main/src/` 中放置独立的 launch 或 config yaml 目录。

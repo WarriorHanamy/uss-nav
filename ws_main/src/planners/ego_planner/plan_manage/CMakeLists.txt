@@ -66,4 +66,3 @@ target_link_libraries(ego_planner_node ego_planner ${catkin_LIBRARIES})
 # target_link_libraries(traj_server ${catkin_LIBRARIES})
 # add_dependencies(traj_server ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-

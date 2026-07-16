@@ -1,6 +1,5 @@
 #include <Eigen/Eigen>
 #include <Eigen/src/Core/Matrix.h>
-#include <decision_trace/decision_trace.h>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -1618,7 +1617,7 @@ void MissionFSM::vlaSearchTargetCallback(
     ROS_WARN_STREAM_THROTTLE(
         1.0,
         "[VLA_SEARCH] Ignore stale target result: session="
-            << msg->task_session_id
+            << static_cast<int>(msg->task_session_id)
             << ", batch=" << msg->observation_batch_id
             << ", request=" << msg->request_id
             << ", observation=" << static_cast<int>(msg->observation_index));
@@ -2303,19 +2302,16 @@ void MissionFSM::FSMCallback(const ros::TimerEvent& e)
 void MissionFSM::goTargetObject() {
   if (fd_->go_object_process_phase == 0) {
     scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
-    decision_trace::log("mission_fsm", "object_path_request", {
-        decision_trace::num("target_obj_id", fd_->object_target_id_),
-        decision_trace::num("source_task_id", active_instruction_task_id_),
-        decision_trace::num("task_session_id", active_instruction_session_id_),
-        decision_trace::vec3("odom_pos", fd_->odom_pos_),
-        decision_trace::num("odom_yaw", fd_->odom_yaw_)});
+    ROS_INFO_STREAM("[MissionFSM] object_path_request target_obj_id=" << fd_->object_target_id_
+                    << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                    << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                    << " odom_pos=" << fd_->odom_pos_.transpose()
+                    << " odom_yaw=" << fd_->odom_yaw_);
     if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_, fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
-      decision_trace::log("mission_fsm", "object_path_result", {
-          decision_trace::boolean("success", true),
-          decision_trace::num("target_obj_id", fd_->object_target_id_),
-          decision_trace::num("path_size", static_cast<int>(fd_->path_res_.size())),
-          decision_trace::vec3("aim_pos", fd_->aim_pos_),
-          decision_trace::num("aim_yaw", fd_->aim_yaw_)});
+      ROS_INFO_STREAM("[MissionFSM] object_path_result success=1 target_obj_id=" << fd_->object_target_id_
+                      << " path_size=" << fd_->path_res_.size()
+                      << " aim_pos=" << fd_->aim_pos_.transpose()
+                      << " aim_yaw=" << fd_->aim_yaw_);
       INFO_MSG_GREEN("[Targ Obj] | find path to object success, size: " << fd_->path_res_.size());
 
       fd_->has_rotated_     = false;
@@ -2329,10 +2325,8 @@ void MissionFSM::goTargetObject() {
       displayPath();
       fd_->go_object_process_phase ++;
     }else {
-      decision_trace::log("mission_fsm", "object_path_result", {
-          decision_trace::boolean("success", false),
-          decision_trace::num("target_obj_id", fd_->object_target_id_),
-          decision_trace::str("reason", "scene_graph_path_failed")});
+      ROS_WARN_STREAM("[MissionFSM] object_path_result success=0 target_obj_id=" << fd_->object_target_id_
+                      << " reason=scene_graph_path_failed");
       fd_->go_object_process_phase = 0;
       if(fd_->find_terminate_target_mode_) {
         transitState(FINISH, "** FIND TERMINATE TARGET PATH FAILED **");
@@ -2363,12 +2357,11 @@ void MissionFSM::goTargetObject() {
     bool yaw_finish = !fp_->object_id_nav_require_final_yaw_ ||
                       (fabs(fd_->odom_yaw_ - fd_->aim_yaw_) / M_PI * 180.0 < 5.0);
     if (pos_finish && yaw_finish) {
-      decision_trace::log("mission_fsm", "object_id_nav_finish", {
-          decision_trace::num("target_obj_id", fd_->object_target_id_),
-          decision_trace::num("source_task_id", active_instruction_task_id_),
-          decision_trace::num("task_session_id", active_instruction_session_id_),
-          decision_trace::num("dis_2_aim_2d", dis_2_aim_2d),
-          decision_trace::num("dis_yaw", dis_yaw)});
+      ROS_INFO_STREAM("[MissionFSM] object_id_nav_finish target_obj_id=" << fd_->object_target_id_
+                      << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                      << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                      << " dis_2_aim_2d=" << dis_2_aim_2d
+                      << " dis_yaw=" << dis_yaw);
       ROS_WARN("-------------> Finish: [Reach Aim] <-------------");
       ROS_INFO_STREAM("t_cur: " << t_cur);
       fd_->go_object_process_phase = 0;
@@ -2393,11 +2386,9 @@ void MissionFSM::goTargetObject() {
 
     // Replan after some time
     if (t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
-      decision_trace::log("mission_fsm", "object_id_nav_replan_needed", {
-          decision_trace::str("reason", "periodic_still"),
-          decision_trace::num("target_obj_id", fd_->object_target_id_),
-          decision_trace::num("elapsed_sec", t_cur),
-          decision_trace::num("odom_vel_norm", fd_->odom_vel_.norm())});
+      ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_needed reason=periodic_still target_obj_id="
+                      << fd_->object_target_id_ << " elapsed_sec=" << t_cur
+                      << " odom_vel_norm=" << fd_->odom_vel_.norm());
       ROS_WARN("-------------> Replan: periodic call <-------------");
       ROS_WARN("t_cur: %f s", t_cur);
       fd_->go_object_process_phase = 0;
@@ -2430,19 +2421,19 @@ void MissionFSM::goTargetObject() {
         if (stuck_sec > fp_->object_id_nav_replan_stuck_duration_) {
           int max_cnt = fp_->object_id_nav_replan_stuck_max_consecutive_;
           if (max_cnt > 0 && fd_->object_id_nav_replan_stuck_count_ >= max_cnt) {
-            decision_trace::log("mission_fsm", "object_id_nav_replan_exhausted", {
-                decision_trace::str("fallback", "topo_block"),
-                decision_trace::num("stuck_sec", stuck_sec),
-                decision_trace::num("count", fd_->object_id_nav_replan_stuck_count_),
-                decision_trace::num("max_count", max_cnt)});
+            ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_exhausted fallback=topo_block reason=stuck_max_reached"
+                            << " target_obj_id=" << fd_->object_target_id_
+                            << " stuck_sec=" << stuck_sec
+                            << " count=" << fd_->object_id_nav_replan_stuck_count_
+                            << " max_count=" << max_cnt);
             ROS_WARN("[ObjIdNavReplan] Stuck replan max reached (count=%d, max=%d), fallback to topo-block",
                      fd_->object_id_nav_replan_stuck_count_, max_cnt);
             fallthrough_to_topo = true;
           } else {
-            decision_trace::log("mission_fsm", "object_id_nav_replan_needed", {
-                decision_trace::str("reason", "stuck_detected"),
-                decision_trace::num("stuck_sec", stuck_sec),
-                decision_trace::num("count", fd_->object_id_nav_replan_stuck_count_)});
+            ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_needed reason=stuck_detected target_obj_id="
+                            << fd_->object_target_id_
+                            << " stuck_sec=" << stuck_sec
+                            << " count=" << fd_->object_id_nav_replan_stuck_count_);
             ROS_WARN("[ObjIdNavReplan] Stuck detected (%.1fs), triggering replan", stuck_sec);
             triggerObjectIdNavReplan("stuck_detected");
             return;
@@ -2457,9 +2448,8 @@ void MissionFSM::goTargetObject() {
           ROS_WARN("[ObjIdNavReplan] Topic trigger ignored: no stored instruction");
           fd_->object_id_nav_replan_topic_triggered_ = false;
         } else {
-          decision_trace::log("mission_fsm", "object_id_nav_replan_needed", {
-              decision_trace::str("reason", "topic_triggered"),
-              decision_trace::num("target_obj_id", fd_->object_target_id_)});
+          ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_needed reason=topic_triggered target_obj_id="
+                          << fd_->object_target_id_);
           ROS_WARN("[ObjIdNavReplan] Topic trigger received, triggering replan");
           triggerObjectIdNavReplan("topic_triggered");
           return;
@@ -2469,11 +2459,10 @@ void MissionFSM::goTargetObject() {
       // ---- Mode 2: 卡死超时fallback到topo-block ----
       if (fp_->object_id_nav_replan_mode_ == 2 &&
           stuck_sec > fp_->object_id_nav_replan_mode2_stuck_fallback_delay_) {
-        decision_trace::log("mission_fsm", "object_id_nav_replan_exhausted", {
-            decision_trace::str("fallback", "topo_block"),
-            decision_trace::str("reason", "mode2_stuck_timeout"),
-            decision_trace::num("stuck_sec", stuck_sec),
-            decision_trace::num("fallback_delay", fp_->object_id_nav_replan_mode2_stuck_fallback_delay_)});
+        ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_exhausted fallback=topo_block reason=mode2_stuck_timeout"
+                        << " target_obj_id=" << fd_->object_target_id_
+                        << " stuck_sec=" << stuck_sec
+                        << " fallback_delay=" << fp_->object_id_nav_replan_mode2_stuck_fallback_delay_);
         ROS_WARN("[ObjIdNavReplan] Mode2 stuck %.1fs > fallback delay %.1fs, fallback to topo-block",
                  stuck_sec, fp_->object_id_nav_replan_mode2_stuck_fallback_delay_);
         fallthrough_to_topo = true;
@@ -2500,19 +2489,15 @@ void MissionFSM::goTargetObject() {
 
           // Tier1: 首次卡死 → 清除blocked标记后内联重规划topo路径(类似强制重启任务)
           if (fd_->stuck_force_advance_count_ == 0) {
-            decision_trace::log("mission_fsm", "topo_block_fallback", {
-                decision_trace::str("tier", "tier1_replan"),
-                decision_trace::num("target_obj_id", fd_->object_target_id_),
-                decision_trace::num("stuck_duration", stuck_duration)});
+            ROS_WARN_STREAM("[MissionFSM] topo_block_fallback tier=tier1_replan target_obj_id="
+                            << fd_->object_target_id_ << " stuck_duration=" << stuck_duration);
             ROS_WARN("[Targ Obj] Stuck tier1: force topo replan (clear blocked + regenerate path)");
             scene_graph_->clearAllBlocked();
             scene_graph_->mountCurPoly(fd_->odom_pos_, fd_->odom_yaw_);
             if (scene_graph_->getPathToObjectWithId(fd_->object_target_id_,
                     fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
-              decision_trace::log("mission_fsm", "topo_block_fallback_result", {
-                  decision_trace::boolean("success", true),
-                  decision_trace::str("tier", "tier1_replan"),
-                  decision_trace::num("path_size", static_cast<int>(fd_->path_res_.size()))});
+              ROS_INFO_STREAM("[MissionFSM] topo_block_fallback_result success=1 tier=tier1_replan path_size="
+                              << fd_->path_res_.size());
               INFO_MSG_GREEN("[Targ Obj] Stuck tier1: new path found, size: " << fd_->path_res_.size());
               fd_->path_inx_ = 0;
               getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
@@ -2522,10 +2507,7 @@ void MissionFSM::goTargetObject() {
               fd_->stuck_begin_time_ = -1.0;
               fd_->last_pub_time_ = ros::Time::now();
             } else {
-              decision_trace::log("mission_fsm", "topo_block_fallback_result", {
-                  decision_trace::boolean("success", false),
-                  decision_trace::str("tier", "tier1_replan"),
-                  decision_trace::str("fallback", "tier2_force_advance")});
+              ROS_WARN("[MissionFSM] topo_block_fallback_result success=0 tier=tier1_replan fallback=tier2_force_advance");
               // tier1 重规划失败 → 跳过tier1直接进入tier2逻辑
               ROS_WARN("[Targ Obj] Stuck tier1 failed (no path), fallback to tier2");
               fd_->stuck_force_advance_count_ = 1;  // 直接标记为已消耗tier1配额
@@ -2540,10 +2522,8 @@ void MissionFSM::goTargetObject() {
               fd_->stuck_begin_time_ = -1.0;
               getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
               fd_->last_pub_time_ = ros::Time::now();
-              decision_trace::log("mission_fsm", "topo_block_fallback", {
-                  decision_trace::str("tier", "tier2_force_advance"),
-                  decision_trace::num("path_index", fd_->path_inx_),
-                  decision_trace::num("count", fd_->stuck_force_advance_count_)});
+              ROS_WARN_STREAM("[MissionFSM] topo_block_fallback tier=tier2_force_advance path_index="
+                              << fd_->path_inx_ << " count=" << fd_->stuck_force_advance_count_);
               ROS_WARN("[Targ Obj] Stuck tier2: force advance path_inx=%d, count=%d",
                        fd_->path_inx_, fd_->stuck_force_advance_count_);
             } else {
@@ -2831,23 +2811,21 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         // 投影趋向下一个路径点(避免回飞); 投影失败才判为真障碍, 去抖标记不可达并跳过(严格不进膨胀层)
         if (map_->getInflateOccupancy(cand) == global_belief::MapInterface::OCCUPIED)
         {
-          decision_trace::log("mission_fsm", "local_occ_candidate_blocked", {
-              decision_trace::num("target_obj_id", fd_->object_target_id_),
-              decision_trace::num("path_index", i),
-              decision_trace::vec3("candidate", cand),
-              decision_trace::vec3("odom_pos", fd_->odom_pos_)});
+          ROS_WARN_STREAM("[MissionFSM] local_occ_candidate_blocked target_obj_id=" << fd_->object_target_id_
+                          << " path_index=" << i
+                          << " candidate=" << cand.transpose()
+                          << " odom_pos=" << fd_->odom_pos_.transpose());
           // 前向参考: 路径上更靠近目标的下一个点(末点则取自身, 退化为无方向)
           Eigen::Vector3d toward = (i + 1 < (int)path_res.size()) ? path_res[i + 1] : path_res.back();
           Eigen::Vector3d repaired;
           if (scene_graph_->projectToInflateFree(cand, toward, repaired) &&
               map_->isVisible(fd_->odom_pos_, repaired))
           {
-            decision_trace::log("mission_fsm", "local_occ_candidate_repaired", {
-                decision_trace::num("target_obj_id", fd_->object_target_id_),
-                decision_trace::num("path_index", i),
-                decision_trace::vec3("original", path_res[i]),
-                decision_trace::vec3("repaired", repaired),
-                decision_trace::vec3("toward", toward)});
+            ROS_INFO_STREAM("[MissionFSM] local_occ_candidate_repaired target_obj_id=" << fd_->object_target_id_
+                            << " path_index=" << i
+                            << " original=" << path_res[i].transpose()
+                            << " repaired=" << repaired.transpose()
+                            << " toward=" << toward.transpose());
             cand = repaired;
             // 模式2: 修复点到toward不可直线可见时, 尝试球交会生成中间点
             if (scene_graph_->getRepairVisMode() == 2 && !map_->isVisible(repaired, toward))
@@ -2856,10 +2834,9 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
               if (scene_graph_->findIntersectionMidpoint(repaired, toward,
                       scene_graph_->getRepairVisSphereRadius(), mid))
               {
-                decision_trace::log("mission_fsm", "local_occ_repair_midpoint", {
-                    decision_trace::num("target_obj_id", fd_->object_target_id_),
-                    decision_trace::num("path_index", i),
-                    decision_trace::vec3("midpoint", mid)});
+                ROS_INFO_STREAM("[MissionFSM] local_occ_repair_midpoint target_obj_id=" << fd_->object_target_id_
+                                << " path_index=" << i
+                                << " midpoint=" << mid.transpose());
                 // 插入中间点到路径中 repaired 和 toward 之间
                 path_res.insert(path_res.begin() + i + 1, mid);
                 INFO_MSG_GREEN("[EXP-FSM] :[getAndPubNextAim] mode2 insert intersection mid pt");
@@ -2876,11 +2853,9 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
               }
               else
               {
-                decision_trace::log("mission_fsm", "local_occ_candidate_rejected", {
-                    decision_trace::str("reason", "repair_midpoint_failed"),
-                    decision_trace::num("target_obj_id", fd_->object_target_id_),
-                    decision_trace::num("path_index", i),
-                    decision_trace::vec3("candidate", path_res[i])});
+                ROS_WARN_STREAM("[MissionFSM] local_occ_candidate_rejected reason=repair_midpoint_failed target_obj_id="
+                                << fd_->object_target_id_ << " path_index=" << i
+                                << " candidate=" << path_res[i].transpose());
                 // 球交会失败 → 标记不可达, 跳过此点
                 scene_graph_->markPolyhedronBlocked(path_res[i]);
                 continue;
@@ -2902,24 +2877,20 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
           }
           else
           {
-            decision_trace::log("mission_fsm", "local_occ_candidate_rejected", {
-                decision_trace::str("reason", "project_to_inflate_free_failed"),
-                decision_trace::num("target_obj_id", fd_->object_target_id_),
-                decision_trace::num("path_index", i),
-                decision_trace::vec3("candidate", path_res[i])});
+            ROS_WARN_STREAM("[MissionFSM] local_occ_candidate_rejected reason=project_to_inflate_free_failed target_obj_id="
+                            << fd_->object_target_id_ << " path_index=" << i
+                            << " candidate=" << path_res[i].transpose());
             scene_graph_->markPolyhedronBlocked(path_res[i]);
             continue;
           }
         }
         path_inx = i;
         local_goal = cand;
-        decision_trace::log("mission_fsm", "local_goal_selected", {
-            decision_trace::str("mode", "visible_shortcut"),
-            decision_trace::num("target_obj_id", fd_->object_target_id_),
-            decision_trace::num("path_index", path_inx),
-            decision_trace::num("path_size", static_cast<int>(path_res.size())),
-            decision_trace::vec3("local_goal", local_goal),
-            decision_trace::vec3("odom_pos", fd_->odom_pos_)});
+        ROS_INFO_STREAM("[MissionFSM] local_goal_selected mode=visible_shortcut target_obj_id="
+                        << fd_->object_target_id_ << " path_index=" << path_inx
+                        << " path_size=" << path_res.size()
+                        << " local_goal=" << local_goal.transpose()
+                        << " odom_pos=" << fd_->odom_pos_.transpose());
         INFO_MSG_GREEN("[EXP-FSM] :[getAndPubNextAim] direct aim to local_goal");
         return true;
       }
@@ -2930,10 +2901,8 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
     if (path_inx >= path_res.size())
     {
       path_inx -- ;
-      decision_trace::log("mission_fsm", "local_goal_selection_failed", {
-          decision_trace::str("reason", "path_finished"),
-          decision_trace::num("path_size", static_cast<int>(path_res.size())),
-          decision_trace::num("path_index", path_inx)});
+      ROS_WARN_STREAM("[MissionFSM] local_goal_selection_failed reason=path_finished path_size="
+                      << path_res.size() << " path_index=" << path_inx);
       ROS_WARN_THROTTLE(1.0, "[EXP-FSM] :[getAndPubNextAim] Path exec finished");
       return false;
     }
@@ -2946,22 +2915,18 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         path_inx++;
         if (path_inx >= path_res.size())
         {
-          decision_trace::log("mission_fsm", "local_goal_selection_failed", {
-              decision_trace::str("reason", "all_remaining_points_too_close"),
-              decision_trace::num("path_size", static_cast<int>(path_res.size())),
-              decision_trace::num("path_index", path_inx)});
+          ROS_WARN_STREAM("[MissionFSM] local_goal_selection_failed reason=all_remaining_points_too_close path_size="
+                          << path_res.size() << " path_index=" << path_inx);
           return false;
         }
         idx = path_inx;
         local_goal = path_res[idx];
       }
-      decision_trace::log("mission_fsm", "local_goal_selected", {
-          decision_trace::str("mode", "next_path_point"),
-          decision_trace::num("target_obj_id", fd_->object_target_id_),
-          decision_trace::num("path_index", path_inx),
-          decision_trace::num("path_size", static_cast<int>(path_res.size())),
-          decision_trace::vec3("local_goal", local_goal),
-          decision_trace::vec3("odom_pos", fd_->odom_pos_)});
+      ROS_INFO_STREAM("[MissionFSM] local_goal_selected mode=next_path_point target_obj_id="
+                      << fd_->object_target_id_ << " path_index=" << path_inx
+                      << " path_size=" << path_res.size()
+                      << " local_goal=" << local_goal.transpose()
+                      << " odom_pos=" << fd_->odom_pos_.transpose());
       return true;
     }
   };
@@ -2979,13 +2944,11 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
       fd_->local_aim_pos_[2] =  adjustTerminateHeightFindingObject(cur_obj, fd_->local_aim_pos_, true);
       fd_->aim_pos_[2] = fd_->local_aim_pos_[2];
     }
-    decision_trace::log("mission_fsm", "local_goal_selected", {
-        decision_trace::str("mode", "direct_final"),
-        decision_trace::num("target_obj_id", fd_->object_target_id_),
-        decision_trace::num("path_size", static_cast<int>(path_res.size())),
-        decision_trace::vec3("local_goal", fd_->local_aim_pos_),
-        decision_trace::num("aim_yaw", aim_yaw),
-        decision_trace::boolean("look_forward", look_forward)});
+    ROS_INFO_STREAM("[MissionFSM] local_goal_selected mode=direct_final target_obj_id="
+                    << fd_->object_target_id_ << " path_size=" << path_res.size()
+                    << " local_goal=" << fd_->local_aim_pos_.transpose()
+                    << " aim_yaw=" << aim_yaw
+                    << " look_forward=" << look_forward);
     pubLocalGoal(fd_->local_aim_pos_, aim_yaw, look_forward);
     std::cout << "[EXP-FM][getAndPubNextAim][look_forward = "<< look_forward << "] Pub aim:" << path_res.back().transpose() << ", yaw: " << aim_yaw << std::endl;
     return true;
@@ -3031,14 +2994,13 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
   msg.yaw_mode = yaw_mode;
   msg.yaw_path_mode = yaw_path_mode;
   ego_goal_pub_.publish(msg);
-  decision_trace::log("mission_fsm", "local_goal_published", {
-      decision_trace::num("source_task_id", active_instruction_task_id_),
-      decision_trace::num("task_session_id", active_instruction_session_id_),
-      decision_trace::vec3("goal", local_goal),
-      decision_trace::num("yaw", yaw),
-      decision_trace::boolean("look_forward", look_forward),
-      decision_trace::num("yaw_mode", yaw_mode),
-      decision_trace::num("yaw_path_mode", yaw_path_mode)});
+  ROS_INFO_STREAM("[MissionFSM] local_goal_published source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                  << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                  << " goal=" << local_goal.transpose()
+                  << " yaw=" << yaw
+                  << " look_forward=" << look_forward
+                  << " yaw_mode=" << static_cast<unsigned int>(yaw_mode)
+                  << " yaw_path_mode=" << static_cast<unsigned int>(yaw_path_mode));
 }
 
 
@@ -3127,13 +3089,12 @@ void MissionFSM::egoPlanResCallback(const quadrotor_msgs::EgoPlannerResultConstP
 void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& msg)
 {
   if (msg->robot_id == md_->drone_id_) {
-    decision_trace::log("mission_fsm", "instruction_received", {
-        decision_trace::num("instruction_type", msg->instruction_type),
-        decision_trace::num("source_task_id", msg->source_task_id),
-        decision_trace::num("task_session_id", msg->task_session_id),
-        decision_trace::num("target_obj_id", msg->target_obj_id),
-        decision_trace::str("command", msg->command),
-        decision_trace::str("state", md_->state_str_[md_->mission_state_])});
+    ROS_INFO_STREAM("[MissionFSM] instruction_received instruction_type=" << static_cast<int>(msg->instruction_type)
+                    << " source_task_id=" << static_cast<int>(msg->source_task_id)
+                    << " task_session_id=" << static_cast<int>(msg->task_session_id)
+                    << " target_obj_id=" << msg->target_obj_id
+                    << " command=" << msg->command
+                    << " state=" << md_->state_str_[md_->mission_state_]);
   }
   if (msg->robot_id != md_->drone_id_) return;
   // check recv time frequncy
@@ -3153,11 +3114,10 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
   }else if (!bypass_freq_limit && !ic_first_recv_flag &&
             (ros::Time::now() - ic_last_recv_time).toSec() < 0.8){
     ic_last_recv_time = ros::Time::now();
-    decision_trace::log("mission_fsm", "instruction_rejected", {
-        decision_trace::str("reason", "frequency_limit"),
-        decision_trace::num("instruction_type", msg->instruction_type),
-        decision_trace::num("source_task_id", msg->source_task_id),
-        decision_trace::num("task_session_id", msg->task_session_id)});
+    ROS_WARN_STREAM("[MissionFSM] instruction_rejected reason=frequency_limit instruction_type="
+                    << static_cast<int>(msg->instruction_type)
+                    << " source_task_id=" << static_cast<int>(msg->source_task_id)
+                    << " task_session_id=" << static_cast<int>(msg->task_session_id));
     std::cout << "[InstructionCallback] : recv too frequent, skip once! instruction_type="
               << static_cast<int>(msg->instruction_type)
               << ", command=" << msg->command << std::endl;
@@ -3171,9 +3131,8 @@ void MissionFSM::instructionCallback(const quadrotor_msgs::InstructionConstPtr& 
         msg->source_task_id == quadrotor_msgs::Instruction::SOURCE_TASK_VLA_SEARCH &&
         msg->task_session_id == vla_search_session_id_;
     if (same_vla_search_session) {
-      decision_trace::log("mission_fsm", "instruction_rejected", {
-          decision_trace::str("reason", "duplicate_vla_search_session"),
-          decision_trace::num("task_session_id", msg->task_session_id)});
+      ROS_WARN_STREAM("[MissionFSM] instruction_rejected reason=duplicate_vla_search_session task_session_id="
+                      << static_cast<int>(msg->task_session_id));
       ROS_WARN_STREAM("[VLA_SEARCH] Ignore duplicated Instruction for active session="
                       << vla_search_session_id_);
       return;
@@ -3435,12 +3394,11 @@ void MissionFSM::startObjectIdNav(int target_obj_id, uint8_t source_task_id,
   fd_->go_object_process_phase = 0;
   fd_->find_terminate_target_mode_ = false;
   scene_graph_->clearAllBlocked();
-  decision_trace::log("mission_fsm", "object_id_nav_start", {
-      decision_trace::num("target_obj_id", target_obj_id),
-      decision_trace::num("source_task_id", source_task_id),
-      decision_trace::num("task_session_id", session_id),
-      decision_trace::str("reason", reason),
-      decision_trace::boolean("reset_replan_count", reset_replan_count)});
+  ROS_INFO_STREAM("[MissionFSM] object_id_nav_start target_obj_id=" << target_obj_id
+                  << " source_task_id=" << static_cast<int>(source_task_id)
+                  << " task_session_id=" << static_cast<int>(session_id)
+                  << " reason=" << reason
+                  << " reset_replan_count=" << reset_replan_count);
   switchPlannerCmdMuxToEgo("startObjectIdNav:" + reason);
   transitState(MISSION_FSM_STATE::GO_TARGET_OBJECT, reason);
 }
@@ -3454,12 +3412,11 @@ void MissionFSM::triggerObjectIdNavReplan(const std::string& reason) {
 
   const auto& msg = fd_->stored_object_id_nav_instruction_;
   fd_->object_id_nav_replan_stuck_count_++;
-  decision_trace::log("mission_fsm", "object_id_nav_replan", {
-      decision_trace::num("target_obj_id", msg.target_obj_id),
-      decision_trace::num("source_task_id", msg.source_task_id),
-      decision_trace::num("task_session_id", msg.task_session_id),
-      decision_trace::str("reason", reason),
-      decision_trace::num("count", fd_->object_id_nav_replan_stuck_count_)});
+  ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan target_obj_id=" << msg.target_obj_id
+                  << " source_task_id=" << static_cast<int>(msg.source_task_id)
+                  << " task_session_id=" << static_cast<int>(msg.task_session_id)
+                  << " reason=" << reason
+                  << " count=" << fd_->object_id_nav_replan_stuck_count_);
   ROS_WARN("[ObjIdNavReplan] Replanning (target_obj_id=%d, reason=%s, count=%d)",
            msg.target_obj_id, reason.c_str(), fd_->object_id_nav_replan_stuck_count_);
 
@@ -3500,14 +3457,13 @@ void MissionFSM::transitState(MISSION_FSM_STATE new_state, string pos_call)
   MISSION_FSM_STATE pre_s = md_->mission_state_;
   md_->mission_state_ = new_state;
 
-  decision_trace::log("mission_fsm", "state_transition", {
-      decision_trace::str("from", md_->state_str_[pre_s]),
-      decision_trace::str("to", md_->state_str_[md_->mission_state_]),
-      decision_trace::str("reason", pos_call),
-      decision_trace::num("source_task_id", active_instruction_task_id_),
-      decision_trace::num("task_session_id", active_instruction_session_id_)});
+  ROS_INFO_STREAM("[MissionFSM] state_transition from=" << md_->state_str_[pre_s]
+                  << " to=" << md_->state_str_[md_->mission_state_]
+                  << " reason=" << pos_call
+                  << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                  << " task_session_id=" << static_cast<int>(active_instruction_session_id_));
   ROS_INFO_STREAM("\033[1;36m" << "[" << pos_call << "]: from " << md_->state_str_[pre_s]
-                      << " to " << md_->state_str_[md_->mission_state_] << "\033[0m"); // 青色
+                    << " to " << md_->state_str_[md_->mission_state_] << "\033[0m"); // 青色
 }
 
 void MissionFSM::displayPath() {

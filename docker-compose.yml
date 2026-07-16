@@ -17,6 +17,7 @@ services:
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - TRACE_ENABLE=${TRACE_ENABLE:-0}
       - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_PROFILE=${TRACE_BAG_PROFILE:-core}
       - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
       - LAUNCH_MODE=${LAUNCH_MODE:-scenegraph}
       - MAP_PCD=${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}
@@ -88,6 +89,7 @@ services:
       - Y_SIZE=${Y_SIZE:-30}
       - TRACE_ENABLE=${TRACE_ENABLE:-0}
       - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_PROFILE=${TRACE_BAG_PROFILE:-core}
       - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
     volumes:
       - type: bind
@@ -124,6 +126,7 @@ services:
       - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - TRACE_ENABLE=${TRACE_ENABLE:-0}
       - TRACE_ID=${TRACE_ID:-}
+      - TRACE_BAG_PROFILE=${TRACE_BAG_PROFILE:-core}
       - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
     volumes:
       - type: bind
@@ -156,6 +159,8 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:3.1
     container_name: uss-nav-fluent-bit-${GIT_SHA:-local}
+    environment:
+      - TRACE_ID=${TRACE_ID:-}
     volumes:
       - type: bind
         source: ./.artifacts
@@ -164,4 +169,65 @@ services:
         source: ./docker/fluent-bit.conf
         target: /fluent-bit/etc/fluent-bit.conf
         read_only: true
+      - type: bind
+        source: ./docker/fluent-bit-parsers.conf
+        target: /fluent-bit/etc/fluent-bit-parsers.conf
+        read_only: true
     command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
+
+  fluent-bit-search:
+    image: fluent/fluent-bit:3.1
+    container_name: uss-nav-fluent-bit-search-${GIT_SHA:-local}
+    profiles: ["trace-search"]
+    depends_on:
+      - opensearch
+    environment:
+      - TRACE_ID=${TRACE_ID:-}
+    volumes:
+      - type: bind
+        source: ./.artifacts
+        target: /workspace/.artifacts
+      - type: bind
+        source: ./docker/fluent-bit-search.conf
+        target: /fluent-bit/etc/fluent-bit-search.conf
+        read_only: true
+      - type: bind
+        source: ./docker/fluent-bit-parsers.conf
+        target: /fluent-bit/etc/fluent-bit-parsers.conf
+        read_only: true
+      - type: bind
+        source: ./docker/fluent-bit-roslog-fields.lua
+        target: /fluent-bit/etc/fluent-bit-roslog-fields.lua
+        read_only: true
+    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit-search.conf"]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    container_name: uss-nav-opensearch-${GIT_SHA:-local}
+    profiles: ["trace-search"]
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - bootstrap.memory_lock=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - type: volume
+        source: opensearch-data
+        target: /usr/share/opensearch/data
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.15.0
+    container_name: uss-nav-opensearch-dashboards-${GIT_SHA:-local}
+    profiles: ["trace-search"]
+    depends_on:
+      - opensearch
+    environment:
+      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+    ports:
+      - "5601:5601"
+
+volumes:
+  opensearch-data:
