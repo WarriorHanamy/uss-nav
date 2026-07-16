@@ -1,5 +1,7 @@
 #include "FOV_Checker.h"
 
+using namespace std;
+
 FOV_Checker::FOV_Checker() : fp_(nullptr) {
 }
 

@@ -171,7 +171,7 @@ namespace ego_planner
      * @param[in] new_state  Target FSM state
      * @param[in] pos_call   Call site identifier for logging
      */
-    void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
+    void changeFSMExecState(FSM_EXEC_STATE new_state, std::string pos_call);
     void printFSMExecState() const;
     void planningReturnsChk();
     void evaluateEnvironmentDensity();
@@ -196,7 +196,7 @@ namespace ego_planner
      * @param[out] pathes                Density evaluation ray data (optional)
      * @return Plan result (SUCCESS / LOCAL_TGT_FAIL / INIT_FAIL / DEFAULT_FAIL)
      */
-    PLAN_RET callReboundReplan(bool flag_use_last_optimal, bool flag_random_init, vector<DensityEvalRayData> *pathes);
+    PLAN_RET callReboundReplan(bool flag_use_last_optimal, bool flag_random_init, std::vector<DensityEvalRayData> *pathes);
     /**
      * Plan trajectory from the current global reference trajectory.
      *
@@ -211,7 +211,7 @@ namespace ego_planner
      * @return True if planning succeeded
      */
     bool planFromLocalTraj(const int trial_times = 1);
-    bool getTrajPVAJ(const string data_source);
+    bool getTrajPVAJ(const std::string data_source);
     void execTraj();
 
     /* global trajectory */

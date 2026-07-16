@@ -58,8 +58,6 @@
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
-using namespace std;
-
 // constant parameters
 
 struct MappingParameters
@@ -72,7 +70,7 @@ struct MappingParameters
   double resolution_, resolution_inv_;
   double obstacles_inflation_;
   int inf_grid_;
-  string frame_id_;
+  std::string frame_id_;
   int pose_type_;
   bool enable_virtual_walll_;
   double virtual_ceil_, virtual_ground_;
@@ -173,16 +171,16 @@ struct MappingData
   bool flag_have_ever_received_pc_;
 
   // depth image projected point cloud
-  vector<Eigen::Vector3d> proj_points_;
+  std::vector<Eigen::Vector3d> proj_points_;
   int proj_points_cnt_;
 
   // flag buffers for speeding up raycasting
-  vector<short> count_hit_, count_hit_and_miss_;
-  vector<short> hit_accum_;
-  vector<char> flag_traverse_, flag_rayend_;
+  std::vector<short> count_hit_, count_hit_and_miss_;
+  std::vector<short> hit_accum_;
+  std::vector<char> flag_traverse_, flag_rayend_;
   char raycast_num_;
 
-  vector<Eigen::Vector3i> cache_voxel_;
+  std::vector<Eigen::Vector3i> cache_voxel_;
   int cache_voxel_cnt_;
 
   int map_voxel_num_;
@@ -498,14 +496,14 @@ private:
       SyncPolicyImageOdom;
   typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, geometry_msgs::PoseStamped>
       SyncPolicyImagePose;
-  typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
-  typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
+  typedef std::shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
+  typedef std::shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
 
   ros::NodeHandle node_;
-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
-  shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
-  shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> gray_sub_;
+  std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
+  std::shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
+  std::shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
+  std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> gray_sub_;
   SynchronizerImagePose sync_image_pose_;
   SynchronizerImageOdom sync_image_odom_;
 
@@ -515,9 +513,9 @@ private:
   ros::Publisher filterlight_pub_;
 
   //
-  uniform_real_distribution<double> rand_noise_;
-  normal_distribution<double> rand_noise2_;
-  default_random_engine eng_;
+  std::uniform_real_distribution<double> rand_noise_;
+  std::normal_distribution<double> rand_noise2_;
+  std::default_random_engine eng_;
 };
 
 /* ============================== definition of inline functions
@@ -577,24 +575,24 @@ inline void GridMap::changeInfBuf(const bool dir, const int inf_buf_idx, const E
             if (md_.occ_buf_inf_[id_inf_buf] < 0) // An error case
             {
               ROS_ERROR("A negtive value of nearby obstacle number! reset the map.");
-              fill(md_.occ_buf_.begin(), md_.occ_buf_.end(), mp_.clamp_min_log_);
-              fill(md_.occ_buf_inf_.begin(), md_.occ_buf_inf_.end(), GRID_MAP_UNKNOWN_FLAG);
-              fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
-              fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
-              fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
-              fill(md_.flag_traverse_.begin(), md_.flag_traverse_.end(), -1);
-              fill(md_.cache_voxel_.begin(), md_.cache_voxel_.end(), Eigen::Vector3i(0, 0, 0));
+              std::fill(md_.occ_buf_.begin(), md_.occ_buf_.end(), mp_.clamp_min_log_);
+              std::fill(md_.occ_buf_inf_.begin(), md_.occ_buf_inf_.end(), GRID_MAP_UNKNOWN_FLAG);
+              std::fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
+              std::fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
+              std::fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
+              std::fill(md_.flag_traverse_.begin(), md_.flag_traverse_.end(), -1);
+              std::fill(md_.cache_voxel_.begin(), md_.cache_voxel_.end(), Eigen::Vector3i(0, 0, 0));
             }
           }
 
           if (md_.occ_buf_inf_[id_inf_buf] < 0)
           {
-            cout << "2 occ=" << md_.occ_buf_inf_[id_inf_buf] << " id_inf_buf=" << id_inf_buf << " id_inf=" << id_inf.transpose() << " pos=" << globalIdx2Pos(id_inf).transpose() << endl;
+              std::cout << "2 occ=" << md_.occ_buf_inf_[id_inf_buf] << " id_inf_buf=" << id_inf_buf << " id_inf=" << id_inf.transpose() << " pos=" << globalIdx2Pos(id_inf).transpose() << std::endl;
           }
         }
         else
         {
-          cout << "id_inf=" << id_inf.transpose() << " md_.rb_inf_ub3i_=" << md_.rb_inf_ub3i_.transpose() << " md_.rb_ub3i_=" << md_.rb_ub3i_.transpose() << endl;
+          std::cout << "id_inf=" << id_inf.transpose() << " md_.rb_inf_ub3i_=" << md_.rb_inf_ub3i_.transpose() << " md_.rb_ub3i_=" << md_.rb_ub3i_.transpose() << std::endl;
           ROS_ERROR("isInInfBuf return false 1");
         }
 
@@ -612,13 +610,13 @@ inline void GridMap::changeInfBuf(const bool dir, const int inf_buf_idx, const E
           if (unlikely(md_.occ_buf_inf_[id_inf_buf] < 0)) // An error case
           {
             ROS_ERROR("Negtive value (%d) of nearby obstacle number! reset the map.", md_.occ_buf_inf_[id_inf_buf]);
-            fill(md_.occ_buf_.begin(), md_.occ_buf_.end(), mp_.clamp_min_log_);
-            fill(md_.occ_buf_inf_.begin(), md_.occ_buf_inf_.end(), GRID_MAP_UNKNOWN_FLAG);
-            fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
-            fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
-            fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
-            fill(md_.flag_traverse_.begin(), md_.flag_traverse_.end(), -1);
-            fill(md_.cache_voxel_.begin(), md_.cache_voxel_.end(), Eigen::Vector3i(0, 0, 0));
+            std::fill(md_.occ_buf_.begin(), md_.occ_buf_.end(), mp_.clamp_min_log_);
+            std::fill(md_.occ_buf_inf_.begin(), md_.occ_buf_inf_.end(), GRID_MAP_UNKNOWN_FLAG);
+            std::fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
+            std::fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
+            std::fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
+            std::fill(md_.flag_traverse_.begin(), md_.flag_traverse_.end(), -1);
+            std::fill(md_.cache_voxel_.begin(), md_.cache_voxel_.end(), Eigen::Vector3i(0, 0, 0));
           }
         }
 #endif
@@ -1004,12 +1002,12 @@ inline void GridMap::setTarget(const Eigen::Vector3d &target_pos, const bool &ta
 
 inline Eigen::Vector3i GridMap::min3i(Eigen::Vector3i in1, Eigen::Vector3i in2)
 {
-  return Eigen::Vector3i(min(in1(0), in2(0)), min(in1(1), in2(1)), min(in1(2), in2(2)));
+  return Eigen::Vector3i(std::min(in1(0), in2(0)), std::min(in1(1), in2(1)), std::min(in1(2), in2(2)));
 }
 
 inline Eigen::Vector3i GridMap::max3i(Eigen::Vector3i in1, Eigen::Vector3i in2)
 {
-  return Eigen::Vector3i(max(in1(0), in2(0)), max(in1(1), in2(1)), max(in1(2), in2(2)));
+  return Eigen::Vector3i(std::max(in1(0), in2(0)), std::max(in1(1), in2(1)), std::max(in1(2), in2(2)));
 }
 
 inline void GridMap::recordFrontierUpdate(const Eigen::Vector3i& idx)

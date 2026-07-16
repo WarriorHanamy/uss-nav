@@ -1,6 +1,8 @@
 #include "plan_env/grid_map.h"
 #include <ros/time.h>
 
+using namespace std;
+
 void GridMap::initMap(ros::NodeHandle &nh)
 {
   node_ = nh;

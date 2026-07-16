@@ -6,7 +6,6 @@
 #include <pcl/point_types.h>
 #include <../include/exploration/ftr_data_structure.h>
 
-using namespace std;
 namespace ftr_finder{
 
 #define EPSS 1e-6
@@ -116,9 +115,9 @@ public:
 template<typename PointType>
 class KD_TREE{
 public:
-    using PointVector = vector<PointType, Eigen::aligned_allocator<PointType>>;
+    using PointVector = std::vector<PointType, Eigen::aligned_allocator<PointType>>;
     // using PointVector = vector<PointType>;
-    using Ptr = shared_ptr<KD_TREE<PointType>>;
+    using Ptr = std::shared_ptr<KD_TREE<PointType>>;
     struct KD_TREE_NODE{
         PointType point;
         uint8_t division_axis;
@@ -291,13 +290,13 @@ public:
     int validnum();
     void root_alpha(float &alpha_bal, float &alpha_del);
     void Build(PointVector point_cloud);
-    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);
+    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, std::vector<float> & Point_Distance, double max_dist = INFINITY);
     void Box_Search(const BoxPointType &Box_of_Point, PointVector &Storage);
     void Radius_Search(PointType point, const float radius, PointVector &Storage);
     int Add_Points(PointVector & PointToAdd, bool downsample_on);
-    void Add_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    void Add_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     void Delete_Points(PointVector & PointToDel);
-    int Delete_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    int Delete_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     void flatten(KD_TREE_NODE * root, PointVector &Storage, delete_point_storage_set storage_type);
     void acquire_removed_points(PointVector & removed_points);
     BoxPointType tree_range();

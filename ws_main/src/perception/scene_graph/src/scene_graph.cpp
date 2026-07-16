@@ -1037,11 +1037,11 @@ void SceneGraph::visualizeSceneGraph() {
     std::map<std::pair<int, int>, bool> edge_exist;
     for (const auto& area : skeleton_gen_->area_handler_->area_map_) {
         for (const auto& edge : area.second->nbr_area_) {
-            if (edge_exist.find(std::make_pair(min(area.first, edge.first), max(area.first, edge.first))) != edge_exist.end()) continue;
+            if (edge_exist.find(std::make_pair(std::min(area.first, edge.first), std::max(area.first, edge.first))) != edge_exist.end()) continue;
             if (skeleton_gen_->area_handler_->area_map_.find(edge.first) == skeleton_gen_->area_handler_->area_map_.end() &&
                 skeleton_gen_->area_handler_->area_map_.find(edge.first) == skeleton_gen_->area_handler_->area_map_.end()) continue;
 
-            edge_exist[std::make_pair(min(area.first, edge.first), max(area.first, edge.first))] = true;
+            edge_exist[std::make_pair(std::min(area.first, edge.first), std::max(area.first, edge.first))] = true;
             geometry_msgs::Point point1, point2;
             point1.x = room_level_vertices[area.first].x(); point1.y = room_level_vertices[area.first].y(); point1.z = room_level_vis_height;
             point2.x = room_level_vertices[edge.first].x(); point2.y = room_level_vertices[edge.first].y(); point2.z = room_level_vis_height;

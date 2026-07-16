@@ -15,7 +15,6 @@
 #include <utility>
 
 namespace mission_executive {
-using namespace ego_planner;
 namespace {
 
 cv::Rect roomRectFromWorld(const VLASearchRoom& room) {
@@ -551,8 +550,8 @@ void VLASearchMap::buildOccupancyImage(
       for (double z = sample_height_min_; z <= sample_height_max_ + 1e-6;
            z += sample_height_step_) {
         const int occupancy = map_->getOccupancy(Eigen::Vector3d(world_x, world_y, z));
-        occupied = occupied || occupancy == MapInterface::OCCUPIED;
-        free = free || occupancy == MapInterface::FREE;
+        occupied = occupied || occupancy == ego_planner::MapInterface::OCCUPIED;
+        free = free || occupancy == ego_planner::MapInterface::FREE;
       }
       if (occupied) {
         image.at<cv::Vec3b>(row, col) = cv::Vec3b(0, 0, 0);

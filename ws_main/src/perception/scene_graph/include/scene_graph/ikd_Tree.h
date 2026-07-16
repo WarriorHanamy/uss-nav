@@ -6,7 +6,6 @@
 #include <pcl/point_types.h>
 #include "../include/scene_graph/data_structure.h"
 
-using namespace std;
 namespace skeleton_gen{
 
 #define EPSS 1e-6
@@ -139,8 +138,8 @@ public:
 template<typename PointType>
 class KD_TREE{
 public:
-    using PointVector = vector<PointType, Eigen::aligned_allocator<PointType>>;
-    using Ptr = shared_ptr<KD_TREE<PointType>>;
+    using PointVector = std::vector<PointType, Eigen::aligned_allocator<PointType>>;
+    using Ptr = std::shared_ptr<KD_TREE<PointType>>;
     struct KD_TREE_NODE{
         PointType point;
         uint8_t division_axis;
@@ -372,7 +371,7 @@ public:
      * @param[out] Point_Distance  Output distances [m]
      * @param[in]  max_dist        Maximum search distance [m]
      */
-    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);
+    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, std::vector<float> & Point_Distance, double max_dist = INFINITY);
     /**
      * Box-range search for points within an axis-aligned box.
      *
@@ -401,7 +400,7 @@ public:
      *
      * @param[in] BoxPoints  List of box regions
      */
-    void Add_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    void Add_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     /**
      * Delete specified points from the tree.
      *
@@ -414,7 +413,7 @@ public:
      * @param[in] BoxPoints  Box regions to delete [m]
      * @return Number of deleted points [--]
      */
-    int Delete_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    int Delete_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     /**
      * Flatten the tree into a point vector.
      *

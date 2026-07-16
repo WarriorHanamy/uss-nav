@@ -70,7 +70,7 @@ namespace ego_planner
         const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel,
         const Eigen::Vector3d &start_acc, const Eigen::Vector3d &glb_start_pt,
         const Eigen::Vector3d &final_goal, const bool flag_use_last_optimial,
-        const bool flag_random_init, vector<DensityEvalRayData> *pathes,
+        const bool flag_random_init, std::vector<DensityEvalRayData> *pathes,
         poly_traj::MinJerkOpt &initMJO, bool &touch_goal);
     /**
      * Compute initial trajectory duration from start to local target.
@@ -129,7 +129,7 @@ namespace ego_planner
         const Eigen::Vector3d &start_acc, const Eigen::Vector3d &start_jerk,
         const Eigen::Vector3d &glb_start_pt, const Eigen::Vector3d &final_goal,
         const bool flag_use_last_optimial, const bool flag_random_init,
-        vector<DensityEvalRayData> *pathes, bool &touch_goal);
+        std::vector<DensityEvalRayData> *pathes, bool &touch_goal);
     /**
      * Evaluate environment density along a ray from start to end.
      *
@@ -140,7 +140,7 @@ namespace ego_planner
      * @return True if evaluation succeeded
      */
     bool densityEval(const Eigen::Vector3d start_pt, const Eigen::Vector3d end_pt,
-                     DensityEvalRayData *best_ray = NULL, vector<DensityEvalRayData> *all_rays = NULL) const;
+                     DensityEvalRayData *best_ray = NULL, std::vector<DensityEvalRayData> *all_rays = NULL) const;
     /**
      * Determine cruise velocity from density evaluation results.
      *
@@ -222,7 +222,7 @@ namespace ego_planner
     double sum_success_time_{0.0};
 
   public:
-    typedef unique_ptr<EGOPlannerManager> Ptr;
+    typedef std::unique_ptr<EGOPlannerManager> Ptr;
 
     // !SECTION
   };

@@ -372,7 +372,7 @@ bool SkeletonGenerator::expandSkeleton(const Eigen::Vector3d &start_point, doubl
   adjustExpandStartPt(expand_start_pos);
 
   // step1. create initial polyhedron
-  PolyHedronPtr new_polyhedron = make_shared<Polyhedron>(expand_start_pos, nullptr, false);
+  PolyHedronPtr new_polyhedron = std::make_shared<Polyhedron>(expand_start_pos, nullptr, false);
   bool init_res = initNewPolyhedron(new_polyhedron);
   if (!init_res) return false;
 
@@ -449,12 +449,12 @@ void SkeletonGenerator::adjustExpandStartPt(Eigen::Vector3d& start_point){
     INFO_MSG("[SkeletonGen] | Adjust expand start point orin-startpt : " << start_point.transpose());
     Eigen::Vector3d direction = (start_point - polyhedrons_in_range.front().polyhedron_->center_).normalized();
     // do ray-cast
-    tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result =
+    std::tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result =
       rayCast(start_point, direction, _max_expansion_ray_length, 0.1);
-    Eigen::Vector3d hit_point = get<0>(ray_cast_result);
+    Eigen::Vector3d hit_point = std::get<0>(ray_cast_result);
 
     // No obstacle detected, likely a long corridor in this direction, need expansion
-    if (get<1>(ray_cast_result) == -2){
+    if (std::get<1>(ray_cast_result) == -2){
       start_point =start_point + 0.5 * direction * _max_expansion_ray_length;
     }else{
       start_point = (hit_point + start_point) * 0.5;
@@ -672,7 +672,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
       vertices.push_back(getVertexFromDirection(polyhedron, vertex_eigen));
       half_edge = mesh.m_halfEdges[half_edge.m_next];
     }
-    FacetPtr new_fecet = make_shared<Facet>(vertices, polyhedron);
+    FacetPtr new_fecet = std::make_shared<Facet>(vertices, polyhedron);
     new_fecet->index_ = polyhedron->facets_.size();
     polyhedron->facets_.push_back(new_fecet);
   }
@@ -764,7 +764,7 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
     linked_groups.push_back(linked_facets);
   }
   for (std::vector<FacetPtr> claster : linked_groups){
-    PolyhedronFtrPtr new_ftr = make_shared<PolyhedronFtr>(claster, polyhedron);
+    PolyhedronFtrPtr new_ftr = std::make_shared<PolyhedronFtr>(claster, polyhedron);
     if (initSingleFrontier(new_ftr))
       polyhedron->ftrs_.push_back(new_ftr);
   }
@@ -782,22 +782,22 @@ void SkeletonGenerator::generateFrontiers(PolyHedronPtr polyhedron){  std::vecto
 // If valid, determine the next node position, write to frontier's next_node_pos, and set valid to true
 void SkeletonGenerator::verifyFrontier(PolyhedronFtrPtr ftr){
   Eigen::Vector3d ray_cast_start_pt = ftr->proj_center_ + 2.0 * ftr->out_unit_normal_ * _search_margin;
-  tuple<Eigen::Vector3d, int, Eigen::Vector3d> collision_res =
+  std::tuple<Eigen::Vector3d, int, Eigen::Vector3d> collision_res =
     rayCast(ray_cast_start_pt, ftr->out_unit_normal_, 2 * _search_margin, 0.2);
-  if (get<1>(collision_res) != -2 && (get<0>(collision_res) - ray_cast_start_pt).norm() < _search_margin){
+  if (std::get<1>(collision_res) != -2 && (std::get<0>(collision_res) - ray_cast_start_pt).norm() < _search_margin){
     ftr->valid_ = false;
     return;
   }
 
   // do ray-cast
-  tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result =
+  std::tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result =
     rayCast(ray_cast_start_pt, ftr->out_unit_normal_, _max_expansion_ray_length, 0.2);
-  Eigen::Vector3d hit_point = get<0>(ray_cast_result);
+  Eigen::Vector3d hit_point = std::get<0>(ray_cast_result);
 
   // No obstacle detected, likely a long corridor, need expansion
   bool need_expand = false;
   Eigen::Vector3d new_polyhedron_center;
-  if (get<1>(ray_cast_result) == -2){
+  if (std::get<1>(ray_cast_result) == -2){
     need_expand = true;
     new_polyhedron_center = ftr->proj_center_ + 0.5 * ftr->out_unit_normal_ * _max_expansion_ray_length;
   }
@@ -871,7 +871,7 @@ void SkeletonGenerator::adjustFrontier(PolyhedronFtrPtr ftr){
 bool SkeletonGenerator::processAValidFrontier(PolyhedronFtrPtr cur_ftr){
   PolyHedronPtr gate;
   if (cur_ftr->gate_ == nullptr){
-    gate = make_shared<Polyhedron>(cur_ftr->proj_center_, cur_ftr, true);
+    gate = std::make_shared<Polyhedron>(cur_ftr->proj_center_, cur_ftr, true);
     cur_ftr->gate_ = gate;
   }else
     gate = cur_ftr->gate_;
@@ -895,7 +895,7 @@ bool SkeletonGenerator::processAValidFrontier(PolyhedronFtrPtr cur_ftr){
   }
    */
 
-  PolyHedronPtr new_polyhedron = make_shared<Polyhedron>(cur_ftr->next_node_pos_, cur_ftr, false);
+  PolyHedronPtr new_polyhedron = std::make_shared<Polyhedron>(cur_ftr->next_node_pos_, cur_ftr, false);
   bool init_success = initNewPolyhedron(new_polyhedron);
   if (init_success){
     initNewPolyhedron(gate);
@@ -1052,11 +1052,11 @@ void SkeletonGenerator::generatePolyVertices(PolyHedronPtr poly){
     Eigen::Vector3d direction = sphere_sample_directions_[i];
     if (direction.norm() < 1e-6) continue;
     // ros::Time t1 = ros::Time::now();
-    tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result = rayCast(poly->center_, direction, _max_ray_length, 0.2);
+    std::tuple<Eigen::Vector3d, int, Eigen::Vector3d> ray_cast_result = rayCast(poly->center_, direction, _max_ray_length, 0.2);
     // INFO_MSG("generateBlackWhiteVertices: raycast time: " << (ros::Time::now() - t1).toSec() * 1000 << "ms");
-    Eigen::Vector3d hit_point = get<0>(ray_cast_result);
-    // INFO_MSG("[SkeletonGen] | hit point :" << get<0>(ray_cast_result).transpose()
-    //   << " length :" << getDistance(polyhedron->center_, hit_point) << "raycast type:" << get<1>(ray_cast_result));
+    Eigen::Vector3d hit_point = std::get<0>(ray_cast_result);
+    // INFO_MSG("[SkeletonGen] | hit point :" << std::get<0>(ray_cast_result).transpose()
+    //   << " length :" << getDistance(polyhedron->center_, hit_point) << "raycast type:" << std::get<1>(ray_cast_result));
 
     poly->box_max_ = Eigen::Vector3d(std::max(hit_point(0), poly->box_max_.x()),
                                      std::max(hit_point(1), poly->box_max_.y()),
@@ -1066,26 +1066,26 @@ void SkeletonGenerator::generatePolyVertices(PolyHedronPtr poly){
                                      std::min(hit_point(2), poly->box_min_.z()));
 
     // no collision, add white vertex
-    if (get<1>(ray_cast_result) == -2){
-      VertexPtr new_vertex = make_shared<Vertex>(hit_point, direction, Vertex::WHITE);
+    if (std::get<1>(ray_cast_result) == -2){
+      VertexPtr new_vertex = std::make_shared<Vertex>(hit_point, direction, Vertex::WHITE);
       poly->white_vertices_.push_back(new_vertex);
       poly->white_vertices_.back()->dir_sample_buffer_index_ = i;
       poly->white_vertices_.back()->distance_to_center_ = getDistance(poly->center_, hit_point);
-    }else if (get<1>(ray_cast_result) == -3){ // have collision with virtual wall, add GRAY vertex
-      VertexPtr new_vertex = make_shared<Vertex>(hit_point, direction, Vertex::GRAY);
+    }else if (std::get<1>(ray_cast_result) == -3){ // have collision with virtual wall, add GRAY vertex
+      VertexPtr new_vertex = std::make_shared<Vertex>(hit_point, direction, Vertex::GRAY);
       poly->gray_vertices_.push_back(new_vertex);
       poly->gray_vertices_.back()->dir_sample_buffer_index_ = i;
       poly->gray_vertices_.back()->distance_to_center_  = getDistance(poly->center_, hit_point);
       poly->gray_vertices_.back()->collision_polyhedron_index_ = Eigen::Vector3d(-9999, -9999, -9999);
     }else{  // have collision with obstacle, add black vertex
-      VertexPtr new_vertex = make_shared<Vertex>(hit_point, direction, Vertex::BLACK);
+      VertexPtr new_vertex = std::make_shared<Vertex>(hit_point, direction, Vertex::BLACK);
       poly->black_vertices_.push_back(new_vertex);
       poly->black_vertices_.back()->dir_sample_buffer_index_ = i;
       poly->black_vertices_.back()->distance_to_center_ = getDistance(poly->center_, hit_point);
-      poly->black_vertices_.back()->collision_polyhedron_index_ = get<2>(ray_cast_result);
-      if (poly->parent_ftr_ != nullptr && get<2>(ray_cast_result) != Eigen::Vector3d(-9999, -9999, -9999)
-          && !isSamePose(poly->parent_ftr_->master_polyhedron->origin_center_, get<2>(ray_cast_result))){
-        poly->candidate_rollback_[get<2>(ray_cast_result)] = true;
+      poly->black_vertices_.back()->collision_polyhedron_index_ = std::get<2>(ray_cast_result);
+      if (poly->parent_ftr_ != nullptr && std::get<2>(ray_cast_result) != Eigen::Vector3d(-9999, -9999, -9999)
+          && !isSamePose(poly->parent_ftr_->master_polyhedron->origin_center_, std::get<2>(ray_cast_result))){
+        poly->candidate_rollback_[std::get<2>(ray_cast_result)] = true;
       }
     }
   }
@@ -1536,14 +1536,14 @@ void SkeletonGenerator::splitFrontier(PolyHedronPtr polyhedron, std::vector<Face
       if (angle > M_PI / 2.5){
         std::vector<FacetPtr> single_facet;
         single_facet.push_back(cur_facet);
-        PolyhedronFtrPtr ftr = make_shared<PolyhedronFtr>(single_facet, polyhedron);
+        PolyhedronFtrPtr ftr = std::make_shared<PolyhedronFtr>(single_facet, polyhedron);
         initSingleFrontier(ftr);
         res.push_back(ftr);
         continue;
       }
       pending_facets_for_ftr.push_back(cur_facet);
     }
-    PolyhedronFtrPtr new_frontier = make_shared<PolyhedronFtr>(pending_facets_for_ftr, polyhedron);
+    PolyhedronFtrPtr new_frontier = std::make_shared<PolyhedronFtr>(pending_facets_for_ftr, polyhedron);
 
     if (initSingleFrontier(new_frontier))
       res.push_back(new_frontier);
@@ -1575,7 +1575,7 @@ void SkeletonGenerator::splitFrontier(PolyHedronPtr polyhedron, std::vector<Face
           if (!neighbor_facet->is_visited_)
             pending_facets.push_back(neighbor_facet);
       } // penign_facets
-      PolyhedronFtrPtr new_frontier = make_shared<PolyhedronFtr>(small_group_facets, polyhedron);
+      PolyhedronFtrPtr new_frontier = std::make_shared<PolyhedronFtr>(small_group_facets, polyhedron);
       if (initSingleFrontier(new_frontier))
         res.push_back(new_frontier);
     }// single_cluster
@@ -1673,7 +1673,7 @@ VertexPtr SkeletonGenerator::getVertexFromDirection(PolyHedronPtr polyhedron, co
 // -1: collision is with map
 //  0: collision is with the node of that index
 // tuple <collision_point, collision_type, polyhedron_index>
-tuple<Eigen::Vector3d, int, Eigen::Vector3d>
+std::tuple<Eigen::Vector3d, int, Eigen::Vector3d>
 SkeletonGenerator::rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction, double max_ray_length, double step_size){
   double          min_dis = 9999.9999;
   bool            is_collision_with_Poly = false;
@@ -1710,22 +1710,22 @@ SkeletonGenerator::rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction
     Eigen::Vector3d pt_check_body_frame = transPointToBodyFrame(pt_check);
     inflate_res = map_interface_->getRawInflateOccupancy(pt_check);
     if (inflate_res.first == ego_planner::MapInterface::OCCUPIED){
-      return make_tuple(pt_check, -1, min_dis_node_index);
+      return std::make_tuple(pt_check, -1, min_dis_node_index);
     }
     if (pt_check_body_frame.z() < _local_z_min || pt_check_body_frame.z() > _local_z_max){
-      return make_tuple(pt_check - 0.1 * direction, -3, min_dis_node_index);
+      return std::make_tuple(pt_check - 0.1 * direction, -3, min_dis_node_index);
     }
     pt_check += step_size * direction;
     length   += step_size;
   }
 
-  if (is_collision_with_Poly) return make_tuple(pt_collision, 0, min_dis_node_index);
+  if (is_collision_with_Poly) return std::make_tuple(pt_collision, 0, min_dis_node_index);
 
   if (inflate_res.first == ego_planner::MapInterface::OCCUPIED &&
       inflate_res.second == ego_planner::MapInterface::FREE)
-    return make_tuple(orin_point + max_ray_length * direction / 1.5, -2, min_dis_node_index);
+    return std::make_tuple(orin_point + max_ray_length * direction / 1.5, -2, min_dis_node_index);
 
-  return make_tuple(orin_point + max_ray_length * direction, -2, min_dis_node_index);
+  return std::make_tuple(orin_point + max_ray_length * direction, -2, min_dis_node_index);
 }
 
 bool SkeletonGenerator::searchPathInRawMap(Eigen::Vector3d start_point, Eigen::Vector3d end_point,

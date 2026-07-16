@@ -1,6 +1,8 @@
 #include <exploration/uniform_grid.h>
 #include <exploration/hgrid.h>
 #include <exploration/graph_node.h>
+
+using namespace std;
 // #include <path_searching/astar2.h>
 // #include <plan_env/sdf_map.h>
 // #include <plan_env/edt_environment.h>

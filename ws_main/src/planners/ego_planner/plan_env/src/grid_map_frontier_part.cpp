@@ -1,5 +1,7 @@
 #include "plan_env/grid_map.h"
 
+using namespace std;
+
 void GridMap::getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax) 
 {
   Eigen::Vector3i min_esdf = min3i(max3i(md_.update_range_lb3i_ /*- Eigen::Vector3i(5, 5, 5)*/, md_.rb_lb3i_),

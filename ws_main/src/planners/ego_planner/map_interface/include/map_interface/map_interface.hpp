@@ -39,7 +39,7 @@ class MapInterface{
   double resolution_;
   Eigen::Vector3d map_min_, map_max_;
   int drone_id_;
-  string para_file_path_;
+  std::string para_file_path_;
 
  public:
   MapInterface(ros::NodeHandle& nh, MapManager::Ptr map):map_(map)
@@ -196,7 +196,7 @@ class MapInterface{
    * @param[in] pos  Global position [m]
    * @return Pair of (consider_uk, ignore_uk) occupancy
    */
-  pair<int, int> getRawInflateOccupancy(const Eigen::Vector3d &pos) const;
+  std::pair<int, int> getRawInflateOccupancy(const Eigen::Vector3d &pos) const;
 
   /**
    * Check if a voxel index is within the global map.
@@ -410,7 +410,7 @@ inline int MapInterface::getInflateOccupancy(const Eigen::Vector3d &pos) const
 }
 
 // return pair(consider_uk, ignore_uk)
-inline pair<int, int> MapInterface::getRawInflateOccupancy(const Eigen::Vector3d& pos) const{
+inline std::pair<int, int> MapInterface::getRawInflateOccupancy(const Eigen::Vector3d& pos) const{
 
   int consider_uk;
   const int res = map_->sml_->getRawInflateOccupancy(pos);
@@ -421,7 +421,7 @@ inline pair<int, int> MapInterface::getRawInflateOccupancy(const Eigen::Vector3d
   else if (res == GRID_MAP_OUTOFREGION_FLAG || res == GRID_MAP_UNKNOWN_FLAG) consider_uk = MapInterface::OCCUPIED;
   else consider_uk = MapInterface::OCCUPIED;
 
-  return make_pair(consider_uk, ignore_uk);
+  return std::make_pair(consider_uk, ignore_uk);
 }
 
 inline bool MapInterface::isInGlobalMap(const Eigen::Vector3d &pos) const

@@ -369,7 +369,7 @@ namespace ego_planner
      * @return Check result (OBS_FREE / ERR / FINISH / TIME_LIM)
      */
     CHK_RET finelyCheckAndSetConstraintPoints(std::vector<std::pair<int, int>> &segments,
-                                              vector<vector<Eigen::Vector3d>> &a_star_pathes,
+                                              std::vector<std::vector<Eigen::Vector3d>> &a_star_pathes,
                                               const poly_traj::MinJerkOpt &pt_data,
                                               const int cps_num_prePiece,
                                               const bool flag_first_init /*= true*/);
@@ -582,7 +582,7 @@ namespace ego_planner
                                       double &var);
 
   public:
-    typedef unique_ptr<PolyTrajOptimizer> Ptr;
+    typedef std::unique_ptr<PolyTrajOptimizer> Ptr;
   };
 
 } // namespace ego_planner

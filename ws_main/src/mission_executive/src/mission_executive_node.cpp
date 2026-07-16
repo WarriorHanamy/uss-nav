@@ -5,7 +5,6 @@
 
 #include <memory>
 
-using namespace ego_planner;
 using namespace mission_executive;
 
 /**
@@ -22,11 +21,11 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "mission_executive_node");
   ros::NodeHandle nh("~");
 
-  EGOReplanFSM rebo_replan;
+  ego_planner::EGOReplanFSM rebo_replan;
   rebo_replan.init(nh);
 
-  MapInterface::Ptr map_;
-  map_ = std::make_shared<MapInterface>(nh, rebo_replan.getMapPtr());
+  ego_planner::MapInterface::Ptr map_;
+  map_ = std::make_shared<ego_planner::MapInterface>(nh, rebo_replan.getMapPtr());
 
   MissionFSM expl_fsm;
   expl_fsm.init(nh, map_);

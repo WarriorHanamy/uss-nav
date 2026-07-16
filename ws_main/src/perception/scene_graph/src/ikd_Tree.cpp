@@ -1,5 +1,7 @@
 #include "../include/scene_graph/ikd_Tree.h"
 
+using namespace std;
+
 namespace skeleton_gen {
 /*
 Description: ikd-Tree: an incremental k-d tree for robotic applications 

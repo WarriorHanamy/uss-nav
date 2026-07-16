@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <fstream>
 #include <memory>
+
+using namespace std;
 #include <lkh_tsp_solver/lkh_interface.h>
 
 

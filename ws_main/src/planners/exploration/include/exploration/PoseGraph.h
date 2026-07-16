@@ -22,8 +22,8 @@
 #define INFO_MSG_YELLOW(str) do {std::cout << "\033[33m" << str << "\033[0m" << std::endl; } while(false)
 #define INFO_MSG_BLUE(str) do {std::cout << "\033[34m" << str << "\033[0m" << std::endl; } while(false)
 
-using namespace std;
-using namespace Eigen;
+using Eigen::Vector3d;
+using Eigen::Vector4d;
 
 
 
@@ -50,12 +50,12 @@ public:
 	}
 };
 
-typedef map<int, set<Edge>> PoseEdge;
+typedef std::map<int, std::set<Edge>> PoseEdge;
 
 class PoseGraph{
 public:
     
-    map<int, set<Edge> > pose_edge;                          // Record the adjacent list (Not contain the sequential connectted edge)
+    std::map<int, std::set<Edge> > pose_edge;                          // Record the adjacent list (Not contain the sequential connectted edge)
     pcl::PointCloud<pcl::PointXYZI>::Ptr key_pose_list;      // Record the vertex of the graph into a poindcloud
     pcl::KdTreeFLANN<pcl::PointXYZI>::Ptr kdtree_keypose;
     typedef std::shared_ptr<PoseGraph> Ptr;
@@ -80,15 +80,15 @@ public:
 
     pcl::PointXYZI getCor(int inx);
     Eigen::Vector3d getCorPos(int inx);
-    void getEdge(int inx, set<Edge>& res);
+    void getEdge(int inx, std::set<Edge>& res);
     int getSize();
     int getEdgeSize();
 
     void addPoseEdge(int inx_s, int inx_e, double dis);
-    void getPotenConnectSetSelf(int inx2, map<int, double>& res_set, double connect_eulerdis_range, double connect_seqendis_range);                              // Get the potential connectted vertex(close in euler dis and far in sequential dis)
-    void getPotenConnectSetB(pcl::PointXYZI cur, map<int, double>& res_set, double connect_eulerdis_range, double connect_seqendis_range);                              // Get the potential connectted vertex(close in euler dis and far in sequential dis)
+    void getPotenConnectSetSelf(int inx2, std::map<int, double>& res_set, double connect_eulerdis_range, double connect_seqendis_range);                              // Get the potential connectted vertex(close in euler dis and far in sequential dis)
+    void getPotenConnectSetB(pcl::PointXYZI cur, std::map<int, double>& res_set, double connect_eulerdis_range, double connect_seqendis_range);                              // Get the potential connectted vertex(close in euler dis and far in sequential dis)
     void getNearTopoNodesInRange(const Vector3d& cur_pose, const double radius,
-                                 map<double, int>& nearby_v_set);
+                                 std::map<double, int>& nearby_v_set);
     void renewKdtree();
     void renewKdtree(int inx_thr);
     double calSeqentialDis(int inx1, int inx2);
@@ -101,8 +101,8 @@ public:
 class MultiPoseGraph{
 public:
     typedef std::shared_ptr<MultiPoseGraph> Ptr; 
-    map<int, PoseGraph> posegraphes;                 // Posegraph Ptr need reset  // Posegraph Vector
-    map<pair<int, int>, map<int, set<Edge>> > table; // Record the edges between posegraphes
+    std::map<int, PoseGraph> posegraphes;                 // Posegraph Ptr need reset  // Posegraph Vector
+    std::map<std::pair<int, int>, std::map<int, std::set<Edge>> > table; // Record the edges between posegraphes
     int main_inx;
     
     MultiPoseGraph(){};
@@ -116,20 +116,20 @@ public:
     const PoseGraph& getPosegraph(const int pg_id) const;
 
     void clear();
-    bool contain(pair<int, int> p, int inx) const;                            // Is the vertex in the poseedge
+    bool contain(std::pair<int, int> p, int inx) const;                            // Is the vertex in the poseedge
     bool containPg(int inx) const;
-    void addVertex(pair<int, int> p, int inx);                                // Add the vertex iff it's not in the poseedge 
+    void addVertex(std::pair<int, int> p, int inx);                                // Add the vertex iff it's not in the poseedge 
     void addEdge(int ps, int pe, int inx_s, int inx_e, double dis);
-    void getEdge(int ps, int pe, map<int, set<Edge> >& res);
-    void getEdge(int ps, int pe, int vs, set<Edge>& res);
+    void getEdge(int ps, int pe, std::map<int, std::set<Edge> >& res);
+    void getEdge(int ps, int pe, int vs, std::set<Edge>& res);
     int  getEdgeSize(int ps, int pe);
     int  getPoseGraphSize(int pg_id);
 
     // Graph Search
-    void   getNeighbor(pair<int, int> p, multimap<double, pair<int,int>>& neighbor);
-    double calHeris(pair<int, int> cur, pair<int, int> aim);
-    double calGraphPath(pair<int, int> cur, pair<int, int> aim, vector<Vector4d>& path);
-    double calGraphPath(pair<int, int> cur, pair<int, int> aim, vector<Vector3d>& path);
+    void   getNeighbor(std::pair<int, int> p, std::multimap<double, std::pair<int,int>>& neighbor);
+    double calHeris(std::pair<int, int> cur, std::pair<int, int> aim);
+    double calGraphPath(std::pair<int, int> cur, std::pair<int, int> aim, std::vector<Eigen::Vector4d>& path);
+    double calGraphPath(std::pair<int, int> cur, std::pair<int, int> aim, std::vector<Eigen::Vector3d>& path);
     void   dispEdgeTable();
 
     void   encodeMultiPoseGraphData(quadrotor_msgs::MultiPoseGraph &msg, const int pose_graph_id);
@@ -146,7 +146,7 @@ public:
     double connect_eulerdis_range;
     double connect_seqendis_range;
     void mergeotherPoseGraph(MultiPoseGraph::Ptr merged_mpg, int start_inx);
-    void mergeotherPoseGraph(map<int, MultiPoseGraph>& allmpg, MultiPoseGraph::Ptr merged_mpg);
+    void mergeotherPoseGraph(std::map<int, MultiPoseGraph>& allmpg, MultiPoseGraph::Ptr merged_mpg);
 };
 
 inline void PoseGraph::addKeypose(const Vector3d& odom_pos, const float intensity){
@@ -181,7 +181,7 @@ inline bool PoseGraph::contain(int inx) const{
 
 inline void PoseGraph::addVertex(int inx){
 	if (!contain(inx)){
-		set<Edge> edge_list;
+		std::set<Edge> edge_list;
 		pose_edge[inx] = edge_list;
 	}
 }
@@ -206,7 +206,7 @@ inline Eigen::Vector3d PoseGraph::getCorPos(int inx){
 }
 
     
-inline void PoseGraph::getEdge(int inx, set<Edge>& res){
+inline void PoseGraph::getEdge(int inx, std::set<Edge>& res){
     res = pose_edge[inx];
 }
 

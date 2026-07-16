@@ -2,6 +2,8 @@
 #include <plan_manage/planner_manager.h>
 #include <thread>
 
+using namespace std;
+
 namespace ego_planner
 {
 

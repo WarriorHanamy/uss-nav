@@ -17,7 +17,7 @@ private:
     std::ifstream fin;
     std::atomic_flag para_lock_ = ATOMIC_FLAG_INIT; 
 public:
-    ParaeterSerer(const string file_path){
+    ParaeterSerer(const std::string file_path){
         file_path_ = file_path;
         std::cout << "[Parameter Server] Parameter file path: " << file_path_ << std::endl;
         fin.open(file_path_);

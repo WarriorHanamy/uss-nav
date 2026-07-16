@@ -1,5 +1,7 @@
 #include "../include/exploration/ikd_Tree.h"
 
+using namespace std;
+
 namespace ftr_finder {
 /*
 Description: ikd-Tree: an incremental k-d tree for robotic applications 

@@ -381,7 +381,7 @@ class SkeletonGenerator {
      * @param[in]  step_size       Raycast step size [m]
      * @return Tuple of (hit_position [m], hit_type, hit_normal [--])
      */
-    tuple<Eigen::Vector3d, int, Eigen::Vector3d> rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction, double max_ray_length, double step_size);
+    std::tuple<Eigen::Vector3d, int, Eigen::Vector3d> rayCast(Eigen::Vector3d orin_point, Eigen::Vector3d direction, double max_ray_length, double step_size);
     /**
      * Search for a collision-free path in the raw occupancy map.
      *

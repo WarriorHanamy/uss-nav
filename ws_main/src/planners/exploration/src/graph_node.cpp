@@ -1,5 +1,7 @@
 #include <exploration/graph_node.h>
 
+using namespace std;
+
 
 // #include <path_searching/astar2.h>
 // #include <plan_env/sdf_map.h>

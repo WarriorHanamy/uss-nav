@@ -1,6 +1,8 @@
 #include <exploration/frontier_finder.h>
 #include <plan_env/raycast.h>
 
+using namespace std;
+
 
 // #include <path_searching/astar2.h>
 

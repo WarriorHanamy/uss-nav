@@ -47,8 +47,6 @@
 #include "FOV_Checker/FOV_Checker.h"
 #include <tr1/unordered_map>
 
-using namespace std::chrono;
-using namespace std;
 using namespace cv;
 using PointType = pcl::PointXYZI;
 
@@ -174,7 +172,7 @@ class opengl_pointcloud_render
     void render_dynclouds_on_depthimage(cv::Mat& depth_image);
     void depth_to_pointcloud(cv::Mat& depth_image, pcl::PointCloud<PointType>::Ptr origin_cloud, \
                         std::vector<Eigen::Matrix<float, 3, 1> >& depth_ptcloud_vec,\
-                        vector<vector<Eigen::Matrix<float, 3, 1> > >& interline_ptcloud_vec);
+                        std::vector<std::vector<Eigen::Matrix<float, 3, 1> > >& interline_ptcloud_vec);
     inline cv::Mat colormap_depth_img(cv::Mat & depth_mat);
     void read_depth( int depth_buffer_precision , std::vector<Eigen::Matrix<float, 3, 1> >& depth_ptcloud_vec);
     void new_gaussian_interline(cv::Mat  & depth_mat);
@@ -246,23 +244,23 @@ void opengl_pointcloud_render::input_dyn_clouds(pcl::PointCloud<pcl::PointXYZI> 
     //     dyn_clouds_vec.push_back(rgb_pt);
     //     dyn_clouds_index.push_back(i + cloud_color_mesh.size());
     // }
-    // // cout << "dyn_clouds_vec size: " << dyn_clouds_vec.size() << endl;
-    // // cout << "g_eigen_pt_vec befroe insert size: " << g_eigen_pt_vec.size() << endl;
-    // // cout << "points_index_infov befroe insert size: " << points_index_infov.size() << endl;
+    // //         std::    std::   std::cout << "dyn_clouds_vec size: " << dyn_clouds_vec.size() << std::endl;
+    // //         std::    std::   std::cout << "g_eigen_pt_vec befroe insert size: " << g_eigen_pt_vec.size() << std::endl;
+    // //         std::    std::   std::cout << "points_index_infov befroe insert size: " << points_index_infov.size() << std::endl;
 
     // // clear vector to static map size
     // g_eigen_pt_vec.erase(g_eigen_pt_vec.begin() + cloud_color_mesh.size()*2, g_eigen_pt_vec.end());
     // points_index_infov.erase(points_index_infov.begin() + cloud_color_mesh.size(), points_index_infov.end());
     
-    // // cout << "g_eigen_pt_vec after erase size: " << g_eigen_pt_vec.size() << endl;
-    // // cout << "points_index_infov fter erase size: " << points_index_infov.size() << endl;
+    // //         std::    std::   std::cout << "g_eigen_pt_vec after erase size: " << g_eigen_pt_vec.size() << std::endl;
+    // //         std::    std::   std::cout << "points_index_infov fter erase size: " << points_index_infov.size() << std::endl;
     
     // // merge two vector
     // g_eigen_pt_vec.insert(g_eigen_pt_vec.end(), dyn_clouds_vec.begin(), dyn_clouds_vec.end());
     // points_index_infov.insert(points_index_infov.end(), dyn_clouds_index.begin(), dyn_clouds_index.end());
 
-    // // cout << "g_eigen_pt_vec after insert size: " << g_eigen_pt_vec.size() << endl;
-    // // cout << "points_index_infov after insert size: " << points_index_infov.size() << endl;
+    // //         std::    std::   std::cout << "g_eigen_pt_vec after insert size: " << g_eigen_pt_vec.size() << std::endl;
+    // //         std::    std::   std::cout << "points_index_infov after insert size: " << points_index_infov.size() << std::endl;
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -339,7 +337,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
 
     std::cout << "shader path = " << vertex_path << std::endl;;
 
-    // std::cout << "You Pushed a button, now open file: " << a_string.Get() << endl;
+    // std::cout << "You Pushed a button, now open file: " << a_string.Get() << std::endl;
     load_pcd_file( map_filename ,cloud_color_mesh);
 
     //downsample pointcloud
@@ -351,7 +349,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     //Map process
 
     // Mainbuilding process
-    string Mainbuilding_highres, Mainbuilding_lowres;
+    std::string Mainbuilding_highres, Mainbuilding_lowres;
     Mainbuilding_highres = "Mainbuilding_opti_002cutoff_sor.pcd";
     Mainbuilding_lowres = "Mainbuilding_opti_01cutoff_sor.pcd";
     if((map_filename.substr(map_filename.length()-Mainbuilding_highres.length(),map_filename.length())).compare(Mainbuilding_highres) == 0 ||
@@ -369,7 +367,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     }
 
     //rsc process
-    string rsc_highres, rsc_lowres;
+    std::string rsc_highres, rsc_lowres;
     rsc_highres = "rsc_merge_002cutoff.pcd";
     rsc_lowres = "rsc_merge_01cutoff_sor.pcd";
     if((map_filename.substr(map_filename.length()-rsc_highres.length(),map_filename.length())).compare(rsc_highres) == 0 ||
@@ -387,7 +385,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     }
 
     //Yuen Lang 02 process
-    string yuanlang02_highres, yuanlang02_lowres;
+    std::string yuanlang02_highres, yuanlang02_lowres;
     yuanlang02_highres = "yuanlang2_optimize_005cutoff.pcd";
     yuanlang02_lowres = "yuanlang2_optimize_01cutoff.pcd";
     if((map_filename.substr(map_filename.length()-yuanlang02_highres.length(),map_filename.length())).compare(yuanlang02_highres) == 0 || 
@@ -405,7 +403,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     }
 
     //Library G process
-    string library_highres, library_lowres;
+    std::string library_highres, library_lowres;
     library_highres = "LibraryLG_002cutoff_sor.pcd";
     library_lowres = "LibraryLG_01cutoff_sor.pcd";
     if((map_filename.substr(map_filename.length()-library_highres.length(),map_filename.length())).compare(library_highres) == 0 ||
@@ -424,7 +422,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
 
     init_pointcloud_data();
     // preprocess(cloud_color_mesh,all_normals);
-    cout << "Load data finish " << endl;
+    std::cout << "Load data finish " << std::endl;
 
     // unsigned int VBO, VAO;
     glGenVertexArrays(1, &VAO);
@@ -671,7 +669,7 @@ void opengl_pointcloud_render::render_pointcloud(pcl::PointCloud<PointType>::Ptr
         // std::cout << eigen_view << std::endl;
         // std::cout << eigen_proj << std::endl;
 
-        system_clock::time_point t0 = system_clock::now();
+        std::chrono::system_clock::time_point t0 = std::chrono::system_clock::now();
 
         //FoV checker
         // points_index_infov.clear();
@@ -718,9 +716,9 @@ void opengl_pointcloud_render::render_pointcloud(pcl::PointCloud<PointType>::Ptr
         // render boxes
         glBindVertexArray(VAO);  
 
-        system_clock::time_point t1 = system_clock::now();
+        std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
         auto fov_check_dur = t1 - t0;
-        duration<double> fovcheck_second(fov_check_dur);
+        std::chrono::duration<double> fovcheck_second(fov_check_dur);
         // std::cout << "FoV checker cost " << fovcheck_second.count() << " seconds" << std::endl;
 
         glPointSize(1);
@@ -732,18 +730,18 @@ void opengl_pointcloud_render::render_pointcloud(pcl::PointCloud<PointType>::Ptr
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        // system_clock::time_point t3 = system_clock::now();
+        // std::chrono::system_clock::time_point t3 = std::chrono::system_clock::now();
         // auto dur2 = t3 - t1;
-        // duration<double> second2(dur2);
+        // std::chrono::duration<double> second2(dur2);
         // std::cout << "One draw frame cost " << second2.count() << " seconds" << std::endl;
 
         depth_ptcloud_vec.clear();
         read_depth(16,depth_ptcloud_vec);
 
         pcl::copyPointCloud(*render_cloud,*output_pointcloud);
-        system_clock::time_point t2 = system_clock::now();
+        std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         // std::cout << "One frame show cost " << second.count() << " seconds" << std::endl;
 }
 
@@ -762,7 +760,7 @@ void opengl_pointcloud_render::preprocess(pcl::PointCloud< PointType > cloud_all
                   normalEstimation.compute(*all_normals);
 
                   int origin_mapptcount = cloud_all_map.points.size();
-                  cout << "Normal compute finished.., mapsize = " << origin_mapptcount << endl;
+                  std::cout << "Normal compute finished.., mapsize = " << origin_mapptcount << std::endl;
 
                   if (!normal_export_path_.empty())
                       pcl::io::savePCDFileASCII(normal_export_path_, *all_normals);
@@ -772,13 +770,13 @@ void opengl_pointcloud_render::render_dynclouds_on_depthimage(cv::Mat& depth_ima
 {
 
     //count running time
-    system_clock::time_point t1 = system_clock::now();
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
     int width = depth_image.cols;
     int height = depth_image.rows;
 
-    // cout << "depth image size = " << width << " x " << height << endl;
-    // cout << "dyn_clouds size = " << dyn_clouds.points.size() << endl;
+    //         std::    std::   std::cout << "depth image size = " << width << " x " << height << std::endl;
+    //         std::    std::   std::cout << "dyn_clouds size = " << dyn_clouds.points.size() << std::endl;
 
 // #pragma omp parallel default (none) \
 //                     shared (dyn_clouds, effect_range,\
@@ -789,7 +787,7 @@ void opengl_pointcloud_render::render_dynclouds_on_depthimage(cv::Mat& depth_ima
 // #pragma omp for
     for(int i = 0; i< dyn_clouds.points.size();i++)
     {
-        // cout << "in dyn cloud loop: " << i << endl;
+        //         std::    std::   std::cout << "in dyn cloud loop: " << i << std::endl;
 
         Eigen::Vector3f temp_point;
         temp_point(0) = dyn_clouds.points[i].x;
@@ -810,8 +808,8 @@ void opengl_pointcloud_render::render_dynclouds_on_depthimage(cv::Mat& depth_ima
         if(cen_theta_index < 0 || cen_theta_index >= width || cen_fi_index < 0 || cen_fi_index >= height)
             continue;
 
-        // cout << "temp_point = " << temp_point.transpose() << endl;
-        // cout << "temp_point_cam = " << temp_point_cam.transpose() << endl;
+        //         std::    std::   std::cout << "temp_point = " << temp_point.transpose() << std::endl;
+        //         std::    std::   std::cout << "temp_point_cam = " << temp_point_cam.transpose() << std::endl;
 
         if(depth > effect_range)
         {
@@ -821,9 +819,9 @@ void opengl_pointcloud_render::render_dynclouds_on_depthimage(cv::Mat& depth_ima
             int half_cover_angle = ceil(
                 (asin(cover_dis / depth) / (M_PI * polar_res / 180.0)));
 
-            // cout << "half_cover_angle = " << half_cover_angle << endl;
-            // cout << "cen_theta_index = " << cen_theta_index << endl;
-            // cout << "cen_fi_index = " << cen_fi_index << endl;
+            //         std::    std::   std::cout << "half_cover_angle = " << half_cover_angle << std::endl;
+            //         std::    std::   std::cout << "cen_theta_index = " << cen_theta_index << std::endl;
+            //         std::    std::   std::cout << "cen_fi_index = " << cen_fi_index << std::endl;
 
             int theta_start = cen_theta_index - half_cover_angle;
             int theta_end = cen_theta_index + half_cover_angle;
@@ -854,24 +852,24 @@ void opengl_pointcloud_render::render_dynclouds_on_depthimage(cv::Mat& depth_ima
     }
 // }
 
-    system_clock::time_point t2 = system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
     auto dur = t2 - t1;
-    duration<double> second(dur);
-    // cout << "dynamic interline costs " << second.count() << " seconds" << endl;
-        // std::cout << "One frame interline costs " << second.count() << " seconds, " << "first for loop costs "<< second2.count() << endl;
+    std::chrono::duration<double> second(dur);
+    //         std::    std::   std::cout << "dynamic interline costs " << second.count() << " seconds" << std::endl;
+        // std::cout << "One frame interline costs " << second.count() << " seconds, " << "first for loop costs "<< second2.count() << std::endl;
 }
 
 void opengl_pointcloud_render::depth_interline_on_depthimage(cv::Mat& depth_image)
 {
 
     //count running time
-    system_clock::time_point t1 = system_clock::now();
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
     int width = depth_image.cols;
     int height = depth_image.rows;
 
-    vector<Eigen::Vector3f> shouldinterline_ptvec;
-    vector<Eigen::Vector2i> shouldinterline_ptvec_index;
+    std::vector<Eigen::Vector3f> shouldinterline_ptvec;
+    std::vector<Eigen::Vector2i> shouldinterline_ptvec_index;
 
     for (int v = 0; v < height; v++)
     {
@@ -909,8 +907,8 @@ void opengl_pointcloud_render::depth_interline_on_depthimage(cv::Mat& depth_imag
             }
         }
     }
-    system_clock::time_point t_middle = system_clock::now();
-    // cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << endl;
+    std::chrono::system_clock::time_point t_middle = std::chrono::system_clock::now();
+    //         std::    std::   std::cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << std::endl;
 
 // #ifdef USE_OPENMP
 // #pragma 
@@ -955,8 +953,8 @@ void opengl_pointcloud_render::depth_interline_on_depthimage(cv::Mat& depth_imag
                 // int half_cover_angle_x = 1;
                 // int half_cover_angle_y = 1;
 
-                // // cout << "half_cover_angle_x: " << half_cover_angle_x << " half_cover_angle_y: " << half_cover_angle_y << endl;
-                // // cout << "depth: " << depth << " temp_point.norm(): " << temp_point.norm() << endl;
+                // //         std::    std::   std::cout << "half_cover_angle_x: " << half_cover_angle_x << " half_cover_angle_y: " << half_cover_angle_y << std::endl;
+                // //         std::    std::   std::cout << "depth: " << depth << " temp_point.norm(): " << temp_point.norm() << std::endl;
 
                 int theta_start = u - half_cover_angle_x;
                 int theta_end = u + half_cover_angle_x;
@@ -971,8 +969,8 @@ void opengl_pointcloud_render::depth_interline_on_depthimage(cv::Mat& depth_imag
                             {continue;}
                         if(depth_image.at<float>(fi_index_o, theta_index_o) > depth)
                         {
-                            // cout << "depth_image.at<float>(fi_index_o, theta_index_o) = " << depth_image.at<float>(fi_index_o, theta_index_o)
-                            // << "depth = " <<depth << endl;
+                            //         std::    std::   std::cout << "depth_image.at<float>(fi_index_o, theta_index_o) = " << depth_image.at<float>(fi_index_o, theta_index_o)
+                            // << "depth = " <<depth << std::endl;
                             depth_image.at<float>(fi_index_o, theta_index_o) = depth;
                         }
                     }
@@ -981,24 +979,24 @@ void opengl_pointcloud_render::depth_interline_on_depthimage(cv::Mat& depth_imag
     }
 }
 
-    system_clock::time_point t2 = system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         auto dur2 = t_middle - t1;
-        duration<double> second2(dur2);
-        // std::cout << "One frame interline costs " << second.count() << " seconds, " << "first for loop costs "<< second2.count() << endl;
+        std::chrono::duration<double> second2(dur2);
+        // std::cout << "One frame interline costs " << second.count() << " seconds, " << "first for loop costs "<< second2.count() << std::endl;
 }
 
 void opengl_pointcloud_render::faces_need_draw_from_depthimage(cv::Mat& depth_image, cv::Mat color_image)
 {
     //count running time
-    system_clock::time_point t1 = system_clock::now();
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
     int width = depth_image.cols;
     int height = depth_image.rows;
 
-    vector<Eigen::Vector3f> shouldinterline_ptvec;
-    vector<Eigen::Vector2i> shouldinterline_ptvec_index;
+    std::vector<Eigen::Vector3f> shouldinterline_ptvec;
+    std::vector<Eigen::Vector2i> shouldinterline_ptvec_index;
 
     for (int v = 0; v < height; v++)
     {
@@ -1024,7 +1022,7 @@ void opengl_pointcloud_render::faces_need_draw_from_depthimage(cv::Mat& depth_im
         }
     }
 
-    // cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << endl;
+    //         std::    std::   std::cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << std::endl;
 
     g_eigen_tri_pt_vec.clear();
     g_eigen_tri_rgb_vec.clear();
@@ -1044,7 +1042,7 @@ void opengl_pointcloud_render::faces_need_draw_from_depthimage(cv::Mat& depth_im
         dir_vec = temp_point_world - camera;
         dir_vec.normalize();
 
-        // std::cout << "temp_point_normal = " << temp_point_normal << endl;
+        // std::cout << "temp_point_normal = " << temp_point_normal << std::endl;
         // std::cout << "temp_point_world = " << temp_point_world << std::endl;
         
         Eigen::Vector3f xdir_vec, ydir_vec, xydir_vec;
@@ -1067,8 +1065,8 @@ void opengl_pointcloud_render::faces_need_draw_from_depthimage(cv::Mat& depth_im
             xydir_vec.normalize();
         }
             // std::cout << "coverage_dis = " << cover_dis << std::endl;
-            // cout << "xdir_vec = " << xdir_vec << endl;
-            // cout << "ydir_vec = " << ydir_vec << endl;
+            //         std::    std::   std::cout << "xdir_vec = " << xdir_vec << std::endl;
+            //         std::    std::   std::cout << "ydir_vec = " << ydir_vec << std::endl;
 
             g_eigen_tri_pt_vec[ 6 * i ] = temp_point_world + xdir_vec * cover_dis* 0.5 + ydir_vec * cover_dis* 0.5; // may be a little big square
             g_eigen_tri_pt_vec[ 6 * i + 1 ] = temp_point_world + xdir_vec * cover_dis* 0.5 - ydir_vec * cover_dis* 0.5;
@@ -1092,16 +1090,16 @@ void opengl_pointcloud_render::faces_need_draw_from_depthimage(cv::Mat& depth_im
 
     }
 
-    system_clock::time_point t2 = system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         // std::cout << "One frame interline costs " << second.count() << " seconds\n";
 }
 
 //from depth image to point cloud
 void opengl_pointcloud_render::depth_to_pointcloud(cv::Mat& depth_image, pcl::PointCloud<PointType>::Ptr origin_cloud, \
                         std::vector<Eigen::Matrix<float, 3, 1> >& depth_ptcloud_vec,\
-                        vector<vector<Eigen::Matrix<float, 3, 1> > >& interline_ptcloud_vec)
+                        std::vector<std::vector<Eigen::Matrix<float, 3, 1> > >& interline_ptcloud_vec)
 {
     int width = depth_image.cols;
     int height = depth_image.rows;
@@ -1290,7 +1288,7 @@ void opengl_pointcloud_render::depth_to_pointcloud(cv::Mat& depth_image, pcl::Po
         // double  min;
         // double  max;
         // minMaxLoc(pattern_image,&min,&max,0,0);
-        // // cout << "final_min = " << min << ", final_max = " << max << endl ;
+        // //         std::    std::   std::cout << "final_min = " << min << ", final_max = " << max << endl ;
         // pattern_image.convertTo( pattern_image, CV_8UC1, 255.0 / ( max - min ), -min );
         // cv::Mat show_pattern;
         // cv::applyColorMap( pattern_image, show_pattern, cv::COLORMAP_HOT );
@@ -1309,7 +1307,7 @@ inline cv::Mat opengl_pointcloud_render::colormap_depth_img(cv::Mat & depth_mat)
     // expand your range to 0..255. Similar to histEq();
     // cv::minMaxIdx(depth_mat, &min, &max);
     // get_real_near_far<unsigned short>(depth_mat, min, max);
-    // cout << "Min = " << min << ", max = " << max ;
+    //         std::    std::   std::cout << "Min = " << min << ", max = " << max ;
     // min = 0;
     // max = 1000;
     // max = min+10000;
@@ -1327,7 +1325,7 @@ inline cv::Mat opengl_pointcloud_render::colormap_depth_img(cv::Mat & depth_mat)
         }
     }
     minMaxLoc(depth_mat,&min,&max,0,0);
-    // cout << "final_min = " << min << ", final_max = " << max << endl ;
+    //         std::    std::   std::cout << "final_min = " << min << ", final_max = " << max << endl ;
     depth_mat.convertTo( adjMap, CV_8UC1, 255.0 / ( max - min ), -min );
 
         // cv::imshow("Depth1", depth_mat);//colormap_depth_img(image_aft_flip)
@@ -1348,7 +1346,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
     if ( depth_buffer_precision == 16 )
     {
         //add time count
-        system_clock::time_point t0 = system_clock::now();
+        std::chrono::system_clock::time_point t0 = std::chrono::system_clock::now();
 
         int image_width = width;
         int image_height = height;
@@ -1358,7 +1356,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
         // glReadPixels( (int)(2*width) , (int)(1*height)-30, image_width, image_height, GL_DEPTH_COMPONENT, GL_FLOAT , mypixels );
         glReadPixels( 0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, mypixels );
 
-        system_clock::time_point t_afterreadpixels = system_clock::now();
+        std::chrono::system_clock::time_point t_afterreadpixels = std::chrono::system_clock::now();
 
         // read color elements
         // GLubyte mypixels2[ image_width * image_height * 3 ];
@@ -1403,7 +1401,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
         // double  red_min;
         // double  red_max;
         // minMaxLoc(color_image_mat,&red_min,&red_max,0,0);
-        // cout << "red_min = " << red_min << ", red_max = " << red_max << endl ;
+        //         std::    std::   std::cout << "red_min = " << red_min << ", red_max = " << red_max << endl ;
 
         // std::ofstream pixelfile;
         // pixelfile.open("/home/dji/OpenGL/test_pangolin/pixels.csv");
@@ -1424,7 +1422,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
         // std::cout << height_depth << " " <<  UI_WIDTH << std::endl;
         // GLushort mypixels[ UI_WIDTH * height_depth ];
         // glReadPixels( 0, 0, UI_WIDTH, height_depth, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, mypixels );
-        // cout << mypixels[ (int)(width * height *0.5 + width*0.5) ] << endl;
+        //         std::    std::   std::cout << mypixels[ (int)(width * height *0.5 + width*0.5) ] << std::endl;
 
         cv::Mat image_mat(image_height, image_width, CV_32F, mypixels);
 
@@ -1459,7 +1457,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
         // cv::imshow("thresh_mat", thresh_mat);
         // cv::waitKey(1);
 
-        system_clock::time_point t_after_interline = system_clock::now();
+        std::chrono::system_clock::time_point t_after_interline = std::chrono::system_clock::now();
 
         // insert dynamic point clouds into depth image
         // for(int i = 0;i < dyn_clouds.points.size();i++)
@@ -1469,14 +1467,14 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
 
         depth_to_pointcloud(image_aft_flip, render_cloud, depth_ptcloud_vec,interline_ptcloud_vec);
 
-        system_clock::time_point t_aftertransptclouds = system_clock::now();
+        std::chrono::system_clock::time_point t_aftertransptclouds = std::chrono::system_clock::now();
 
         auto dur_readpixels = t_afterreadpixels - t0;
-        duration<double> second_readpixels(dur_readpixels);
+        std::chrono::duration<double> second_readpixels(dur_readpixels);
         auto dur_interline = t_after_interline - t_afterreadpixels;
-        duration<double> second_interline(dur_interline);
+        std::chrono::duration<double> second_interline(dur_interline);
         auto dur_trans2ptclouds = t_aftertransptclouds - t_after_interline;
-        duration<double> second_trans2ptclouds(dur_trans2ptclouds);
+        std::chrono::duration<double> second_trans2ptclouds(dur_trans2ptclouds);
         // std::cout << "Read pixles use " << second_readpixels.count() << "s, " << 
         // "interline use " << second_interline.count() << "s, " << 
         // "trans2ptclouds use " <<  second_trans2ptclouds.count() << "s" << std::endl;
@@ -1484,7 +1482,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
         // double  min;
         // double  max;
         // minMaxLoc(image_aft_flip,&min,&max,0,0);
-        // // cout << "final_min = " << min << ", final_max = " << max << endl ;
+        // //         std::    std::   std::cout << "final_min = " << min << ", final_max = " << max << endl ;
         // image_aft_flip.convertTo( image_aft_flip, CV_8UC1, 255.0 / ( max - min ), -min );
         // cv::applyColorMap( image_aft_flip, image_aft_flip, cv::COLORMAP_JET );
         // cv::imshow("interline Depth", (image_aft_flip));//
@@ -1512,7 +1510,7 @@ void opengl_pointcloud_render::read_depth( int depth_buffer_precision , std::vec
     {
         GLfloat mypixels[ width * height ];
         glReadPixels( 0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, mypixels );
-        cout << mypixels[ (int)(width * height *0.5 + width*0.5) ] << endl;
+        std::cout << mypixels[ (int)(width * height *0.5 + width*0.5) ] << std::endl;
         cv::Mat image_mat(height, width, CV_32F, mypixels);
         cv::Mat image_aft_flip;
         cv::flip(image_mat, image_aft_flip , 0 );
@@ -1548,7 +1546,7 @@ void opengl_pointcloud_render::read_depth2pointcloud( int depth_buffer_precision
         double  min;
         double  max;
         minMaxLoc(image_aft_flip,&min,&max,0,0);
-        // cout << "final_min = " << min << ", final_max = " << max << endl ;
+        //         std::    std::   std::cout << "final_min = " << min << ", final_max = " << max << endl ;
         image_aft_flip.convertTo( image_aft_flip, CV_8UC1, 255.0 / ( max - min ), -min );
         cv::applyColorMap( image_aft_flip, image_aft_flip, cv::COLORMAP_JET );
         cv::imshow("interline Depth", (image_aft_flip));//
@@ -1580,7 +1578,7 @@ void opengl_pointcloud_render::test_vector_insert()
         vec_temp.push_back(temp_point);
     }
 
-        system_clock::time_point t1 = system_clock::now();
+        std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
 
     for(int i = 0;i<20;i++)
@@ -1600,9 +1598,9 @@ void opengl_pointcloud_render::test_vector_insert()
     }
 
 
-        system_clock::time_point t2 = system_clock::now();
+        std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         std::cout << "One insert cost " << second.count() << " seconds\n";
 }
 
@@ -1628,42 +1626,42 @@ void opengl_pointcloud_render::get_Rendering_info()
 
 void opengl_pointcloud_render::printf_pointcloud2_infos(pcl::PCLPointCloud2 & v)
 {
-    cout << "**** Printf pointcloud2 infos *****" << endl;
-    cout << "Header: " << std::endl;
-    cout<< v.header;
-    cout << "Height: ";
-    cout << "  " << v.height << std::endl;
-    cout << "Width: ";
-    cout << "  " << v.width << std::endl;
-    cout << "Pointcloud fields: " << endl;
+    std::cout << "**** Printf pointcloud2 infos *****" << std::endl;
+    std::cout << "Header: " << std::endl;
+    std::cout << v.header;
+    std::cout << "Height: ";
+    std::cout << "  " << v.height << std::endl;
+    std::cout << "Width: ";
+    std::cout << "  " << v.width << std::endl;
+    std::cout << "Pointcloud fields: " << std::endl;
     //clang-format off
     for ( int i = 0; i < v.fields.size(); i++ )
     {
-        cout << "=== Pointcloud field [" << i << "] ===\r\n" << v.fields[ i ];
+        std::cout << "=== Pointcloud field [" << i << "] ===\r\n" << v.fields[ i ];
     }
     //clang-format on
-    cout << endl;
+    std::cout << std::endl;
 }
 
 void opengl_pointcloud_render::load_pcd_file(std::string file_name, pcl::PointCloud<PointType>& cloud_color_mesh)
 {
     // mesh = pcl::PolygonMesh();
-    // cout << "Loading mesh file from : " << file_name << endl;
+    //         std::    std::   std::cout << "Loading mesh file from : " << file_name << std::endl;
     // pcl::io::loadPLYFile( file_name.c_str(), mesh );
     // pcl::fromPCLPointCloud2( mesh.cloud, cloud_color_mesh );
 
-    // cout << "Pointcloud have " << cloud_color_mesh.points.size() << " points." << endl;
-    // cout << "Mesh have pointcloud: " << mesh.cloud.width << ", " << mesh.cloud.height << mesh.cloud.row_step << ", " << mesh.cloud.data.size() << ", " << mesh.cloud.data.size() / mesh.cloud.width
-    //      << endl;
-    // cout << "Size of pcl_points: " << sizeof( pcl::PointXYZRGB ) << ", " << sizeof( pcl::PointXYZRGBA ) << ", " << sizeof( pcl::PointXYZI ) << ", " << sizeof( pcl::PointXYZ ) << endl;
-    // cout << "Mesh have polygon: " << mesh.polygons.size() << endl;
+    //         std::    std::   std::cout << "Pointcloud have " << cloud_color_mesh.points.size() << " points." << std::endl;
+    //         std::    std::   std::cout << "Mesh have pointcloud: " << mesh.cloud.width << ", " << mesh.cloud.height << mesh.cloud.row_step << ", " << mesh.cloud.data.size() << ", " << mesh.cloud.data.size() / mesh.cloud.width
+    //      << std::endl;
+    //         std::    std::   std::cout << "Size of pcl_points: " << sizeof( pcl::PointXYZRGB ) << ", " << sizeof( pcl::PointXYZRGBA ) << ", " << sizeof( pcl::PointXYZI ) << ", " << sizeof( pcl::PointXYZ ) << std::endl;
+    //         std::    std::   std::cout << "Mesh have polygon: " << mesh.polygons.size() << std::endl;
     // printf_pointcloud2_infos( mesh.cloud );
     // printf_polygon_infos(mesh);
 
     int status = pcl::io::loadPCDFile<PointType>(file_name, cloud_color_mesh);
     if (status == -1)
     {
-        cout << "can't read file." << endl;
+        std::cout << "can't read file." << std::endl;
         return ;
     }
 }
@@ -1673,7 +1671,7 @@ void opengl_pointcloud_render::load_normal_file(std::string file_name, pcl::Poin
     int status = pcl::io::loadPCDFile<pcl::Normal>(file_name, normal_ptcloud);
     if (status == -1)
     {
-        cout << "can't read file." << endl;
+        std::cout << "can't read file." << std::endl;
         return ;
     }
 }
@@ -1841,7 +1839,7 @@ void opengl_pointcloud_render::init_pointcloud_data()
     fov_checker.Set_BoxLength(hash_cubesize);
 
     // scope_color(ANSI_COLOR_YELLOW_BOLD);
-    cout << "Now initing the point cloud data: " << endl;
+    std::cout << "Now initing the point cloud data: " << std::endl;
     g_eigen_tri_rgb_vec.clear();
     g_eigen_tri_pt_vec.clear();
     g_pointcloud_vec.clear();
@@ -1948,8 +1946,8 @@ void opengl_pointcloud_render::init_pointcloud_data()
     //     g_eigen_tri_rgb_vec[ 3 * i + 2 ] = g_eigen_rgb_vec[ tri_c ];
     // }
     
-    cout << "Number of points = " << g_eigen_pt_vec.size() / 20000.0 << "X 10000" << endl;
-    cout << "Number of faces = " << g_eigen_tri_pt_vec.size() / 10000.0 << "X 10000" << endl;
+    std::cout << "Number of points = " << g_eigen_pt_vec.size() / 20000.0 << "X 10000" << std::endl;
+    std::cout << "Number of faces = " << g_eigen_tri_pt_vec.size() / 10000.0 << "X 10000" << std::endl;
 }
 
 
@@ -2185,7 +2183,7 @@ void opengl_pointcloud_render::interlinebytriangles(cv::Mat& depth_image)
                     //print sort result
                     // for(int k = 0; k < nearest_points.size(); k++)
                     // {
-                    //     cout << nearest_points[k](0) << " " << nearest_points[k](1) << " " << nearest_points[k](2) << endl;
+                    //     std::cout << nearest_points[k](0) << " " << nearest_points[k](1) << " " << nearest_points[k](2) << std::endl;
                     // }
 
                     //get the three nearest point
@@ -2267,8 +2265,8 @@ int opengl_pointcloud_render::count_fov_point_num(pcl::PointCloud< PointType > c
     pcl::KdTreeFLANN<PointType> kdtree;
     kdtree.setInputCloud(cloud_all_map.makeShared());
 
-    vector<float> diss;
-    vector<int> indexs;
+    std::vector<float> diss;
+    std::vector<int> indexs;
     PointType search_point;
     search_point.x = pos(0);
     search_point.y = pos(1);
@@ -2294,16 +2292,16 @@ int opengl_pointcloud_render::count_fov_point_num(pcl::PointCloud< PointType > c
     // }
 
     //count running time
-    system_clock::time_point t1 = system_clock::now();
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
     //search nearest point
-    vector<int> pointIdxNKNSearch;
-    vector<float> pointNKNSquaredDistance;
+    std::vector<int> pointIdxNKNSearch;
+    std::vector<float> pointNKNSquaredDistance;
     int search_num = kdtree.nearestKSearch(search_point, 1, pointIdxNKNSearch, pointNKNSquaredDistance);
 
-    system_clock::time_point t2 = system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         std::cout << "One search in kdtree cost " << second.count() << " seconds\n";
 }
 
@@ -2311,17 +2309,17 @@ void opengl_pointcloud_render::new_gaussian_interline(cv::Mat  & depth_mat)
 {
 
     //count running time
-    system_clock::time_point t1 = system_clock::now();
+    std::chrono::system_clock::time_point t1 = std::chrono::system_clock::now();
 
     int width = depth_mat.cols;
     int height = depth_mat.rows;
 
     //matrix vector
-    vector<vector<float>> depth_mat_interline_vector;
+    std::vector<std::vector<float>> depth_mat_interline_vector;
     depth_mat_interline_vector.resize(height*width);
 
-    vector<Eigen::Vector3f> shouldinterline_ptvec;
-    vector<Eigen::Vector2i> shouldinterline_ptvec_index;
+    std::vector<Eigen::Vector3f> shouldinterline_ptvec;
+    std::vector<Eigen::Vector2i> shouldinterline_ptvec_index;
 
     for (int v = 0; v < height; v++)
     {
@@ -2376,7 +2374,7 @@ void opengl_pointcloud_render::new_gaussian_interline(cv::Mat  & depth_mat)
         }
     }
 
-    // cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << endl;
+    //         std::    std::   std::cout << "shouldinterline_ptvec size = " << shouldinterline_ptvec.size() << std::endl;
 
     //depth interline points on depth image
     for (int v = 0; v < height; v++)
@@ -2418,9 +2416,9 @@ void opengl_pointcloud_render::new_gaussian_interline(cv::Mat  & depth_mat)
      
     }
 
-    system_clock::time_point t2 = system_clock::now();
+    std::chrono::system_clock::time_point t2 = std::chrono::system_clock::now();
         auto dur = t2 - t1;
-        duration<double> second(dur);
+        std::chrono::duration<double> second(dur);
         // std::cout << "One frame interline costs " << second.count() << " seconds\n";
 
         cv::Mat show_img;

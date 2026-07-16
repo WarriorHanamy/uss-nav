@@ -37,7 +37,6 @@
 using Eigen::Vector4d;
 
 namespace mission_executive {
-using namespace ego_planner;
 namespace {
 /**
  * Normalize an angle to the range [-pi, pi].
@@ -68,7 +67,7 @@ std::string jsonEscape(const std::string& value) {
 }
 }  // namespace
 
-void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
+void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr& map)
 {
   md_ = std::make_shared<MissionData>();
   fp_ = std::make_shared<FSMParam>();
@@ -221,7 +220,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const MapInterface::Ptr& map)
   scene_graph_        = std::make_shared<SceneGraph>(nh, map_);
   vla_search_map_      = std::make_shared<VLASearchMap>(nh, map_);
   counting_scene_graph_ = std::make_shared<CountingSceneGraph>(nh);
-  expl_manager_       = std::make_shared<FrontierManager>(nh, map, scene_graph_);
+  expl_manager_       = std::make_shared<ego_planner::FrontierManager>(nh, map, scene_graph_);
   traj_visualizer_    = std::make_shared<TrajectoryVisualizer>(nh);
 
   scene_graph_->setTargetAndPriorKnowledge(fd_->target_cmd_, fd_->prior_knowledge_);
@@ -604,8 +603,8 @@ bool MissionFSM::prepareVlaSearchPath(
     for (double offset = 0.0; offset <= 2.0; offset += 0.2) {
       Eigen::Vector3d candidate =
           requested_goal + direction_to_robot * offset;
-      if (map_->getInflateOccupancy(candidate) != MapInterface::OCCUPIED &&
-          map_->getOccupancy(candidate) != MapInterface::UNKNOWN) {
+      if (map_->getInflateOccupancy(candidate) != ego_planner::MapInterface::OCCUPIED &&
+          map_->getOccupancy(candidate) != ego_planner::MapInterface::UNKNOWN) {
         navigation_goal = candidate;
         goal_is_free = true;
         break;
@@ -1548,7 +1547,7 @@ void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& g
                                               const std::string& source,
                                               const ros::Time& stamp,
                                               const std::string& frame_id) {
-  expl_manager_->vis_ptr_->visualize_a_ball(fd_->track_pos_, 0.35, "track_pos", expl_vis::Color::blue);
+  expl_manager_->vis_ptr_->visualize_a_ball(fd_->track_pos_, 0.35, "track_pos", ego_planner::expl_vis::Color::blue);
   if (global_poses.empty()) return;
 
   const auto& first_pose = global_poses.front();
@@ -1787,7 +1786,7 @@ bool MissionFSM::getSceneGraphInitSeed(Eigen::Vector3d& init_seed, std::string* 
     return false;
   }
 
-  if (map_->getInflateOccupancy(init_seed) == MapInterface::OCCUPIED) {
+  if (map_->getInflateOccupancy(init_seed) == ego_planner::MapInterface::OCCUPIED) {
     if (reason != nullptr) *reason = "seed in occupied region";
     return false;
   }
@@ -1959,13 +1958,13 @@ void MissionFSM::planLLMExplore() {
     fd_->llm_plan_explore_counter_ = 0;
   }
 
-  if (res == NO_FRONTIER) {
+  if (res == ego_planner::NO_FRONTIER) {
     has_made_area_decision_ = false;
     publishExplorationResult(false, "target_not_found", "target area has no frontier");
     transitState(FINISH, "LLM Plan No Frontier");
     return;
 
-  } else if (res == FAIL) {
+  } else if (res == ego_planner::FAIL) {
     has_made_area_decision_ = false;
     planRegularExplore();
     INFO_MSG_RED(" !!!!!!!!!!!!!!!!!!!! LLM Plan Explore Failed !!!!!!!!!!!!!!!!!!!!!!");
@@ -2026,7 +2025,7 @@ void MissionFSM::planRegularExplore() {
   if (fd_->df_demo_mode_)
     need_rotate_yaw_ = enable_yaw_scan_;
 
-  if (res == SUCCEED)
+  if (res == ego_planner::SUCCEED)
   {
     double dis_2_aim       = (fd_->aim_pos_ - fd_->odom_pos_).norm();
     double dis_2_aim_2d    = (fd_->aim_pos_ - fd_->odom_pos_).head(2).norm();
@@ -2046,14 +2045,14 @@ void MissionFSM::planRegularExplore() {
     // ROS_ERROR_STREAM("[Plan_Traj] start_vel: " << fd_->start_vel_.transpose());
     // ROS_ERROR_STREAM("[Plan_Traj] odom_vel: " << fd_->odom_vel_.transpose());
   }
-  else if (res == NO_FRONTIER)
+  else if (res == ego_planner::NO_FRONTIER)
   {
     const std::string reason = expl_manager_->hasExplorationRegion() ? "region_explored" : "global_explored";
     publishExplorationResult(true, reason, "no frontier remains");
     transitState(FINISH, "FSM");
     // clearVisMarker();
   }
-  else if (res == FAIL)
+  else if (res == ego_planner::FAIL)
   {
     // Still in PLAN_TRAJ state, keep replanning
     ROS_ERROR("\n\n ======================== [FSM] Plan fail! ==========================");
@@ -2341,7 +2340,7 @@ void MissionFSM::planTrack() {
   }
 
   const int res = callTrackPlanner(fd_->aim_pos_, fd_->aim_vel_, fd_->aim_yaw_, fd_->path_res_);
-  if (res != SUCCEED) {
+  if (res != ego_planner::SUCCEED) {
     resetTrackingFinishCandidate();
     ROS_WARN_THROTTLE(1.0, "[TRACK] Tracking target not directly reachable yet.");
     return;
@@ -3216,10 +3215,10 @@ double MissionFSM::adjustTerminateHeightFindingObject(ObjectNode::Ptr target_obj
     check_pos.z() = adjusted_height;
     if (map_->isInLocalMap(check_pos) &&
         map_->isVisible(fd_->odom_pos_, check_pos) &&
-        map_->getInflateOccupancy(check_pos) == MapInterface::FREE) {
+        map_->getInflateOccupancy(check_pos) == ego_planner::MapInterface::FREE) {
       Eigen::Vector3d check_floor = check_pos;
       check_floor.z() -= 0.5;
-      if(map_->getInflateOccupancy(check_floor) == MapInterface::FREE){
+      if(map_->getInflateOccupancy(check_floor) == ego_planner::MapInterface::FREE){
         INFO_MSG_CYAN("[FSM] Adjust Terminate Height Finding Object: from " << ideal_terminate_height
           << " to " << adjusted_height << " m");
         return adjusted_height;
@@ -3266,7 +3265,7 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         Eigen::Vector3d cand = path_res[i];
         // inflate 守卫: 候选点落入膨胀层时, 先尝试 C0 投影到最近 inflate-free 且可达点;
         // 投影趋向下一个路径点(避免回飞); 投影失败才判为真障碍, 去抖标记不可达并跳过(严格不进膨胀层)
-        if (map_->getInflateOccupancy(cand) == MapInterface::OCCUPIED)
+        if (map_->getInflateOccupancy(cand) == ego_planner::MapInterface::OCCUPIED)
         {
           // 前向参考: 路径上更靠近目标的下一个点(末点则取自身, 退化为无方向)
           Eigen::Vector3d toward = (i + 1 < (int)path_res.size()) ? path_res[i + 1] : path_res.back();

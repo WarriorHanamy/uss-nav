@@ -3,6 +3,8 @@
 //
 #include <../include/exploration/viewpoint_handler.h>
 
+using namespace std;
+
 void ViewpointsHandler::calCurrentAreaCostMatrix(const PolyhedronCluster::Ptr &cluster, const Eigen::Vector3d &cur_pos,
                                             const double &cur_yaw, const Eigen::Vector3d & cur_vel, Eigen::MatrixXd &cost_mat) {
     ros::Time start_time = ros::Time::now();

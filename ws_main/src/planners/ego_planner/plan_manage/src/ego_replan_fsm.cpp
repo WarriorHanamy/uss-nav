@@ -3,6 +3,9 @@
 #include <std_msgs/Bool.h>
 #include <tf/tf.h>
 #include <cmath>
+
+using namespace std;
+
 namespace ego_planner
 {
   void EGOReplanFSM::init(ros::NodeHandle &nh)

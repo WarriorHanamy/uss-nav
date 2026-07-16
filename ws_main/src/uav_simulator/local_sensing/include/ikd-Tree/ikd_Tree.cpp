@@ -1,5 +1,7 @@
 #include "ikd_Tree.h"
 
+using namespace std;
+
 /*
 Description: ikd-Tree: an incremental k-d tree for robotic applications 
 Author: Yixi Cai

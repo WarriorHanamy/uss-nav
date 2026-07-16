@@ -1,4 +1,7 @@
 #include <exploration/PoseGraph.h>
+
+using namespace std;
+
 /**
  * @brief Add bi-direction edge to the poseedge
  * 

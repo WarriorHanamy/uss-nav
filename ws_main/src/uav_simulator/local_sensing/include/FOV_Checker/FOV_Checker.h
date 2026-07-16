@@ -20,7 +20,7 @@ public:
     void Set_Env(BoxPointType env_param);
     void Set_BoxLength(double box_len_param);
     void set_log_path(const std::string& path);
-    void check_fov(Eigen::Vector3d cur_pose, Eigen::Vector3d axis, double theta, double depth, vector<BoxPointType> &boxes);
+    void check_fov(Eigen::Vector3d cur_pose, Eigen::Vector3d axis, double theta, double depth, std::vector<BoxPointType> &boxes);
     bool check_box(Eigen::Vector3d cur_pose, Eigen::Vector3d axis, double theta, double depth, const BoxPointType box);
     bool check_line(Eigen::Vector3d cur_pose, Eigen::Vector3d axis, double theta, double depth, Eigen::Vector3d line_p, Eigen::Vector3d line_vec);
     bool check_surface(Eigen::Vector3d cur_pose, Eigen::Vector3d axis,  double theta, double depth, PlaneType plane);

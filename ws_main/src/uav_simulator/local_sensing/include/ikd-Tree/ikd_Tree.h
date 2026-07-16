@@ -16,10 +16,8 @@
 #define ForceRebuildPercentage 0.2
 #define Q_LEN 1000000
 
-using namespace std;
-
 typedef pcl::PointXYZI PointType;
-typedef vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
+typedef std::vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
 
 const PointType ZeroP;
 
@@ -174,11 +172,11 @@ public:
     int validnum();
     void root_alpha(float &alpha_bal, float &alpha_del);
     void Build(PointVector point_cloud);
-    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);
+    void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, std::vector<float> & Point_Distance, double max_dist = INFINITY);
     int Add_Points(PointVector & PointToAdd, bool downsample_on);
-    void Add_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    void Add_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     void Delete_Points(PointVector & PointToDel);
-    int Delete_Point_Boxes(vector<BoxPointType> & BoxPoints);
+    int Delete_Point_Boxes(std::vector<BoxPointType> & BoxPoints);
     void flatten(KD_TREE_NODE * root, PointVector &Storage, delete_point_storage_set storage_type);
     void acquire_removed_points(PointVector & removed_points);
     void print_tree(int index, FILE *fp, float x_min, float x_max, float y_min, float y_max, float z_min, float z_max);

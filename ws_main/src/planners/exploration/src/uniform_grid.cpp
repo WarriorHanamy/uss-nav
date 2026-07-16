@@ -1,6 +1,8 @@
 #include <exploration/uniform_grid.h>
 #include <exploration/graph_node.h>
 
+using namespace std;
+
 #include <map_interface/map_interface.hpp>
 
 namespace ego_planner {
