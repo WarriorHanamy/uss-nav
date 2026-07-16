@@ -20,6 +20,7 @@
 #include <quadrotor_msgs/EgoGoalSet.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <quadrotor_msgs/DetectOut.h>
+#include <quadrotor_msgs/PositionCommand.h>
 #include <quadrotor_msgs/TrackCommand.h>
 #include <quadrotor_msgs/VLASearchBBox.h>
 #include <quadrotor_msgs/VLASearchTarget.h>
@@ -89,12 +90,26 @@ private:
   ros::Subscriber vla_search_target_sub_, vla_search_camera_sub_;
   ros::Subscriber vla_search_ego_state_trigger_sub_;
   ros::Subscriber object_id_nav_replan_sub_;    // 订阅 /object_id_nav_replan
+  // Planner command mux (integrated)
+  ros::Subscriber ego_position_cmd_sub_;
+  ros::Subscriber elastic_position_cmd_sub_;
+  ros::Publisher position_cmd_pub_;
+  std::string planner_cmd_mux_active_mode_{"ego"};
+  double planner_cmd_mux_input_timeout_{0.5};
+  bool has_ego_cmd_{false};
+  bool has_elastic_cmd_{false};
+  int blocked_elastic_traj_id_{-1};
+  ros::Time elastic_mode_start_time_;
+  ros::Time ego_cmd_stamp_;
+  ros::Time elastic_cmd_stamp_;
+  quadrotor_msgs::PositionCommand last_ego_cmd_;
+  quadrotor_msgs::PositionCommand last_elastic_cmd_;
+
   ros::Publisher ego_goal_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
   ros::Publisher fsm_state_pub_;
   ros::Publisher tracking_finish_pub_;
   ros::Publisher tracking_target_odom_pub_;
-  ros::Publisher planner_cmd_mux_mode_pub_;
   ros::Publisher elastic_tracker_trigger_pub_;
   ros::Publisher elastic_tracker_stop_pub_;
   ros::Publisher exploration_result_pub_;
@@ -259,13 +274,6 @@ private:
    */
   bool useElasticTrackerBackend() const;
   /**
-   * Publish planner command multiplexer mode.
-   *
-   * @param[in] mode    Mode name
-   * @param[in] source  Source identifier for logging
-   */
-  void publishPlannerCmdMuxMode(const std::string& mode, const std::string& source);
-  /**
    * Switch planner command mux to EGO planner mode.
    *
    * @param[in] source  Source identifier for logging
@@ -428,6 +436,33 @@ private:
    */
   void triggerObjectIdNavReplan(const std::string& reason);
   /**
+   * Publish a command only if the mode matches the active mux mode.
+   *
+   * @param[in] cmd          Position command
+   * @param[in] source_mode  Source mode identifier
+   */
+  void publishIfActive(const quadrotor_msgs::PositionCommand& cmd,
+                       const std::string& source_mode);
+  /**
+   * Publish the last cached command for the currently active mux mode.
+   *
+   * @param[in] source  Caller identifier for logging
+   */
+  void publishLastForMode(const std::string& source);
+  /**
+   * Check whether the elastic tracker command is usable (fresh + current session).
+   *
+   * @return True if elastic command can be forwarded
+   */
+  bool isElasticCmdUsable() const;
+  /**
+   * Check whether a timestamp is within the input timeout window.
+   *
+   * @param[in] stamp  Message timestamp [s]
+   * @return True if the message is still fresh
+   */
+  bool isFresh(const ros::Time& stamp) const;
+  /**
    * Get the initial seed position for scene graph initialization.
    *
    * @param[out] init_seed  Seed position [m]
@@ -518,6 +553,18 @@ private:
    * @param[in] msg  Bool message
    */
   void objectIdNavReplanCallback(const std_msgs::Bool::ConstPtr& msg);
+  /**
+   * Callback for EGO planner position commands (mux input A).
+   *
+   * @param[in] msg  Position command from EGO planner
+   */
+  void egoPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg);
+  /**
+   * Callback for elastic tracker position commands (mux input B).
+   *
+   * @param[in] msg  Position command from elastic tracker
+   */
+  void elasticPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg);
   /**
    * Handle goal instruction for exploration or object search.
    *

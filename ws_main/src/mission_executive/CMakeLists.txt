@@ -53,15 +53,6 @@ target_link_libraries(mission_executive_node
   # -ldw
   )
 
-add_executable(planner_cmd_mux
-  src/planner_cmd_mux.cpp
-)
-add_dependencies(planner_cmd_mux ${catkin_EXPORTED_TARGETS})
-
-target_link_libraries(planner_cmd_mux
-  ${catkin_LIBRARIES}
-)
-
 add_executable(rc_replan_trigger
   src/rc_replan_trigger.cpp
 )

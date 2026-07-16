@@ -71,6 +71,7 @@ struct MappingParameters
   double obstacles_inflation_;
   int inf_grid_;
   std::string frame_id_;
+  std::string input_mode_;
   int pose_type_;
   bool enable_virtual_walll_;
   double virtual_ceil_, virtual_ground_;
@@ -323,7 +324,10 @@ public:
    *
    * @return True if no depth data received within the timeout window
    */
-  bool getOdomDepthTimeout() const { return md_.flag_have_ever_received_depth_ ? (ros::Time::now() - md_.last_occ_update_time_).toSec() > mp_.odom_depth_timeout_ : false; }
+  bool getOdomDepthTimeout() const {
+    return (md_.flag_have_ever_received_depth_ || md_.flag_have_ever_received_pc_) ?
+      (ros::Time::now() - md_.last_occ_update_time_).toSec() > mp_.odom_depth_timeout_ : false;
+  }
   /**
    * Evaluate ESDF distance and gradient at a position (trilinear interpolation).
    *
@@ -455,7 +459,7 @@ private:
   void depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
                          const geometry_msgs::PoseStampedConstPtr &pose);
   void extrinsicCallback(const nav_msgs::OdometryConstPtr &odom);
-  void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom, const sensor_msgs::ImageConstPtr &gray);
+  void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
   void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img);
   void odomCallback(const nav_msgs::OdometryConstPtr &odom);
 
@@ -492,7 +496,7 @@ private:
   // nav_msgs::Odometry> SyncPolicyImageOdom; typedef
   // message_filters::sync_policies::ExactTime<sensor_msgs::Image,
   // geometry_msgs::PoseStamped> SyncPolicyImagePose;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry, sensor_msgs::Image>
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
       SyncPolicyImageOdom;
   typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, geometry_msgs::PoseStamped>
       SyncPolicyImagePose;
@@ -503,7 +507,6 @@ private:
   std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
   std::shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
   std::shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
-  std::shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> gray_sub_;
   SynchronizerImagePose sync_image_pose_;
   SynchronizerImageOdom sync_image_odom_;
 

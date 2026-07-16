@@ -10,6 +10,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
   /* get parameter */
   // double x_size, y_size, z_size;
   node_.param("grid_map/pose_type", mp_.pose_type_, 1);
+  node_.param("grid_map/input_mode", mp_.input_mode_, std::string("depth"));
   node_.param("grid_map/odom_depth_timeout", mp_.odom_depth_timeout_, 0.25);
 
   // node_.param("grid_map/resolution", mp_.resolution_, -1.0);
@@ -138,36 +139,48 @@ void GridMap::initMap(ros::NodeHandle &nh)
 
   md_.target_pos_update_ = false;
 
-  /* init callback */
-  depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 3));
-  extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
-      "/vins_estimator/extrinsic", 10, &GridMap::extrinsicCallback, this); // sub
-  gray_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "/camera/infra1/image_rect_raw", 3));
-
-  if (mp_.pose_type_ == POSE_STAMPED)
+  const bool use_cloud_input = (mp_.input_mode_ == "cloud" || mp_.input_mode_ == "lidar");
+  if (!use_cloud_input && mp_.input_mode_ != "depth")
   {
-    ROS_ERROR("Do NOT support POSE_STAMPED input because of the added gray image check in updateOccupancy() !!!");
-    // pose_sub_.reset(
-    //     new message_filters::Subscriber<geometry_msgs::PoseStamped>(node_, "grid_map/pose", 25));
-
-    // sync_image_pose_.reset(new message_filters::Synchronizer<SyncPolicyImagePose>(
-    //     SyncPolicyImagePose(100), *depth_sub_, *pose_sub_));
-    // sync_image_pose_->registerCallback(boost::bind(&GridMap::depthPoseCallback, this, _1, _2));
-  }
-  else if (mp_.pose_type_ == ODOMETRY)
-  {
-    odom_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(node_, "grid_map/odom", 100, ros::TransportHints().tcpNoDelay()));
-
-    sync_image_odom_.reset(new message_filters::Synchronizer<SyncPolicyImageOdom>(
-        SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_,  *gray_sub_));
-    sync_image_odom_->registerCallback(boost::bind(&GridMap::depthOdomCallback, this, _1, _2, _3));
+    ROS_WARN("[%s] Unknown grid_map/input_mode='%s'; falling back to depth input.",
+             mp_.name_.c_str(), mp_.input_mode_.c_str());
+    mp_.input_mode_ = "depth";
   }
 
-  // use odometry and point cloud
+  if (!use_cloud_input)
+  {
+    depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 3));
+    extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
+        "/vins_estimator/extrinsic", 10, &GridMap::extrinsicCallback, this); // sub
+
+    if (mp_.pose_type_ == POSE_STAMPED)
+    {
+      ROS_ERROR("Do NOT support POSE_STAMPED input in this simulation mapping pipeline.");
+      // pose_sub_.reset(
+      //     new message_filters::Subscriber<geometry_msgs::PoseStamped>(node_, "grid_map/pose", 25));
+
+      // sync_image_pose_.reset(new message_filters::Synchronizer<SyncPolicyImagePose>(
+      //     SyncPolicyImagePose(100), *depth_sub_, *pose_sub_));
+      // sync_image_pose_->registerCallback(boost::bind(&GridMap::depthPoseCallback, this, _1, _2));
+    }
+    else if (mp_.pose_type_ == ODOMETRY)
+    {
+      odom_sub_.reset(new message_filters::Subscriber<nav_msgs::Odometry>(node_, "grid_map/odom", 100, ros::TransportHints().tcpNoDelay()));
+
+      sync_image_odom_.reset(new message_filters::Synchronizer<SyncPolicyImageOdom>(
+          SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
+      sync_image_odom_->registerCallback(boost::bind(&GridMap::depthOdomCallback, this, _1, _2));
+    }
+  }
+
+  // PointCloud2/LiDAR input uses odometry for sensor origin and grid_map/cloud for observations.
   indep_odom_sub_ =
       node_.subscribe<nav_msgs::Odometry>("grid_map/odom", 10, &GridMap::odomCallback, this);
-  indep_cloud_sub_ =
-      node_.subscribe<sensor_msgs::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
+  if (use_cloud_input)
+  {
+    indep_cloud_sub_ =
+        node_.subscribe<sensor_msgs::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
+  }
 
   std::thread vis_thread(GridMap::visCallback, this);
   vis_thread.detach();
@@ -341,7 +354,6 @@ void GridMap::updateOccupancyPC(void *obj, const sensor_msgs::PointCloud2ConstPt
   /* update occupancy */
   ros::Time t1, t2, t3, t4, t5, t6;
   t1 = ros::Time::now();
-  map->md_.finish_occupancy_ = false;
 
   pcl::PointCloud<pcl::PointXYZ> latest_cloud;
   pcl::fromROSMsg(*img, latest_cloud);
@@ -353,6 +365,7 @@ void GridMap::updateOccupancyPC(void *obj, const sensor_msgs::PointCloud2ConstPt
     return;
 
   map->mtx_.lock();
+  map->md_.finish_occupancy_ = false;
   map->moveRingBuffer();
   t2 = ros::Time::now();
 
@@ -606,8 +619,7 @@ void GridMap::depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
 }
 
 void GridMap::depthOdomCallback(const sensor_msgs::ImageConstPtr &img,
-                                const nav_msgs::OdometryConstPtr &odom,
-                                const sensor_msgs::ImageConstPtr &gray)
+                                const nav_msgs::OdometryConstPtr &odom)
 {
   if (md_.finish_occupancy_)
   {
@@ -631,9 +643,8 @@ void GridMap::depthOdomCallback(const sensor_msgs::ImageConstPtr &img,
     md_.camera_r_m_ = cam_T.block<3, 3>(0, 0);
 
     /* get depth image */
-    cv_bridge::CvImagePtr cv_ptr, gray_ptr;
+    cv_bridge::CvImagePtr cv_ptr;
     cv_ptr = cv_bridge::toCvCopy(img, img->encoding);
-    gray_ptr = cv_bridge::toCvCopy(gray, gray->encoding);
     if (img->encoding == sensor_msgs::image_encodings::TYPE_32FC1)
     {
       (cv_ptr->image).convertTo(cv_ptr->image, CV_16UC1, mp_.k_depth_scaling_factor_);
@@ -641,7 +652,7 @@ void GridMap::depthOdomCallback(const sensor_msgs::ImageConstPtr &img,
 
     mtx_.lock();
     cv_ptr->image.copyTo(md_.depth_image_);
-    gray_ptr->image.copyTo(md_.gray_image_);
+    md_.gray_image_ = cv::Mat::zeros(md_.depth_image_.rows, md_.depth_image_.cols, CV_8UC1);
 
     if ((int)md_.proj_points_.size() != md_.depth_image_.cols * md_.depth_image_.rows / mp_.skip_pixel_ / mp_.skip_pixel_)
       md_.proj_points_.resize(md_.depth_image_.cols * md_.depth_image_.rows / mp_.skip_pixel_ / mp_.skip_pixel_);

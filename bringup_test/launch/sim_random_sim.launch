@@ -40,6 +40,7 @@
         name="drone_$(arg drone_id)_pcl_render_node" output="log">
     <remap from="~global_map" to="/map_generator/global_cloud"/>
     <remap from="~odometry" to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~cloud" to="/livox/lidar_world"/>
 
     <param name="drone_id" value="$(arg drone_id)"/>
     <param name="quadrotor_name" value="drone_$(arg drone_id)"/>

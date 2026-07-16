@@ -11,7 +11,7 @@
     <arg name="odometry_topic" value="visual_slam/odom"/>
     <arg name="camera_pose_topic" value="pcl_render_node/sensor_pose"/>
     <arg name="depth_topic" value="pcl_render_node/depth_img"/>
-    <arg name="cloud_topic" value="pcl_render_node/cloud"/>
+    <arg name="cloud_topic" value="/livox/lidar_world"/>
     <arg name="cx" value="320.0"/>
     <arg name="cy" value="240.0"/>
     <arg name="fx" value="442.025"/>
@@ -30,16 +30,4 @@
     <arg name="scene_graph_load_name" value="$(arg scene_graph_name)"/>
   </include>
 
-  <!-- Command multiplexer (ego / elastic selection) -->
-  <node pkg="mission_executive" type="planner_cmd_mux"
-        name="drone_$(arg drone_id)_planner_cmd_mux" output="screen">
-    <remap from="~ego_position_cmd" to="/planner_mux/ego_position_cmd"/>
-    <remap from="~elastic_position_cmd" to="/planner_mux/elastic_position_cmd"/>
-    <remap from="~mode" to="/planner_mux/mode"/>
-    <remap from="~position_cmd" to="/drone_$(arg drone_id)_planning/pos_cmd"/>
-    <param name="default_mode" value="ego" type="string"/>
-    <param name="ego_mode" value="ego" type="string"/>
-    <param name="elastic_mode" value="elastic" type="string"/>
-    <param name="input_timeout" value="0.5" type="double"/>
-  </node>
 </launch>

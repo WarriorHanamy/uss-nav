@@ -118,7 +118,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   nh.param("tracking/finish_yaw_thresh",      fp_->track_finish_yaw_thresh_, 0.2);
   nh.param("tracking/backend",                 fp_->tracking_backend_, std::string("ego"));
   nh.param("tracking/target_odom_topic",       fp_->tracking_target_odom_topic_, std::string("/target_ekf_odom"));
-  nh.param("planner_cmd_mux/mode_topic",       fp_->planner_cmd_mux_mode_topic_, std::string("/planner_mux/mode"));
+  nh.param("planner_cmd_mux/input_timeout",    planner_cmd_mux_input_timeout_, 0.5);
   nh.param("planner_cmd_mux/ego_mode",         fp_->planner_cmd_mux_ego_mode_, std::string("ego"));
   nh.param("planner_cmd_mux/elastic_mode",     fp_->planner_cmd_mux_elastic_mode_, std::string("elastic"));
   nh.param("elastic_tracker/trigger_topic",    fp_->elastic_tracker_trigger_topic_, std::string("/triger"));
@@ -325,7 +325,11 @@ void MissionFSM::init(ros::NodeHandle& nh, const ego_planner::MapInterface::Ptr&
   fsm_state_pub_        = nh.advertise<std_msgs::String>("/planner/fsm_state", 10);
   tracking_finish_pub_  = nh.advertise<std_msgs::Bool>("/tracking_finish", 10);
   tracking_target_odom_pub_ = nh.advertise<nav_msgs::Odometry>(fp_->tracking_target_odom_topic_, 10);
-  planner_cmd_mux_mode_pub_ = nh.advertise<std_msgs::String>(fp_->planner_cmd_mux_mode_topic_, 10, true);
+  position_cmd_pub_ = nh.advertise<quadrotor_msgs::PositionCommand>("position_cmd", 20);
+  ego_position_cmd_sub_ = nh.subscribe("ego_position_cmd", 20, &MissionFSM::egoPositionCmdCallback, this,
+                                       ros::TransportHints().tcpNoDelay());
+  elastic_position_cmd_sub_ = nh.subscribe("elastic_position_cmd", 20, &MissionFSM::elasticPositionCmdCallback, this,
+                                            ros::TransportHints().tcpNoDelay());
   elastic_tracker_trigger_pub_ = nh.advertise<geometry_msgs::PoseStamped>(fp_->elastic_tracker_trigger_topic_, 10);
   elastic_tracker_stop_pub_ = nh.advertise<std_msgs::Empty>(fp_->elastic_tracker_stop_topic_, 10);
   exploration_result_pub_ = nh.advertise<std_msgs::String>("/planning/exploration_result", 10);
@@ -2230,21 +2234,83 @@ bool MissionFSM::useElasticTrackerBackend() const {
          fp_->tracking_backend_ == "tracker";
 }
 
-void MissionFSM::publishPlannerCmdMuxMode(const std::string& mode,
-                                                  const std::string& source) {
-  std_msgs::String msg;
-  msg.data = mode;
-  planner_cmd_mux_mode_pub_.publish(msg);
-  ROS_INFO_STREAM_THROTTLE(0.5, "[planner_cmd_mux] request mode=" << mode
-                           << " from " << source);
-}
-
 void MissionFSM::switchPlannerCmdMuxToEgo(const std::string& source) {
-  publishPlannerCmdMuxMode(fp_->planner_cmd_mux_ego_mode_, source);
+  const std::string next_mode = fp_->planner_cmd_mux_ego_mode_;
+  if (next_mode == planner_cmd_mux_active_mode_) return;
+  planner_cmd_mux_active_mode_ = next_mode;
+  blocked_elastic_traj_id_ = -1;
+  ROS_INFO_STREAM("[planner_cmd_mux] switch mode to " << planner_cmd_mux_active_mode_ << " from " << source);
+  publishLastForMode(source);
 }
 
 void MissionFSM::switchPlannerCmdMuxToElastic(const std::string& source) {
-  publishPlannerCmdMuxMode(fp_->planner_cmd_mux_elastic_mode_, source);
+  const std::string next_mode = fp_->planner_cmd_mux_elastic_mode_;
+  if (next_mode == planner_cmd_mux_active_mode_) return;
+  planner_cmd_mux_active_mode_ = next_mode;
+  elastic_mode_start_time_ = ros::Time::now();
+  blocked_elastic_traj_id_ = has_elastic_cmd_ ? last_elastic_cmd_.trajectory_id : -1;
+  has_elastic_cmd_ = false;
+  ROS_INFO_STREAM("[planner_cmd_mux] switch mode to " << planner_cmd_mux_active_mode_ << " from " << source);
+  publishLastForMode(source);
+}
+
+bool MissionFSM::isFresh(const ros::Time& stamp) const {
+  if (planner_cmd_mux_input_timeout_ <= 0.0) return true;
+  if (stamp.isZero()) return false;
+  return (ros::Time::now() - stamp).toSec() <= planner_cmd_mux_input_timeout_;
+}
+
+bool MissionFSM::isElasticCmdUsable() const {
+  if (!has_elastic_cmd_ || !isFresh(elastic_cmd_stamp_)) return false;
+  if (!elastic_mode_start_time_.isZero() && elastic_cmd_stamp_ < elastic_mode_start_time_) return false;
+  if (blocked_elastic_traj_id_ >= 0 && last_elastic_cmd_.trajectory_id == blocked_elastic_traj_id_) return false;
+  return true;
+}
+
+void MissionFSM::publishIfActive(const quadrotor_msgs::PositionCommand& cmd,
+                                          const std::string& source_mode) {
+  if (planner_cmd_mux_active_mode_ != source_mode) return;
+  position_cmd_pub_.publish(cmd);
+}
+
+void MissionFSM::publishLastForMode(const std::string& source) {
+  if (planner_cmd_mux_active_mode_ == fp_->planner_cmd_mux_ego_mode_) {
+    if (has_ego_cmd_ && isFresh(ego_cmd_stamp_)) {
+      position_cmd_pub_.publish(last_ego_cmd_);
+    } else {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[planner_cmd_mux] no fresh ego cmd after switch from " << source);
+    }
+    return;
+  }
+  if (planner_cmd_mux_active_mode_ == fp_->planner_cmd_mux_elastic_mode_) {
+    if (isElasticCmdUsable()) {
+      position_cmd_pub_.publish(last_elastic_cmd_);
+    } else {
+      ROS_WARN_STREAM_THROTTLE(1.0, "[planner_cmd_mux] no fresh elastic cmd after switch from " << source);
+    }
+  }
+}
+
+void MissionFSM::egoPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg) {
+  last_ego_cmd_ = *msg;
+  ego_cmd_stamp_ = ros::Time::now();
+  has_ego_cmd_ = true;
+  publishIfActive(last_ego_cmd_, fp_->planner_cmd_mux_ego_mode_);
+}
+
+void MissionFSM::elasticPositionCmdCallback(const quadrotor_msgs::PositionCommand::ConstPtr& msg) {
+  if (planner_cmd_mux_active_mode_ == fp_->planner_cmd_mux_elastic_mode_ && blocked_elastic_traj_id_ >= 0) {
+    if (msg->trajectory_id == blocked_elastic_traj_id_) {
+      ROS_WARN_STREAM_THROTTLE(0.5, "[planner_cmd_mux] drop stale elastic trajectory_id="
+                                        << msg->trajectory_id << " after mode switch");
+      return;
+    }
+    blocked_elastic_traj_id_ = -1;
+  }
+  last_elastic_cmd_ = *msg;
+  elastic_cmd_stamp_ = ros::Time::now();
+  has_elastic_cmd_ = true;
+  publishIfActive(last_elastic_cmd_, fp_->planner_cmd_mux_elastic_mode_);
 }
 
 void MissionFSM::publishElasticTrackerTrigger(const ros::Time& stamp,
