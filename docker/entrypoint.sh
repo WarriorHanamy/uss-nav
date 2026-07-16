@@ -68,6 +68,17 @@ if [ "$LAUNCH_MODE" = "random" ]; then
     roslaunch bringup_test sim_random_main.launch \
       flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
       &>"${ROSLAUNCH_LOG}" &
+elif [ "$LAUNCH_MODE" = "super" ]; then
+    echo "Mode: super planner (PCD + super planner backend)"
+    if [ ! -f "$MAP_PCD" ]; then
+      echo "Missing scene map: $MAP_PCD" >&2
+      echo "Mount or create .data/pcd/J30V2_latest.pcd, or set LAUNCH_MODE=random." >&2
+      exit 1
+    fi
+    roslaunch bringup_test sim_scenegraph_super_main.launch \
+      max_vel:=0.6 max_acc:=1.0 \
+      map_pcd:="$MAP_PCD" \
+      &>"${ROSLAUNCH_LOG}" &
 else
     echo "Mode: scenegraph (PCD + offline scene graph)"
     if [ ! -f "$MAP_PCD" ]; then

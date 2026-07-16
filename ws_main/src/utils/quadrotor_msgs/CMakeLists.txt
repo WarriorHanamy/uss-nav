@@ -45,7 +45,7 @@ add_message_files(
   SwarmInfo.msg
   Px4ctrlDebug.msg
   TakeoffLand.msg
-  EgoGoalSet.msg
+  LocalGoalSet.msg
   Instruction.msg
   TrackCommand.msg
   EgoPlannerResult.msg

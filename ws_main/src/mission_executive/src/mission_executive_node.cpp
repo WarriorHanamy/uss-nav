@@ -30,8 +30,16 @@ int main(int argc, char **argv)
   global_belief::MapInterface::Ptr map_;
   map_ = std::make_shared<global_belief::MapInterface>(nh, global_mm);
 
-  ego_planner::EGOReplanFSM rebo_replan;
-  rebo_replan.init(nh);
+  bool enable_ego_replan = true;
+  nh.param("fsm/enable_ego_replan", enable_ego_replan, true);
+
+  std::unique_ptr<ego_planner::EGOReplanFSM> rebo_replan;
+  if (enable_ego_replan) {
+    rebo_replan = std::make_unique<ego_planner::EGOReplanFSM>();
+    rebo_replan->init(nh);
+  } else {
+    ROS_WARN("[MissionFSM] EGOReplanFSM disabled; external local planner must consume local_goal and publish execution feedback.");
+  }
 
   MissionFSM fsm;
   fsm.init(nh, map_);

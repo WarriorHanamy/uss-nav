@@ -16,7 +16,7 @@
 #include <quadrotor_msgs/MultiPoseGraph.h>
 #include <quadrotor_msgs/HgridMsg.h>
 #include <quadrotor_msgs/PerceptionMsg.h>
-#include <quadrotor_msgs/EgoGoalSet.h>
+#include <quadrotor_msgs/LocalGoalSet.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <quadrotor_msgs/DetectOut.h>
 #include <quadrotor_msgs/PositionCommand.h>
@@ -539,8 +539,8 @@ private:
    */
   void pubLocalGoal(
       const Eigen::Vector3d local_goal, const double yaw = 0.0, const bool look_forward = true,
-      uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
-      uint8_t yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+      uint8_t yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL,
+      uint8_t yaw_path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST);
   /**
    * Stop all robot motion by publishing a zero-velocity command.
    */

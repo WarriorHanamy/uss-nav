@@ -310,7 +310,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Pt
       &MissionFSM::objectIdNavReplanCallback, this,
       ros::TransportHints().tcpNoDelay());
 
-  ego_goal_pub_         = nh.advertise<quadrotor_msgs::EgoGoalSet>("local_goal", 10);
+  ego_goal_pub_         = nh.advertise<quadrotor_msgs::LocalGoalSet>("local_goal", 10);
 
   vis_marker_pub_       = nh.advertise<visualization_msgs::Marker>("planning/fsm_vis", 10);
   vis_path_pub_         = nh.advertise<visualization_msgs::MarkerArray>("planning/fsm_path", 10);
@@ -1298,7 +1298,7 @@ void MissionFSM::handleVlaSearchYaw()
         vla_search_scan_yaw_offsets_[vla_search_scan_index_]);
     pubLocalGoal(
         vla_search_scan_hold_position_, vla_search_scan_target_yaw_, false,
-        quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+        quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
     vla_search_scan_command_time_ = ros::Time::now();
     vla_search_scan_yaw_reached_time_ = ros::Time();
     vla_search_scan_command_published_ = true;
@@ -1491,7 +1491,7 @@ void MissionFSM::handleGoalInstruction(const std::vector<geometry_msgs::Point>& 
       Eigen::Vector3d(first_goal.x, first_goal.y, goal_z),
       yaw,
       look_forward,
-      quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+      quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
 }
 
 void MissionFSM::handleTrackingTarget(const std::vector<geometry_msgs::Point>& global_poses,
@@ -1858,8 +1858,8 @@ void MissionFSM::planTrack() {
   const bool yaw_low_speed = far_yaw_align;
 
   pubLocalGoal(fd_->path_res_.back(), fd_->aim_yaw_, look_forward,
-               yaw_low_speed ? quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED
-                             : quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+               yaw_low_speed ? quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED
+                             : quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
   resetTrackingFinishCandidate();
   INFO_MSG_GREEN("[TRACK] [look_forward = " << look_forward
                  << ", yaw_low_speed = " << yaw_low_speed
@@ -1931,7 +1931,7 @@ void MissionFSM::approachTrack() {
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
     pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
-                 quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+                 quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
     INFO_MSG_GREEN("[TRACK] Switch to yaw-lock, aim: " << fd_->aim_pos_.transpose()
                    << ", yaw: " << fd_->aim_yaw_);
     return;
@@ -1942,7 +1942,7 @@ void MissionFSM::approachTrack() {
     fd_->aim_yaw_ = current_dir;
     resetTrackingFinishCandidate();
     pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
-                 quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+                 quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
     INFO_MSG_GREEN("[TRACK] Update yaw-lock, aim: " << fd_->aim_pos_.transpose()
                    << ", yaw: " << fd_->aim_yaw_);
   }
@@ -2015,8 +2015,8 @@ void MissionFSM::handlePanoramaYaw() {
            panorama_accumulated_yaw_ * 180.0 / M_PI,
            remaining * 180.0 / M_PI);
   pubLocalGoal(panorama_hold_pos_, panorama_command_target_yaw_, false,
-               quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA,
-               quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION);
+               quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA,
+               quadrotor_msgs::LocalGoalSet::YAW_PATH_KEEP_DIRECTION);
   panorama_command_active_ = true;
 }
 
@@ -2039,7 +2039,7 @@ void MissionFSM::handleYawChange() {
       INFO_MSG("[HandleYaw] | Turn Left ...");
       yawhandle_left_published = true;
       pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_left, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -2051,7 +2051,7 @@ void MissionFSM::handleYawChange() {
       INFO_MSG("[HandleYaw] | Turn Right ...");
       yawhandle_right_published = true;
       pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_target_right, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -2063,7 +2063,7 @@ void MissionFSM::handleYawChange() {
       INFO_MSG("[HandleYaw] | Back to raw ...");
       yawhandle_back_published = true;
       pubLocalGoal(fd_->odom_pos_, yawhandle_yaw_raw, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
     }
     return ;
   }
@@ -2380,7 +2380,7 @@ void MissionFSM::goTargetObject() {
       fd_->last_pub_time_ = ros::Time::now();
       ROS_WARN("-------------> RePublish LocalGoal: crash recovery, forcely rotate yaw<----------------");
       pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
       // INFO_MSG_GREEN("[Targ Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     }
 
@@ -2552,7 +2552,7 @@ void MissionFSM::goTargetObject() {
       Eigen::Vector3d target_pos = fd_->path_res_.back();
       target_pos[2] =  adjustTerminateHeightFindingObject(cur_obj, fd_->aim_pos_, true);
       pubLocalGoal(target_pos, fd_->aim_yaw_, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
       fd_->has_rotated_ = true;
       return;
     }
@@ -2652,7 +2652,7 @@ void MissionFSM::goTargetWithWaypoint() {
       fd_->last_pub_time_ = ros::Time::now();
       ROS_WARN("-------------> RePublish LocalGoal: crash recovery, forcely rotate yaw<----------------");
       pubLocalGoal(fd_->odom_pos_, fd_->aim_yaw_, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL);
     }
 
     if (t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
@@ -2669,7 +2669,7 @@ void MissionFSM::goTargetWithWaypoint() {
           << ", err : " << (fd_->odom_yaw_ - fd_->aim_yaw_) / 3.14 * 180.0f << "deg");
 
       pubLocalGoal(fd_->aim_pos_, fd_->aim_yaw_, false,
-                   quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED);
+                   quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED);
       fd_->has_rotated_ = true;
       return;
     }
@@ -2979,10 +2979,10 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
                                       const uint8_t yaw_path_mode)
 {
   // yaw-only全景命令不占用EGO位置轨迹完成标志，目标续接由odometry角度驱动。
-  if (yaw_mode != quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+  if (yaw_mode != quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA)
     fd_->ego_exec_finished_ = false;
 
-  quadrotor_msgs::EgoGoalSet msg;
+  quadrotor_msgs::LocalGoalSet msg;
   msg.drone_id = md_->drone_id_;
   msg.source_task_id = active_instruction_task_id_;
   msg.goal[0] = static_cast<float>(local_goal.x());
@@ -2990,7 +2990,7 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
   msg.goal[2] = static_cast<float>(local_goal.z());
   msg.look_forward = look_forward;
   msg.yaw = yaw;
-  msg.yaw_low_speed = yaw_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED;
+  msg.yaw_low_speed = yaw_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED;
   msg.yaw_mode = yaw_mode;
   msg.yaw_path_mode = yaw_path_mode;
   ego_goal_pub_.publish(msg);

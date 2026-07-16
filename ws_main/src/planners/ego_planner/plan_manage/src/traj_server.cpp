@@ -50,8 +50,8 @@ namespace ego_planner
     yaw_given_.pos = pos;
     yaw_given_.reach_given_yaw_ = true;
     yaw_given_.look_forward = true;
-    yaw_given_.control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL;
-    yaw_given_.path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST;
+    yaw_given_.control_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL;
+    yaw_given_.path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST;
   }
 
 
@@ -61,7 +61,7 @@ namespace ego_planner
     panorama_yaw_active_ = false;
     // 保持方向模式下，将新odometry yaw展开到最接近当前内部连续角的等价角度。
     // 这样分段发布全景目标时不会因odometry跨越[-pi, pi]而丢失累计圈数。
-    if (path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION)
+    if (path_mode == quadrotor_msgs::LocalGoalSet::YAW_PATH_KEEP_DIRECTION)
     {
       double unwrapped_cur_yaw = cur_yaw;
       while (unwrapped_cur_yaw - last_yaw_ > M_PI) unwrapped_cur_yaw -= 2 * M_PI;
@@ -96,8 +96,8 @@ namespace ego_planner
     yaw_given_.pos = hold_pos;
     yaw_given_.reach_given_yaw_ = false;
     yaw_given_.look_forward = false;
-    yaw_given_.control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA;
-    yaw_given_.path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_KEEP_DIRECTION;
+    yaw_given_.control_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA;
+    yaw_given_.path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_KEEP_DIRECTION;
   }
 
   void TrajServer::syncYawFromOdom(const double yaw, const std::string& source)
@@ -153,13 +153,13 @@ namespace ego_planner
     {
       yaw_temp = yaw_given_.yaw;
       double yaw_error = yaw_temp - last_yaw_;
-      if (yaw_given_.path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
+      if (yaw_given_.path_mode == quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST)
       {
         while (yaw_error >= M_PI) yaw_error -= 2 * M_PI;
         while (yaw_error <= -M_PI) yaw_error += 2 * M_PI;
       }
       const bool panorama_stopped =
-          yaw_given_.control_mode != quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA ||
+          yaw_given_.control_mode != quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA ||
           abs(last_yawdot_) < 0.5 * M_PI / 180.0;
       if (abs(yaw_error) < 0.01 && panorama_stopped)
       {
@@ -171,19 +171,19 @@ namespace ego_planner
 
     double yawdot = 0;
     double d_yaw = yaw_temp - last_yaw_;
-    if (yaw_given_.path_mode == quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST)
+    if (yaw_given_.path_mode == quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST)
     {
       if (d_yaw >= M_PI) d_yaw -= 2 * M_PI;
       if (d_yaw <= -M_PI) d_yaw += 2 * M_PI;
     }
 
     double YDM, YDDM;
-    if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+    if (yaw_given_.control_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA)
     {
       YDM = d_yaw >= 0 ? yaw_vel_panorama_ : -yaw_vel_panorama_;
       YDDM = d_yaw >= 0 ? yaw_acc_panorama_ : -yaw_acc_panorama_;
     }
-    else if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_LOW_SPEED)
+    else if (yaw_given_.control_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED)
     {
       YDM = d_yaw >= 0 ? yaw_vel_low_limit_ : -yaw_vel_low_limit_;
       YDDM = d_yaw >= 0 ? yaw_acc_low_limit_ : -yaw_acc_low_limit_;
@@ -194,7 +194,7 @@ namespace ego_planner
       YDDM = d_yaw >= 0 ? yaw_acc_limit_ : -yaw_acc_limit_;
     }
 
-    if (yaw_given_.control_mode == quadrotor_msgs::EgoGoalSet::YAW_MODE_PANORAMA)
+    if (yaw_given_.control_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA)
     {
       // 根据剩余角度生成可制动的目标角速度，再按角加速度限制逐周期逼近。
       // 中间目标会在进入制动区前被上层续接，因此巡航阶段能够保持稳定角速度。

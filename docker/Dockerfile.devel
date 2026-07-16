@@ -39,8 +39,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   apt-get update && apt-get install -y --no-install-recommends \
   ros-noetic-tf ros-noetic-nodelet ros-noetic-cv-bridge \
   ros-noetic-image-transport ros-noetic-pcl-ros \
+  ros-noetic-dynamic-reconfigure \
   mosquitto-clients \
-  ros-noetic-mavros ros-noetic-mavros-extras
+  ros-noetic-mavros ros-noetic-mavros-extras \
+  libdw-dev libyaml-cpp-dev
 
 RUN pip3 install paho-mqtt
 

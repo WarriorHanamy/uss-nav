@@ -5,7 +5,7 @@
 #include <thread>
 #include <optimizer/poly_traj_utils.hpp>
 #include <quadrotor_msgs/PositionCommand.h>
-#include <quadrotor_msgs/EgoGoalSet.h>
+#include <quadrotor_msgs/LocalGoalSet.h>
 #include <ros/ros.h>
 #include <camera_fov/camera_fov.h>
 #include <string>
@@ -69,8 +69,8 @@ namespace ego_planner
             double yaw;
             bool reach_given_yaw_{true};
             bool look_forward{true};
-            uint8_t control_mode{quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL};
-            uint8_t path_mode{quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST};
+            uint8_t control_mode{quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL};
+            uint8_t path_mode{quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST};
             Eigen::Vector3d pos;
         };
         struct TIME_REC
@@ -107,8 +107,8 @@ namespace ego_planner
          * @param[in] path_mode     Yaw path mode
          */
         void setYaw(double des_yaw, double cur_yaw, Eigen::Vector3d pos, bool look_forward = true,
-                    uint8_t control_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
-                    uint8_t path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+                    uint8_t control_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL,
+                    uint8_t path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST);
         /**
          * Set panorama yaw (continuous 360-degree rotation).
          *

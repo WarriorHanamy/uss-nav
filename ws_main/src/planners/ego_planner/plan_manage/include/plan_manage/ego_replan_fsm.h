@@ -19,7 +19,7 @@
 #include <optimizer/poly_traj_optimizer.h>
 #include <plan_env/grid_map.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <quadrotor_msgs/EgoGoalSet.h>
+#include <quadrotor_msgs/LocalGoalSet.h>
 #include <quadrotor_msgs/EgoPlannerResult.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <plan_manage/planner_manager.h>
@@ -216,8 +216,8 @@ namespace ego_planner
 
     /* global trajectory */
     void waypointCallback(const geometry_msgs::PoseStampedPtr &msg);
-    void aimCallback(const quadrotor_msgs::EgoGoalSetPtr &msg);
-    void aimCallbackYawPreset(const quadrotor_msgs::EgoGoalSetPtr &msg);
+    void aimCallback(const quadrotor_msgs::LocalGoalSetPtr &msg);
+    void aimCallbackYawPreset(const quadrotor_msgs::LocalGoalSetPtr &msg);
     void execAim();
     void readGivenWpsAndPlan();
     /**
@@ -232,8 +232,8 @@ namespace ego_planner
      */
     bool planNextWaypoint(
         const Eigen::Vector3d next_wp, const double next_yaw = 0.0, const bool look_forward = true,
-        uint8_t yaw_mode = quadrotor_msgs::EgoGoalSet::YAW_MODE_NORMAL,
-        uint8_t yaw_path_mode = quadrotor_msgs::EgoGoalSet::YAW_PATH_SHORTEST);
+        uint8_t yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL,
+        uint8_t yaw_path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST);
     bool mondifyInCollisionFinalGoal();
 
     /* input-output */
