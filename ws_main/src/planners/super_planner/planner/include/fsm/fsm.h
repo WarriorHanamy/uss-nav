@@ -149,6 +149,10 @@ namespace fsm {
         double system_start_time_;
 
         bool traj_finish_{false};
+        double last_progress_log_t_{-1.0};
+        double last_progress_dist_{-1.0};
+        double last_progress_move_t_{-1.0};
+        int consecutive_replan_failures_{0};
 
         void WriteTimeToLog();
 
@@ -157,6 +161,8 @@ namespace fsm {
         void callMainFsmOnce();
 
         bool closeToGoal(const double &thresh_dis);
+
+        void logNavigationProgress();
 
         void setGoalPosiAndYaw(const Vec3f &p, const Quatf &q);
 

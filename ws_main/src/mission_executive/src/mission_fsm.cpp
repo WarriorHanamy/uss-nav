@@ -65,6 +65,17 @@ std::string jsonEscape(const std::string& value) {
   }
   return out;
 }
+
+std::string formatTopoPath(const vector<Eigen::Vector3d>& path) {
+  std::ostringstream oss;
+  oss << "[";
+  for (size_t i = 0; i < path.size(); ++i) {
+    if (i > 0) oss << ";";
+    oss << i << ":(" << path[i].x() << "," << path[i].y() << "," << path[i].z() << ")";
+  }
+  oss << "]";
+  return oss.str();
+}
 }  // namespace
 
 void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Ptr& map)
@@ -2312,6 +2323,11 @@ void MissionFSM::goTargetObject() {
                       << " path_size=" << fd_->path_res_.size()
                       << " aim_pos=" << fd_->aim_pos_.transpose()
                       << " aim_yaw=" << fd_->aim_yaw_);
+      ROS_INFO_STREAM("[MissionFSM] object_path_topo_sequence target_obj_id=" << fd_->object_target_id_
+                      << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                      << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                      << " path_size=" << fd_->path_res_.size()
+                      << " topo_sequence=" << formatTopoPath(fd_->path_res_));
       INFO_MSG_GREEN("[Targ Obj] | find path to object success, size: " << fd_->path_res_.size());
 
       fd_->has_rotated_     = false;
@@ -2350,18 +2366,71 @@ void MissionFSM::goTargetObject() {
     ROS_INFO_STREAM_THROTTLE(0.5, "[Targ Obj] : ego plan times: " << fd_->ego_plan_times_
                                                                   << "  ego plan statue: " << ego_plan_status_str_
                                                                   << "  ego modify status: " << ego_modify_status_str_);
+    ROS_INFO_STREAM_THROTTLE(1.0, "[MissionFSM] object_topo_progress target_obj_id=" << fd_->object_target_id_
+                             << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                             << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                             << " path_index=" << fd_->path_inx_
+                             << " path_size=" << fd_->path_res_.size()
+                             << " is_final_path_index="
+                             << (fd_->path_res_.empty() ? 0 : (fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1))
+                             << " dis_2_local_aim=" << dis_2_local_aim
+                             << " dis_2_aim_2d=" << dis_2_aim_2d
+                             << " dis_yaw=" << dis_yaw
+                             << " ego_exec_finished=" << fd_->ego_exec_finished_
+                             << " ego_plan_status=" << fd_->ego_plan_status_
+                             << " ego_modify_status=" << fd_->ego_modify_status_
+                             << " odom_pos=" << fd_->odom_pos_.transpose()
+                             << " local_aim=" << fd_->local_aim_pos_.transpose()
+                             << " aim_pos=" << fd_->aim_pos_.transpose());
 
     displayLocalAim();  // 橙色marker标记当前导航点
 
     bool pos_finish = (dis_2_aim_2d < fp_->replan_dis_thresh_);
     bool yaw_finish = !fp_->object_id_nav_require_final_yaw_ ||
                       (fabs(fd_->odom_yaw_ - fd_->aim_yaw_) / M_PI * 180.0 < 5.0);
-    if (pos_finish && yaw_finish) {
+    bool direct_path = fd_->path_res_.size() <= 2;
+    bool final_path_index = !fd_->path_res_.empty() &&
+                            fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1;
+    bool final_topo_stage = direct_path || final_path_index;
+    bool finish_ready = pos_finish && yaw_finish && final_topo_stage && fd_->ego_exec_finished_;
+    if (pos_finish && yaw_finish && !finish_ready) {
+      ROS_INFO_STREAM_THROTTLE(0.5, "[MissionFSM] object_id_nav_finish_hold target_obj_id=" << fd_->object_target_id_
+                               << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                               << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                               << " path_index=" << fd_->path_inx_
+                               << " path_size=" << fd_->path_res_.size()
+                               << " direct_path=" << direct_path
+                               << " final_path_index=" << final_path_index
+                               << " final_topo_stage=" << final_topo_stage
+                               << " pos_finish=" << pos_finish
+                               << " yaw_finish=" << yaw_finish
+                               << " ego_exec_finished=" << fd_->ego_exec_finished_
+                               << " dis_2_aim_2d=" << dis_2_aim_2d
+                               << " dis_2_local_aim=" << dis_2_local_aim
+                               << " dis_yaw=" << dis_yaw
+                               << " reason=wait_final_topo_or_exec_finish");
+    }
+    if (finish_ready) {
       ROS_INFO_STREAM("[MissionFSM] object_id_nav_finish target_obj_id=" << fd_->object_target_id_
                       << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
                       << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                      << " path_index=" << fd_->path_inx_
+                      << " path_size=" << fd_->path_res_.size()
+                      << " direct_path=" << direct_path
+                      << " final_path_index=" << final_path_index
+                      << " final_topo_stage=" << final_topo_stage
+                      << " pos_finish=" << pos_finish
+                      << " yaw_finish=" << yaw_finish
+                      << " ego_exec_finished=" << fd_->ego_exec_finished_
+                      << " ego_plan_status=" << fd_->ego_plan_status_
+                      << " ego_modify_status=" << fd_->ego_modify_status_
                       << " dis_2_aim_2d=" << dis_2_aim_2d
-                      << " dis_yaw=" << dis_yaw);
+                      << " dis_2_local_aim=" << dis_2_local_aim
+                      << " dis_yaw=" << dis_yaw
+                      << " replan_dis_thresh=" << fp_->replan_dis_thresh_
+                      << " odom_pos=" << fd_->odom_pos_.transpose()
+                      << " local_aim=" << fd_->local_aim_pos_.transpose()
+                      << " aim_pos=" << fd_->aim_pos_.transpose());
       ROS_WARN("-------------> Finish: [Reach Aim] <-------------");
       ROS_INFO_STREAM("t_cur: " << t_cur);
       fd_->go_object_process_phase = 0;
@@ -2498,6 +2567,12 @@ void MissionFSM::goTargetObject() {
                     fd_->path_res_, fd_->aim_pos_, fd_->aim_yaw_)) {
               ROS_INFO_STREAM("[MissionFSM] topo_block_fallback_result success=1 tier=tier1_replan path_size="
                               << fd_->path_res_.size());
+              ROS_INFO_STREAM("[MissionFSM] object_path_topo_sequence target_obj_id=" << fd_->object_target_id_
+                              << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                              << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                              << " reason=topo_block_fallback_tier1_replan"
+                              << " path_size=" << fd_->path_res_.size()
+                              << " topo_sequence=" << formatTopoPath(fd_->path_res_));
               INFO_MSG_GREEN("[Targ Obj] Stuck tier1: new path found, size: " << fd_->path_res_.size());
               fd_->path_inx_ = 0;
               getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
@@ -2520,6 +2595,15 @@ void MissionFSM::goTargetObject() {
               fd_->stuck_force_advance_count_++;
               fd_->stuck_force_advance_triggered_ = true;
               fd_->stuck_begin_time_ = -1.0;
+              ROS_WARN_STREAM("[MissionFSM] object_topo_waypoint_forced_advance target_obj_id="
+                              << fd_->object_target_id_
+                              << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                              << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                              << " path_index=" << fd_->path_inx_
+                              << " path_size=" << fd_->path_res_.size()
+                              << " reason=topo_block_fallback_tier2"
+                              << " count=" << fd_->stuck_force_advance_count_
+                              << " odom_pos=" << fd_->odom_pos_.transpose());
               getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
               fd_->last_pub_time_ = ros::Time::now();
               ROS_WARN_STREAM("[MissionFSM] topo_block_fallback tier=tier2_force_advance path_index="
@@ -2566,6 +2650,20 @@ void MissionFSM::goTargetObject() {
         transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "can't reach local goal");
         return ;
       }
+      ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_reached target_obj_id=" << fd_->object_target_id_
+                      << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                      << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                      << " reached_path_index=" << fd_->path_inx_
+                      << " path_size=" << fd_->path_res_.size()
+                      << " is_final_path_index="
+                      << (fd_->path_res_.empty() ? 0 : (fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1))
+                      << " dis_2_local_aim=" << dis_2_local_aim
+                      << " reach_thresh=1.5"
+                      << " ego_exec_finished=" << fd_->ego_exec_finished_
+                      << " ego_plan_status=" << fd_->ego_plan_status_
+                      << " ego_modify_status=" << fd_->ego_modify_status_
+                      << " odom_pos=" << fd_->odom_pos_.transpose()
+                      << " local_aim=" << fd_->local_aim_pos_.transpose());
       getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
       fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
       fd_->stuck_force_advance_triggered_ = false;
@@ -2950,6 +3048,19 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                     << " aim_yaw=" << aim_yaw
                     << " look_forward=" << look_forward);
     pubLocalGoal(fd_->local_aim_pos_, aim_yaw, look_forward);
+    if (md_->mission_state_ == MISSION_FSM_STATE::GO_TARGET_OBJECT) {
+      ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_command target_obj_id=" << fd_->object_target_id_
+                      << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                      << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                      << " path_index=" << (path_res.empty() ? -1 : static_cast<int>(path_res.size()) - 1)
+                      << " path_size=" << path_res.size()
+                      << " is_final_path_index=1"
+                      << " mode=direct_final"
+                      << " local_goal=" << fd_->local_aim_pos_.transpose()
+                      << " aim_pos=" << fd_->aim_pos_.transpose()
+                      << " aim_yaw=" << aim_yaw
+                      << " look_forward=" << look_forward);
+    }
     std::cout << "[EXP-FM][getAndPubNextAim][look_forward = "<< look_forward << "] Pub aim:" << path_res.back().transpose() << ", yaw: " << aim_yaw << std::endl;
     return true;
   }
@@ -2967,6 +3078,20 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
         }
       }
       pubLocalGoal(fd_->local_aim_pos_, aim_yaw, true);
+      if (md_->mission_state_ == MISSION_FSM_STATE::GO_TARGET_OBJECT) {
+        ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_command target_obj_id=" << fd_->object_target_id_
+                        << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                        << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                        << " path_index=" << fd_->path_inx_
+                        << " path_size=" << path_res.size()
+                        << " is_final_path_index="
+                        << (path_res.empty() ? 0 : (fd_->path_inx_ >= static_cast<int>(path_res.size()) - 1))
+                        << " mode=path_point"
+                        << " local_goal=" << fd_->local_aim_pos_.transpose()
+                        << " aim_pos=" << fd_->aim_pos_.transpose()
+                        << " aim_yaw=" << aim_yaw
+                        << " look_forward=1");
+      }
       std::cout << "[EXP-FM][getAndPubNextAim][look_forward = 1]" << " Pub local aim: " << fd_->local_aim_pos_.transpose() << std::endl;
       return true;
     }

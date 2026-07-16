@@ -31,7 +31,9 @@ namespace super_planner {
                                          const rog_map::ROGMapROS::Ptr &map_ptr, const double bound_dis,
                                          const double seed_line_max_dis, const double min_overlap_threshold,
                                          const double virtual_groud_height, const double virtual_ceil_height,
-                                         const double robot_r, const int box_search_skip_num, const int iris_iter_num)
+                                         const double robot_r,
+                                         const int box_search_skip_num,
+                                         const int iris_iter_num)
             : ros_ptr_(ros_ptr), map_ptr_(map_ptr) {
         ciri_ = std::make_shared<CIRI>(ros_ptr_);
         ciri_->setupParams(robot_r, iris_iter_num);

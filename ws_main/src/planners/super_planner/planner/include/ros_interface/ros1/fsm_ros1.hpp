@@ -248,7 +248,7 @@ namespace fsm {
             cmd_pub = nh_.advertise<quadrotor_msgs::PositionCommand>(cfg_.cmd_topic, 10);
             path_pub_ = nh_.advertise<nav_msgs::Path>("fsm/path", 100);
             plan_result_pub_ = nh_.advertise<quadrotor_msgs::EgoPlannerResult>("/planning/ego_plan_result", 10);
-            exec_finish_pub_ = nh_.advertise<std_msgs::Bool>("exec_finish_trigger", 10);
+            exec_finish_pub_ = nh_.advertise<std_msgs::Bool>("/drone_0_ego_planner_node/exec_finish_trigger", 10);
 
             int cmd_cnt = 0;
 

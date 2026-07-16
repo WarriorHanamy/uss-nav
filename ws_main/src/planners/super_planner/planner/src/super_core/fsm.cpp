@@ -67,7 +67,15 @@ namespace fsm {
         RET_CODE ret_code = planner_ptr_->ReplanOnce(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);
         if (ret_code == FAILED) {
 //            cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
-        } else { cout << GREEN << " -- [Fsm] ReplanOnce succeed." << RESET << endl; }
+            consecutive_replan_failures_++;
+            const double dist_to_goal = (robot_state_.p - gi_.goal_p).norm();
+            ros_ptr_->warn(" -- [SUPER][Progress] event=replan_failed state={} consecutive_failures={} dist_to_goal={} pos={} goal={} vel_norm={}",
+                           MACHINE_STATE_STR[machine_state_], consecutive_replan_failures_, dist_to_goal,
+                           robot_state_.p.transpose(), gi_.goal_p.transpose(), robot_state_.v.norm());
+        } else {
+            consecutive_replan_failures_ = 0;
+            cout << GREEN << " -- [Fsm] ReplanOnce succeed." << RESET << endl;
+        }
 
         if (ret_code == EMER) {
             ChangeState("ReplanTimerCallback", EMER_STOP);
@@ -162,6 +170,7 @@ namespace fsm {
             }
             case FOLLOW_TRAJ: {
                 publishCurPoseToPath();
+                logNavigationProgress();
                 break;
             }
             case EMER_STOP: {
@@ -179,6 +188,39 @@ namespace fsm {
         /// The intermedia points should be in free space.
         double dis = (robot_state_.p - gi_.goal_p).norm();
         return dis < thresh_dis;
+    }
+
+    void Fsm::logNavigationProgress() {
+        const double now = ros_ptr_->getSimTime();
+        if (last_progress_log_t_ > 0.0 && now - last_progress_log_t_ < 1.0) {
+            return;
+        }
+        last_progress_log_t_ = now;
+
+        const double dist_to_goal = (robot_state_.p - gi_.goal_p).norm();
+        double progress = 0.0;
+        if (last_progress_dist_ >= 0.0) {
+            progress = last_progress_dist_ - dist_to_goal;
+        }
+        if (last_progress_dist_ < 0.0 || progress > 0.05) {
+            last_progress_move_t_ = now;
+        }
+        last_progress_dist_ = dist_to_goal;
+
+        const double no_progress_duration = last_progress_move_t_ > 0.0 ? now - last_progress_move_t_ : 0.0;
+        const bool stuck_suspect = started_ && machine_state_ == FOLLOW_TRAJ &&
+                                   dist_to_goal > 0.5 &&
+                                   no_progress_duration > 3.0 &&
+                                   robot_state_.v.norm() < 0.2;
+        ros_ptr_->info(" -- [SUPER][Progress] event=nav_tick state={} dist_to_goal={} progress_1s={} no_progress_duration={} stuck_suspect={} pos={} goal={} vel_norm={} consecutive_replan_failures={} traj_finish={}",
+                       MACHINE_STATE_STR[machine_state_], dist_to_goal, progress, no_progress_duration,
+                       stuck_suspect, robot_state_.p.transpose(), gi_.goal_p.transpose(),
+                       robot_state_.v.norm(), consecutive_replan_failures_, traj_finish_);
+        if (stuck_suspect) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=stuck_suspect dist_to_goal={} no_progress_duration={} pos={} goal={} vel_norm={} consecutive_replan_failures={}",
+                           dist_to_goal, no_progress_duration, robot_state_.p.transpose(),
+                           gi_.goal_p.transpose(), robot_state_.v.norm(), consecutive_replan_failures_);
+        }
     }
 
     void Fsm::setGoalPosiAndYaw(const Vec3f &p, const Quatf &q) {
@@ -225,6 +267,9 @@ namespace fsm {
 
         started_ = true;
         gi_.new_goal = true;
+        last_progress_dist_ = -1.0;
+        last_progress_move_t_ = ros_ptr_->getSimTime();
+        consecutive_replan_failures_ = 0;
     }
 
     void Fsm::ChangeState(const string &call_func, const MACHINE_STATE &new_state) {

@@ -191,6 +191,9 @@ namespace super_planner {
         time_consuming_[GENERATE_EXP_TRAJ] = t_exp.stop();
 
         if (exp_ret_code == FAILED) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=generate_exp_failed stage=ReplanOnce dist_to_goal={} pos={} goal={} vel_norm={} on_backup={}",
+                           (robot_state_.p - gi_.goal_p).norm(), robot_state_.p.transpose(),
+                           gi_.goal_p.transpose(), robot_state_.v.norm(), robot_on_backup_traj_);
             ros_ptr_->warn(" -- [SUPER] in [ReplanOnce]: GenerateExpTrajectory failed, force return");
             return FAILED;
         } else if (exp_ret_code == NEW_TRAJ) {
@@ -639,10 +642,16 @@ namespace super_planner {
 //                    }
 //                }
                 if (!PathSearch(guide_path.back(), gi_.goal_p, temp_horizon, new_path)) {
+                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_failed start={} goal={} temp_horizon={} dist_to_goal={} guide_path_len={}",
+                                   guide_path.back().transpose(), gi_.goal_p.transpose(), temp_horizon,
+                                   (robot_state_.p - gi_.goal_p).norm(),
+                                   geometry_utils::computePathLength(guide_path));
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
                     return FAILED;
                 }
                 if (new_path.size() < 2) {
+                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_too_short start={} goal={} temp_horizon={} new_path_size={}",
+                                   guide_path.back().transpose(), gi_.goal_p.transpose(), temp_horizon, new_path.size());
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
                     return FAILED;
                 }
@@ -710,6 +719,9 @@ namespace super_planner {
         bool bool_ret_code = cg_ptr_->SearchPolytopeOnPath(guide_path, sfc, shifted_sfc_start_pt_, cfg_.use_fov_cut);
 
         if (!bool_ret_code) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=sfc_failed guide_path_size={} guide_path_len={} dist_to_goal={} shifted_sfc_start={} connected_goal={}",
+                           guide_path.size(), geometry_utils::computePathLength(guide_path),
+                           (robot_state_.p - gi_.goal_p).norm(), shifted_sfc_start_pt_.transpose(), connected_goal);
             ros_ptr_->warn(" -- [SUPER] SearchPolytopeOnPath for new path failed");
             return FAILED;
         }
@@ -751,6 +763,12 @@ namespace super_planner {
             latest_replan.setExpCondition(init_ts, init_ps, pos_init_state, pos_fina_state, sfc);
         }
         if (!temp_ret) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=exp_opt_failed guide_path_size={} guide_path_len={} sfc_count={} connected_goal={} dist_to_goal={} pos={} goal={} init_pos={} final_pos={} max_vel={} max_acc={}",
+                           guide_path.size(), geometry_utils::computePathLength(guide_path), sfc.size(),
+                           connected_goal, (robot_state_.p - gi_.goal_p).norm(),
+                           robot_state_.p.transpose(), gi_.goal_p.transpose(),
+                           pos_init_state.col(0).transpose(), pos_fina_state.col(0).transpose(),
+                           cfg_.exp_traj_cfg.max_vel, cfg_.exp_traj_cfg.max_acc);
             ros_ptr_->warn(" -- [SUPER] OptimizationExpTrajInPolytopes for new path failed");
             return FAILED;
         }
