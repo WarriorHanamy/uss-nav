@@ -3,8 +3,6 @@
   <arg name="init_x" default="0.0"/>
   <arg name="init_y" default="0.0"/>
   <arg name="init_z" default="1.0"/>
-  <arg name="max_vel" default="0.6"/>
-  <arg name="max_acc" default="1.0"/>
   <arg name="uav_mass" default="1.64"/>
   <arg name="uav_grav" default="9.81"/>
 
@@ -31,8 +29,6 @@
   <!-- Super planner (replaces EGO planner as local backend) -->
   <include file="$(find bringup_test)/launch/sim_scenegraph_super_planner.launch">
     <arg name="drone_id" value="$(arg drone_id)"/>
-    <arg name="max_vel" value="$(arg max_vel)"/>
-    <arg name="max_acc" value="$(arg max_acc)"/>
     <arg name="uav_mass" value="$(arg uav_mass)"/>
     <arg name="uav_grav" value="$(arg uav_grav)"/>
   </include>
