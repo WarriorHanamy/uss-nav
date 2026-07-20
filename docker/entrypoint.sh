@@ -21,6 +21,8 @@ echo "RViz managed by ~/rviz_ws (external), not started here."
 
 LAUNCH_MODE="${LAUNCH_MODE:-scenegraph}"
 MAP_PCD="${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}"
+SUPPORT_PCD_ENABLE="${SUPPORT_PCD_ENABLE:-true}"
+SUPPORT_PCD="${SUPPORT_PCD:-/workspace/.data/pcd/20260705-magic2-d0.05.pcd}"
 TRACE_ENABLE="${TRACE_ENABLE:-0}"
 TRACE_ID="${TRACE_ID:-uss-nav-$(date +%Y%m%d-%H%M%S)}"
 TRACE_DIR="${TRACE_DIR:-/workspace/.artifacts/traces/${TRACE_ID}}"
@@ -78,6 +80,8 @@ elif [ "$LAUNCH_MODE" = "super" ]; then
     roslaunch bringup_test sim_scenegraph_super_main.launch \
       max_vel:=0.6 max_acc:=1.0 \
       map_pcd:="$MAP_PCD" \
+      support_pcd_enable:="$SUPPORT_PCD_ENABLE" \
+      support_pcd:="$SUPPORT_PCD" \
       &>"${ROSLAUNCH_LOG}" &
 else
     echo "Mode: scenegraph (PCD + offline scene graph)"
@@ -89,6 +93,8 @@ else
     roslaunch bringup_test sim_scenegraph_main.launch \
       flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
       map_pcd:="$MAP_PCD" \
+      support_pcd_enable:="$SUPPORT_PCD_ENABLE" \
+      support_pcd:="$SUPPORT_PCD" \
       &>"${ROSLAUNCH_LOG}" &
 fi
 LAUNCH_PID=$!

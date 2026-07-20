@@ -75,7 +75,7 @@ echo "Starting uss-nav simulation (devel)..."
 docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" down --remove-orphans >/dev/null 2>&1 || true
 docker rm -f "${DEVEL_CONTAINER}" >/dev/null 2>&1 || true
 docker rm -f "${FLUENT_BIT_CONTAINER}" >/dev/null 2>&1 || true
-docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" up --build --force-recreate -d devel
+docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" up --force-recreate -d devel
 if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
     if ! docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" up --force-recreate -d fluent-bit; then
         echo "Warning: Fluent Bit sidecar did not start; ROS logs and run.bag will still be written." >&2

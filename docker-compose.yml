@@ -21,6 +21,8 @@ services:
       - TRACE_BAG_TOPICS=${TRACE_BAG_TOPICS:-}
       - LAUNCH_MODE=${LAUNCH_MODE:-scenegraph}
       - MAP_PCD=${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}
+      - SUPPORT_PCD_ENABLE=${SUPPORT_PCD_ENABLE:-true}
+      - SUPPORT_PCD=${SUPPORT_PCD:-/workspace/.data/pcd/20260705-magic2-d0.05.pcd}
     volumes:
       - type: bind
         source: ./ws_main/src

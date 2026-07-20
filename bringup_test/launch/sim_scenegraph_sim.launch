@@ -5,6 +5,14 @@
   <arg name="init_z" default="1.0"/>
   <arg name="map_pcd" default="/workspace/.data/pcd/J30V2_latest.pcd"/>
 
+  <!-- prior_local support cloud (ported from FAST_LIO prior_local):
+       cut a local patch from a prior PCD around current pose and merge
+       it into the simulated LiDAR scan to assist mapping -->
+  <arg name="support_pcd_enable" default="true"/>
+  <arg name="support_pcd" default="/workspace/.data/pcd/20260705-magic2-d0.05.pcd"/>
+  <arg name="cloud_out" value="/livox/lidar_world_raw" if="$(arg support_pcd_enable)"/>
+  <arg name="cloud_out" value="/livox/lidar_world" unless="$(arg support_pcd_enable)"/>
+
   <!-- PCD map publisher (global occupancy map) -->
   <node pkg="map_generator" name="map_pub" type="map_pub" output="screen"
         args="$(arg map_pcd)">
@@ -54,7 +62,7 @@
         name="drone_$(arg drone_id)_pcl_render_node" output="log">
     <remap from="~global_map" to="/map_generator/global_cloud/fixed"/>
     <remap from="~odometry" to="/drone_$(arg drone_id)_visual_slam/odom"/>
-    <remap from="~cloud" to="/livox/lidar_world"/>
+    <remap from="~cloud" to="$(arg cloud_out)"/>
     <remap from="~sensor_pose" to="/drone_$(arg drone_id)_pcl_render_node/camera_pose"/>
     <remap from="~depth_img" to="/drone_$(arg drone_id)_pcl_render_node/depth"/>
 
@@ -85,6 +93,41 @@
     <param name="collisioncheck_enable" value="0"/>
     <param name="collision_range" value="0.3"/>
     <param name="output_pcd" value="0"/>
+  </node>
+
+  <!-- prior_local support cloud merger (aligned with diff-uss-nav obj_nav.launch):
+       extracts prior local cloud around current pose, merges into the raw
+       simulated scan, and republishes on /livox/lidar_world so downstream
+       planner configs stay unchanged -->
+  <node pkg="map_generator" name="drone_$(arg drone_id)_cloud_merger"
+        type="support_cloud_pub" output="screen"
+        if="$(arg support_pcd_enable)">
+    <param name="support_pcd_path" value="$(arg support_pcd)"/>
+    <param name="prior_local_radius" value="2.0"/>
+    <param name="prior_local_leaf" value="0.1"/>
+    <!-- extraction shape: 0=sphere (radius), 1=box (6-direction extends below,
+         yaw follows heading, up/down always along world z) -->
+    <param name="prior_local_mode"          type="int"    value="1"/>
+    <param name="prior_box_extend_forward"  type="double" value="2.0"/>
+    <param name="prior_box_extend_backward" type="double" value="0.6"/>
+    <param name="prior_box_extend_left"     type="double" value="0.6"/>
+    <param name="prior_box_extend_right"    type="double" value="0.6"/>
+    <param name="prior_box_extend_up"       type="double" value="1.5"/>
+    <param name="prior_box_extend_down"     type="double" value="2.0"/>
+    <!-- motion-threshold caching (aligned with FAST_LIO prior_local_motion_*) -->
+    <param name="prior_local_motion_check"      type="bool"   value="false"/>
+    <param name="prior_local_motion_thresh"     type="double" value="0.5"/>
+    <param name="prior_local_motion_yaw_thresh" type="double" value="0.1"/>
+    <!-- support map outlier filter (aligned with FAST_LIO prior_outlier_filter, run once at PCD load) -->
+    <param name="prior_outlier_filter/enable"        type="bool"   value="true"/>
+    <param name="prior_outlier_filter/type"          type="int"    value="1"/>
+    <param name="prior_outlier_filter/radius"        type="double" value="0.3"/>
+    <param name="prior_outlier_filter/min_neighbors" type="int"    value="30"/>
+    <param name="prior_outlier_filter/mean_k"        type="int"    value="20"/>
+    <param name="prior_outlier_filter/std_threshold" type="double" value="2.0"/>
+    <remap from="~cloud" to="/livox/lidar_world_raw"/>
+    <remap from="~odom"  to="/drone_$(arg drone_id)_visual_slam/odom"/>
+    <remap from="~cloud_merged" to="/livox/lidar_world"/>
   </node>
 
 </launch>

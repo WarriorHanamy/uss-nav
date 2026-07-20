@@ -70,7 +70,7 @@ trap cleanup EXIT
 
 # ── start simulation container ──────────────────────────────────────
 echo "Starting uss-nav simulation (devel)..."
-docker compose --project-directory "${SCRIPT_DIR}" up --build --force-recreate -d devel
+docker compose --project-directory "${SCRIPT_DIR}" up --force-recreate -d devel
 if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
     if ! docker compose --project-directory "${SCRIPT_DIR}" up --force-recreate -d fluent-bit; then
         echo "Warning: Fluent Bit sidecar did not start; ROS logs and run.bag will still be written." >&2

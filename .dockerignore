@@ -20,6 +20,10 @@ env/
 .codex
 .idea/
 
+# Runtime artifacts and data mounts (bind-mounted at runtime, never COPYed)
+.artifacts/
+.data/
+
 yoloe/
 FTXUI/
 fish-speech/
