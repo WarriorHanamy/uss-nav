@@ -1,0 +1,83 @@
+<launch>
+    <arg name="drone_id"/>
+
+    <group ns="drone_$(arg drone_id)_ego_planner_node">
+        <!-- skeleton -->
+        <param name="skeleton/local_x_max" value="4"/>
+        <param name="skeleton/local_x_min" value="-2"/>
+        <param name="skeleton/local_y_max" value="4"/>
+        <param name="skeleton/local_y_min" value="-4"/>
+        <param name="skeleton/local_z_max" value="1.0"/>
+        <param name="skeleton/local_z_min" value="-1.0"/>
+        <param name="skeleton/expand_time_limit" value="60"/>
+        <param name="skeleton/frontier_creation_threshold" value="0.3"/>
+        <param name="skeleton/frontier_jump_threshold" value="3.0"/>
+        <param name="skeleton/frontier_split_threshold" value="2.0"/>
+        <param name="skeleton/min_loop_creation_threshold" value="1"/>
+        <param name="skeleton/min_flowback_creation_radius_threshold" value="0.5"/>
+        <param name="skeleton/min_node_radius" value="0.6"/>
+        <param name="skeleton/min_node_dense_radius" value="1.0"/>
+        <param name="skeleton/search_margin" value="0.2"/>
+        <param name="skeleton/max_ray_length" value="1.4"/>
+        <param name="skeleton/max_expansion_ray_length" value="2.0"/>
+        <param name="skeleton/max_height_diff" value="1.5"/>
+        <param name="skeleton/sampling_density" value="50"/>
+        <param name="skeleton/sampling_level" value="4"/>
+        <param name="skeleton/max_facets_grouped" value="4"/>
+        <param name="skeleton/resolution" value="0.1"/>
+        <param name="skeleton/truncated_z_high" value="2.5"/>
+        <param name="skeleton/truncated_z_low" value="0"/>
+        <param name="skeleton/debug_mode" value="false"/>
+        <param name="skeleton/bad_loop" value="true"/>
+        <param name="skeleton/visualize_final_result_only" value="true"/>
+        <param name="skeleton/visualize_all" value="true"/>
+        <param name="skeleton/visualize_outwards_normal" value="true"/>
+        <param name="skeleton/visualize_nbhd_frontiers" value="false"/>
+        <param name="skeleton/visualize_black_polygon" value="true"/>
+
+        <!-- obj (dead param max_threads removed, dead param posegraph/* removed) -->
+        <param name="obj/camera_fx" type="double" value="442.0250167097101"/>
+        <param name="obj/camera_fy" type="double" value="442.0250167097101"/>
+        <param name="obj/camera_cx" type="double" value="320.0"/>
+        <param name="obj/camera_cy" type="double" value="240.0"/>
+        <param name="obj/lidar_cam_tx" type="double" value="0.0"/>
+        <param name="obj/lidar_cam_ty" type="double" value="0.0"/>
+        <param name="obj/lidar_cam_tz" type="double" value="0.0"/>
+        <param name="obj/lidar_cam_pitch" type="double" value="0.0"/>
+        <param name="obj/lidar_cam_roll" type="double" value="0.0"/>
+        <param name="obj/lidar_cam_yaw" type="double" value="0.0"/>
+        <param name="obj/use_realsense" type="bool" value="false"/>
+        <param name="obj/use_camera_intrinsics" type="bool" value="false"/>
+        <param name="obj/fov_vertical" type="double" value="57.0"/>
+        <param name="obj/fov_horizontal" type="double" value="71.0"/>
+        <param name="obj/cam_resolution_h" type="int" value="480"/>
+        <param name="obj/cam_resolution_w" type="int" value="640"/>
+        <param name="obj/max_depth" type="double" value="5.0"/>
+        <param name="obj/min_depth" type="double" value="0.2"/>
+        <param name="obj/max_ray_length" type="double" value="4.0"/>
+        <param name="obj/voxel_size" type="double" value="0.05"/>
+        <param name="obj/mean_k" type="int" value="60"/>
+        <param name="obj/std_dev_thresh" type="double" value="0.01"/>
+        <param name="obj/obj_cloud_num_thresh" type="int" value="20"/>
+        <param name="obj/detection_counter_thresh" type="int" value="5"/>
+        <param name="obj/filter_run_duration" type="double" value="3.0"/>
+        <param name="obj/obj_main_thread_run_hz" type="int" value="5"/>
+        <param name="obj/seg_result_topic" type="string" value="/yoloe/encodemask"/>
+        <param name="obj/depth_cloud_disp_all" type="bool" value="false"/>
+
+        <!-- counting -->
+        <param name="counting_obj/max_depth" type="double" value="8.0"/>
+        <param name="counting_obj/detection_counter_thresh" type="int" value="5"/>
+        <param name="counting_scene_graph/json_topic" type="string" value="/counting_scene_graph/json_text"/>
+
+        <!-- topo_block -->
+        <param name="topo_block/enable"                  type="bool"   value="false"/>
+        <param name="topo_block/repair_radius"           type="double" value="0.3"/>
+        <param name="topo_block/repair_use_visibility"   type="bool"   value="false"/>
+        <param name="topo_block/hits_thresh"             type="int"    value="2"/>
+        <param name="topo_block/ttl"                     type="double" value="8.0"/>
+        <param name="topo_block/revalidate_on_fail"      type="bool"   value="false"/>
+        <param name="topo_block/max_iter"                type="int"    value="4"/>
+        <param name="topo_block/repair_insert_node"      type="bool"   value="false"/>
+    </group>
+</launch>

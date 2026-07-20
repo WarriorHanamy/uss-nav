@@ -10,7 +10,7 @@
 
 | 参数 | 值 | 定义位置 |
 |------|-----|----------|
-| `camera_fov/top_angle` | 0.6 | `advanced_param_sim.xml:174`, `advanced_param_real.xml:174`, `advanced_param_objsam.xml:116`, `sim_ego_planner.yaml:77`, `sim_scenegraph_planner.yaml:83` |
+| `camera_fov/top_angle` | 0.6 | `mission_backend_sim.xml`, `advanced_param_real.xml:174`, `advanced_param_objsam.xml:116`, `sim_ego_planner.yaml:77`, `sim_scenegraph_planner.yaml:83` |
 | `camera_fov/left_angle` | 0.76 | 同上 |
 | `camera_fov/right_angle` | 0.76 | 同上 |
 | `camera_fov/max_dist` | 6.0 | 同上 |

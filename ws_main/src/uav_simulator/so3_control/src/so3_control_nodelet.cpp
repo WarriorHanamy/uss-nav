@@ -197,6 +197,10 @@ SO3ControlNodelet::onInit(void)
   n.param("mass", mass, 0.5);
   controller_.setMass(mass);
 
+  double g;
+  n.param("g", g, 9.81);
+  controller_.setGravity(g);
+
   n.param("use_external_yaw", use_external_yaw_, true);
 
   n.param("gains/rot/x", kR_[0], 1.5);

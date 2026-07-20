@@ -182,6 +182,10 @@ REAL_YOLOE=1 docker compose run --rm release
 
 当 `REAL_YOLOE=1` 且 `/workspace/.pretrained/yoloe-11m-seg-pf.pt` 存在时，自动启动 `predict_realtime_cam_sim.py`；否则回退到 `fake_realtime_cam_sim.py`。
 
+### `.data/scene_graph/` — J30V2 场景地形说明
+
+J30V2 场景的 z 参考系中，scenegraph 骨架路径 z 从起飞点 ~1.0 下降到 -7~-10 是**正确地形**：任务动线为"下楼后进入开阔空间"（如 export → starbucks 方向）。诊断 trace 时不要把 z 下降误判为坐标系偏移。
+
 ## Trace / ROS Logging Rules — 强制约束
 
 **项目诊断 trace 的文本事实来源只能是 ROS log。** 禁止新增或依赖 `decision.jsonl`、自定义旁路 trace 文件作为主要诊断依据；如果 ROS log 信息缺失，应在对应模块补充 `ROS_INFO` / `ROS_WARN` / `ROS_ERROR`。
@@ -246,7 +250,7 @@ bringup_test/
 │   ├── planning/                 # 轨迹规划 dev 启动文件
 │   ├── mapping/                  # 地图 dev 启动文件
 │   ├── target_ekf/               # 目标跟踪 EKF
-│   ├── ego_planner/include/      # EGO Planner 组件（xml include，含 advanced_param_sim.xml）
+│   ├── ego_planner/include/      # EGO Planner 参数（ego_params_sim.xml）
 │   ├── uav_simulator/            # UAV 动力学仿真
 │   ├── box_odom_estimator/       # 包围盒里程计估计器
 │   └── mission_executive/        # global_box.yaml（由 map_interface C++ 运行时加载）
@@ -263,12 +267,20 @@ bringup_test/
 sim_scenegraph_main.launch / sim_random_main.launch
   └─ sim_scenegraph_sim.launch / sim_random_sim.launch     ← 仿真：so3_quadrotor_simulator + so3_control + local_sensing_node
   └─ sim_scenegraph_planner.launch / sim_random_planner.launch
-       └─ include advanced_param_sim.xml                   ← EGO Planner 完整参数（410 行）
-            └─ <node pkg="ego_planner" type="ego_planner_node">  ← 真正的 ego planner binary
-       └─ <node pkg="mission_executive" type="planner_cmd_mux">  ← 命令多路复用器
+       ├─ include mission_backend_sim.xml                  ← MissionFSM + GridMap + tracking
+       ├─ include scene_graph_params_sim.xml             ← skeleton + obj + topo_block
+       └─ include ego_params_sim.xml                     ← EGO planner 本地参数
 ```
 
-`advanced_param_sim.xml` 是 EGO Planner 的**权威参数源**，包含全部 410 行参数（FSM、grid_map、frontier、skeleton、obj、tracking、optimization 等）。`sim_scenegraph_planner.launch` 通过 `<arg>` 传入场景图自动加载参数覆盖。
+参数按消费者拆分为三文件：
+
+| 文件 | 消费者 | 包含 |
+|------|--------|------|
+| `mission_backend_sim.xml` | MissionFSM / GridMap / tracking / object_id_nav / VLA search | `fsm/*`（MissionFSM 子集）、`grid_map/*`、`tracking/*`、`vla_search/*`、`object_id_nav*` |
+| `scene_graph_params_sim.xml` | SceneGraph / ObjectFactory | `skeleton/*`、`obj/*`、`topo_block/*`、`counting_*` |
+| `ego_params_sim.xml` | EGOReplanFSM / EGOPlannerManager / PolyTrajOptimizer / TrajServer | `traj_server/*`、`manager/*`、`optimization/*`、`fsm/{flight_type,emergency,ego_state_trigger,*}` |
+
+super backend（`sim_scenegraph_super_planner.launch`）只 include backend + scene_graph，不含 ego 参数。
 
 ### 引用路径规则
 
@@ -305,7 +317,7 @@ sim_scenegraph_main.launch / sim_random_main.launch
 一键启动仿真 + RViz：
 
 ```bash
-cd ~/uss-nav && ./start_uss_nav_sim_rviz.sh
+cd ~/uss-nav && ./start_uss_nav_sim_ego_rviz.sh
 ```
 
 退出时自动停仿真容器。

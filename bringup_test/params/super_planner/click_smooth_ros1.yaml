@@ -24,7 +24,7 @@ super_planner:
   iris_iter_num: 2
   obs_skip_num: 2
   replan_forward_dt: 0.1
-  planning_horizon: 2.2
+  planning_horizon: 4.2
   sensing_horizon: -1
   receding_dis: 1.0
   robot_r: 0.2
@@ -40,9 +40,9 @@ traj_opt:
     print_optimizer_log: false
 
   boundary:
-    max_vel: 1.5
-    max_acc: 2.0
-    max_jerk: 60.0
+    max_vel: 3.0
+    max_acc: 4.0
+    max_jerk: 30.0
     max_omg: 2.5
     max_acc_thr: 18.0
     min_acc_thr: 6.0
@@ -105,18 +105,18 @@ astar:
 
 rog_map:
   resolution: 0.1
-  inflation_resolution: 0.2
-  inflation_step: 1
+  inflation_resolution: 0.1
+  inflation_step: 2
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 50,50,6 ]
+  map_size: [ 10,10,8 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0,1.5 ]
   frontier_extraction_en: false
 
   # Virtual ceil and ground
-  virtual_ceil_height: 3.5
-  virtual_ground_height: -5.0
+  virtual_ceil_height: 1.5
+  virtual_ground_height: -7.5
 
   load_pcd_en: false
 
@@ -166,12 +166,12 @@ rog_map:
     # will be considered as unknown.
     enable: true
     batch_update_size: 1
-    local_update_box: [ 100,100,5 ]
+    local_update_box: [ 10,10,8 ]
     # The range of raycasting [m].
     ray_range: [0.5, 100 ]
 
     p_min: 0.12
-    p_miss: 0.49
+    p_miss: 0.40
     p_free: 0.499
     p_occ: 0.85
     p_hit: 0.9
@@ -184,4 +184,4 @@ rog_map:
     #         2) if unk_thresh is set to 1.0, then only all cells in prob map are unknown,
     #             the cell will be considered as unknown.
     # in all, 1.0 is more aggressive while 0.0 is more conservative.
-    unk_thresh: 1.0
+    unk_thresh: 0.5

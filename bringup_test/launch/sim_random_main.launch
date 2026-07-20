@@ -9,6 +9,8 @@
   <arg name="flight_type" default="2"/>
   <arg name="max_vel" default="0.6"/>
   <arg name="max_acc" default="1.0"/>
+  <arg name="uav_mass" default="1.64"/>
+  <arg name="uav_grav" default="9.81"/>
 
   <!-- Procedural random map (global_cloud publisher) -->
   <include file="$(find bringup_test)/launch/sim_random_map.launch">
@@ -21,6 +23,8 @@
     <arg name="init_x" value="$(arg init_x)"/>
     <arg name="init_y" value="$(arg init_y)"/>
     <arg name="init_z" value="$(arg init_z)"/>
+    <arg name="uav_mass" value="$(arg uav_mass)"/>
+    <arg name="uav_grav" value="$(arg uav_grav)"/>
   </include>
 
   <!-- EGO planner + command mux -->

@@ -218,6 +218,12 @@ main(int argc, char** argv)
                 ros::TransportHints().tcpNoDelay());
 
   QuadrotorSimulator::Quadrotor quad;
+  double                        mass, g;
+  n.param("mass", mass, quad.getMass());
+  n.param("g", g, quad.getGravity());
+  quad.setMass(mass);
+  quad.setGravity(g);
+
   double                        _init_x, _init_y, _init_z;
   n.param("simulator/init_state_x", _init_x, 0.0);
   n.param("simulator/init_state_y", _init_y, 0.0);

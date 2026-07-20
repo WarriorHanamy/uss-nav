@@ -26,6 +26,9 @@
 #include <string>
 #include <utils/geometry/quadrotor_flatness.hpp>
 #include <utils/header/yaml_loader.hpp>
+#ifdef USE_ROS1
+#include <ros/param.h>
+#endif
 #define DEBUG_FILE_DIR(name) (string(string(ROOT_DIR) + "log/"+(name)))
 
 namespace traj_opt {
@@ -90,6 +93,10 @@ namespace traj_opt {
             loader.LoadParam("traj_opt/flatness/grav", grav, 1.0);
             loader.LoadParam("traj_opt/flatness/cp", cp, 0.01);
             loader.LoadParam("traj_opt/flatness/v_eps", v_eps, 0.0001);
+#ifdef USE_ROS1
+            ros::param::param("/uav_dynamics/mass", mass, mass);
+            ros::param::param("/uav_dynamics/g", grav, grav);
+#endif
 
             loader.LoadParam("traj_opt/switch/save_log_en", save_log_en, false);
             loader.LoadParam("traj_opt" + ns + "pos_constraint_type", pos_constraint_type, 2);

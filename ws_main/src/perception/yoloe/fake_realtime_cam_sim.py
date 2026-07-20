@@ -24,9 +24,7 @@ class FakeRealtimeCamSimNode:
     def __init__(self):
         # 对齐 predict_realtime_cam_sim.py 使用的仿真话题。
         self.odom_topic = rospy.get_param("~odom_topic", "/unity_odom_sync")
-        self.result_output_topic = rospy.get_param(
-            "~result_output_topic", "/yoloe/encodemask"
-        )
+        self.result_output_topic = rospy.get_param("~result_output_topic", "/yoloe/encodemask")
 
         # 伪造目标和发布行为配置
         self.label = rospy.get_param("~label", "fake_object")
@@ -36,7 +34,7 @@ class FakeRealtimeCamSimNode:
         self.publish_duration = float(rospy.get_param("~publish_duration", 1.5))
         self.use_live_odom = bool(rospy.get_param("~use_live_odom", False))
 
-        # 对齐 advanced_param_sim.xml 中 ObjectFactory 的图像尺寸。
+        # 对齐 scene_graph_params_sim.xml 中 ObjectFactory 的图像尺寸。
         self.image_width = int(rospy.get_param("~image_width", 640))
         self.image_height = int(rospy.get_param("~image_height", 480))
         self.mask_x_min = int(rospy.get_param("~mask_x_min", 220))
@@ -59,12 +57,8 @@ class FakeRealtimeCamSimNode:
         self.fake_mask = self._create_fake_mask()
         self.fake_word_vector = self._create_fake_word_vector()
 
-        self.result_pub = rospy.Publisher(
-            self.result_output_topic, EncodeMask, queue_size=2
-        )
-        self.odom_sub = rospy.Subscriber(
-            self.odom_topic, Odometry, self.odom_callback, queue_size=100
-        )
+        self.result_pub = rospy.Publisher(self.result_output_topic, EncodeMask, queue_size=2)
+        self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback, queue_size=100)
 
         rospy.loginfo(
             "Fake simulation YOLOE node initialized: odom=%s, output=%s, "
@@ -104,9 +98,7 @@ class FakeRealtimeCamSimNode:
     def _create_fake_depth(self):
         """创建 ObjectFactory 仿真分支可直接解码的 16 位 PNG 深度图。"""
         depth_mm = int(round(self.depth_m * 1000.0))
-        depth_image = np.full(
-            (self.image_height, self.image_width), depth_mm, dtype=np.uint16
-        )
+        depth_image = np.full((self.image_height, self.image_width), depth_mm, dtype=np.uint16)
 
         encode_success, png_data = cv2.imencode(".png", depth_image)
         if not encode_success:
@@ -115,7 +107,7 @@ class FakeRealtimeCamSimNode:
         depth_msg = CompressedImage()
         depth_msg.format = "png"
 
-        # advanced_param_sim.xml 配置 obj/use_realsense=false，下游会直接
+        # scene_graph_params_sim.xml 配置 obj/use_realsense=false，下游会直接
         # 对完整 data 执行 cv::imdecode，因此这里不能添加 Realsense 12 字节头。
         depth_msg.data = png_data.tobytes()
         return depth_msg
@@ -129,25 +121,19 @@ class FakeRealtimeCamSimNode:
             size=(self.image_height, self.image_width, 3),
             dtype=np.uint8,
         )
-        rgb_msg = self.cv_bridge.cv2_to_compressed_imgmsg(
-            rgb_image, dst_format="jpg"
-        )
+        rgb_msg = self.cv_bridge.cv2_to_compressed_imgmsg(rgb_image, dst_format="jpg")
         rgb_msg.format = "jpeg"
         return rgb_msg
 
     def _create_fake_mask(self):
         """创建与仿真 RGB、Depth 分辨率一致的矩形二值 Mask。"""
-        mask_image = np.zeros(
-            (self.image_height, self.image_width), dtype=np.uint8
-        )
+        mask_image = np.zeros((self.image_height, self.image_width), dtype=np.uint8)
         mask_image[
-            self.mask_y_min:self.mask_y_max,
-            self.mask_x_min:self.mask_x_max,
+            self.mask_y_min : self.mask_y_max,
+            self.mask_x_min : self.mask_x_max,
         ] = 255
 
-        mask_msg = self.cv_bridge.cv2_to_compressed_imgmsg(
-            mask_image, dst_format="png"
-        )
+        mask_msg = self.cv_bridge.cv2_to_compressed_imgmsg(mask_image, dst_format="png")
         mask_msg.format = "png"
         return mask_msg
 
@@ -173,9 +159,7 @@ class FakeRealtimeCamSimNode:
                 should_start = True
 
         if should_start:
-            rospy.loginfo(
-                "First simulation odometry received, starting fake result publishing."
-            )
+            rospy.loginfo("First simulation odometry received, starting fake result publishing.")
             publish_thread = threading.Thread(target=self.publish_for_duration)
             publish_thread.daemon = True
             publish_thread.start()
@@ -225,8 +209,7 @@ class FakeRealtimeCamSimNode:
             rate.sleep()
 
         rospy.loginfo(
-            "Fake simulation result publishing finished: %d messages "
-            "published in %.2f seconds.",
+            "Fake simulation result publishing finished: %d messages published in %.2f seconds.",
             published_count,
             self.publish_duration,
         )

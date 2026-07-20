@@ -3,10 +3,10 @@
   <arg name="flight_type" default="2"/>
   <arg name="max_vel" default="0.6"/>
   <arg name="max_acc" default="1.0"/>
-  <arg name="scene_graph_name" default="J30V2_snapshot"/>
+  <arg name="scene_graph_name" default="J30V2_202607010-0957"/>
 
-  <!-- EGO planner node (from ego_planner package) with full parameters -->
-  <include file="$(find bringup_test)/launch/ego_planner/include/advanced_param_sim.xml">
+  <!-- MissionFSM + GridMap + tracking + object_id_nav -->
+  <include file="$(find bringup_test)/launch/mission_executive/include/mission_backend_sim.xml">
     <arg name="drone_id" value="$(arg drone_id)"/>
     <arg name="odometry_topic" value="visual_slam/odom"/>
     <arg name="camera_pose_topic" value="pcl_render_node/sensor_pose"/>
@@ -16,20 +16,29 @@
     <arg name="cy" value="240.0"/>
     <arg name="fx" value="442.025"/>
     <arg name="fy" value="442.025"/>
+    <arg name="tracking_target_odom_topic" value="/target_ekf_odom"/>
+    <arg name="auto_load_scene_graph" value="true"/>
+    <arg name="scene_graph_data_path" value="/workspace/.data/scene_graph"/>
+    <arg name="scene_graph_load_name" value="$(arg scene_graph_name)"/>
+    <arg name="object_id_nav_autostart_enable" value="true"/>
+    <arg name="object_id_nav_autostart_target_id" value="6"/>
+    <arg name="object_id_nav_autostart_delay_sec" value="1.0"/>
+  </include>
+
+  <!-- Scene graph params (skeleton, obj, topo_block) -->
+  <include file="$(find bringup_test)/launch/scene_graph/include/scene_graph_params_sim.xml">
+    <arg name="drone_id" value="$(arg drone_id)"/>
+  </include>
+
+  <!-- EGO local planner params -->
+  <include file="$(find bringup_test)/launch/ego_planner/include/ego_params_sim.xml">
+    <arg name="drone_id" value="$(arg drone_id)"/>
     <arg name="max_vel" value="$(arg max_vel)"/>
     <arg name="max_acc" value="$(arg max_acc)"/>
     <arg name="max_jer" value="2.0"/>
     <arg name="max_sna" value="5.0"/>
     <arg name="use_multitopology_trajs" value="false"/>
     <arg name="flight_type" value="$(arg flight_type)"/>
-    <arg name="tracking_target_odom_topic" value="/target_ekf_odom"/>
-    <!-- Scene graph auto-load -->
-    <arg name="auto_load_scene_graph" value="true"/>
-    <arg name="scene_graph_data_path" value="/workspace/.data/scene_graph"/>
-    <arg name="scene_graph_load_name" value="$(arg scene_graph_name)"/>
-    <arg name="object_id_nav_autostart_enable" value="true"/>
-    <arg name="object_id_nav_autostart_target_id" value="2"/>
-    <arg name="object_id_nav_autostart_delay_sec" value="1.0"/>
   </include>
 
 </launch>

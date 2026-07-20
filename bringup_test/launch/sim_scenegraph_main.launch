@@ -6,6 +6,8 @@
   <arg name="flight_type" default="2"/>
   <arg name="max_vel" default="0.6"/>
   <arg name="max_acc" default="1.0"/>
+  <arg name="uav_mass" default="1.64"/>
+  <arg name="uav_grav" default="9.81"/>
 
   <!-- PCD map path (mounted from .data/pcd/) -->
   <arg name="map_pcd" default="/workspace/.data/pcd/J30V2_latest.pcd"/>
@@ -15,7 +17,7 @@
   <arg name="support_pcd" default="/workspace/.data/pcd/20260705-magic2-d0.05.pcd"/>
 
   <!-- Scene graph snapshot name (under .data/scene_graph/) -->
-  <arg name="scene_graph_name" default="J30V2_snapshot"/>
+  <arg name="scene_graph_name" default="J30V2_202607010-0957"/>
 
   <!-- PCD map + quadrotor simulation + 360° LiDAR sensor -->
   <include file="$(find bringup_test)/launch/sim_scenegraph_sim.launch">
@@ -26,6 +28,8 @@
     <arg name="map_pcd" value="$(arg map_pcd)"/>
     <arg name="support_pcd_enable" value="$(arg support_pcd_enable)"/>
     <arg name="support_pcd" value="$(arg support_pcd)"/>
+    <arg name="uav_mass" value="$(arg uav_mass)"/>
+    <arg name="uav_grav" value="$(arg uav_grav)"/>
   </include>
 
   <!-- EGO planner + offline scene graph auto-load -->

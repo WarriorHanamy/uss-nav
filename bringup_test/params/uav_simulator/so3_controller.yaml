@@ -1,5 +1,10 @@
+################################################################################
+# Legacy mirror only.
+# Runtime simulation loads bringup_test/params/sim_ego_control.yaml.
+################################################################################
+
 g: 9.81
-mass: 0.98
+mass: 1.64
 gains/rot/x  : 1.5
 gains/rot/y  : 1.5
 gains/rot/z  : 1.0

@@ -4,14 +4,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RVIZ_WS_DIR="${RVIZ_WS_DIR:-$HOME/rviz_ws}"
 ROS_MASTER_URI="${ROS_MASTER_URI:-http://127.0.0.1:11311}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-uss-nav-ego}"
 DEVEL_CONTAINER="uss-nav-devel-${GIT_SHA:-local}"
+FLUENT_BIT_CONTAINER="uss-nav-fluent-bit-${GIT_SHA:-local}"
 DEFAULT_MAP_PCD="${SCRIPT_DIR}/.data/pcd/J30V2_latest.pcd"
 FALLBACK_MAP_PCD="${SCRIPT_DIR}/2026-06-28-all-120.pcd"
-DEFAULT_SCENE_GRAPH="${SCRIPT_DIR}/.data/scene_graph/J30V2_snapshot"
+DEFAULT_SCENE_GRAPH="${SCRIPT_DIR}/.data/scene_graph/J30V2_202607010-0957"
 FALLBACK_SCENE_GRAPH="${SCRIPT_DIR}/scene_graph_saved/J30V2_whole-20260626-9"
 RVIZ_DEVEL_SETUP="${RVIZ_WS_DIR}/.artifacts/devel/setup.bash"
+export LAUNCH_MODE="${LAUNCH_MODE:-scenegraph}"
 export TRACE_ENABLE="${TRACE_ENABLE:-1}"
-export TRACE_ID="${TRACE_ID:-scenegraph-$(date +%Y%m%d-%H%M%S)}"
+export TRACE_ID="${TRACE_ID:-ego-$(date +%Y%m%d-%H%M%S)}"
 
 # ── check prerequisites ────────────────────────────────────────────
 if [[ -z "${DISPLAY:-}" ]]; then
@@ -60,19 +63,21 @@ fi
 cleanup() {
     echo ""
     echo "Stopping uss-nav devel container..."
-    docker compose --project-directory "${SCRIPT_DIR}" stop devel 2>/dev/null || true
-    if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
-        docker compose --project-directory "${SCRIPT_DIR}" stop fluent-bit 2>/dev/null || true
-    fi
+    docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" down --remove-orphans 2>/dev/null || true
+    docker rm -f "${DEVEL_CONTAINER}" >/dev/null 2>&1 || true
+    docker rm -f "${FLUENT_BIT_CONTAINER}" >/dev/null 2>&1 || true
     echo "Done."
 }
 trap cleanup EXIT
 
 # ── start simulation container ──────────────────────────────────────
 echo "Starting uss-nav simulation (devel)..."
-docker compose --project-directory "${SCRIPT_DIR}" up --force-recreate -d devel
+docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" down --remove-orphans >/dev/null 2>&1 || true
+docker rm -f "${DEVEL_CONTAINER}" >/dev/null 2>&1 || true
+docker rm -f "${FLUENT_BIT_CONTAINER}" >/dev/null 2>&1 || true
+docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" up --force-recreate -d devel
 if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
-    if ! docker compose --project-directory "${SCRIPT_DIR}" up --force-recreate -d fluent-bit; then
+    if ! docker compose --project-name "${COMPOSE_PROJECT_NAME}" --project-directory "${SCRIPT_DIR}" up --force-recreate -d fluent-bit; then
         echo "Warning: Fluent Bit sidecar did not start; ROS logs and run.bag will still be written." >&2
     fi
 fi
@@ -112,6 +117,7 @@ fi
 echo ""
 echo "=== USS-NAV Simulation + RViz ==="
 echo "  devel:  localhost:11311"
+echo "  mode:   ego planner (${LAUNCH_MODE})"
 echo "  rviz:   ${RVIZ_WS_DIR}/bringup/config/ego_planner/uss_nav_sim.rviz"
 if [[ "${TRACE_ENABLE}" == "1" || "${TRACE_ENABLE}" == "true" || "${TRACE_ENABLE}" == "TRUE" ]]; then
     echo "  trace:  ${SCRIPT_DIR}/.artifacts/traces/${TRACE_ID}"

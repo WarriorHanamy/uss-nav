@@ -1,6 +1,7 @@
 # SO3 controller gains + corrections (merged from gains_hummingbird + corrections_hummingbird)
 
-mass: 0.98
+mass: 1.64
+g: 9.81
 use_angle_corrections: false
 use_external_yaw: false
 

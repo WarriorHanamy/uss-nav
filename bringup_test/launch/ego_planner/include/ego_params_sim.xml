@@ -1,0 +1,53 @@
+<launch>
+    <arg name="drone_id"/>
+    <arg name="max_vel"/>
+    <arg name="max_acc"/>
+    <arg name="max_jer"/>
+    <arg name="max_sna"/>
+    <arg name="use_multitopology_trajs"/>
+    <arg name="flight_type"/>
+
+    <group ns="drone_$(arg drone_id)_ego_planner_node">
+        <!-- traj_server -->
+        <param name="traj_server/time_forward" value="1.0" type="double"/>
+        <param name="traj_server/max_yaw_vel" value="100.0" type="double"/>
+        <param name="traj_server/max_yaw_acc" value="120.0" type="double"/>
+        <param name="traj_server/max_yaw_vel_low" value="30.0" type="double"/>
+        <param name="traj_server/max_yaw_acc_low" value="60.0" type="double"/>
+        <param name="traj_server/panorama_yaw_vel" value="30.0" type="double"/>
+        <param name="traj_server/panorama_yaw_acc" value="60.0" type="double"/>
+
+        <!-- EGOReplanFSM fsm params (also read by MissionFSM from backend file) -->
+        <param name="fsm/flight_type" value="$(arg flight_type)" type="int"/>
+        <param name="fsm/emergency_time" value="1.0" type="double"/>
+        <param name="fsm/fail_safe" value="true"/>
+        <param name="fsm/ground_height_measurement" value="true" type="bool"/>
+        <param name="fsm/ego_state_trigger_pos_thresh" value="0.30" type="double"/>
+        <param name="fsm/ego_state_trigger_vel_thresh" value="0.15" type="double"/>
+        <param name="fsm/ego_state_trigger_acc_thresh" value="0.30" type="double"/>
+        <param name="fsm/ego_state_trigger_yaw_rate_thresh" value="0.20" type="double"/>
+        <param name="fsm/ego_state_trigger_hold_time" value="0.50" type="double"/>
+
+        <!-- manager -->
+        <param name="manager/max_vel" value="$(arg max_vel)" type="double"/>
+        <param name="manager/max_acc" value="$(arg max_acc)" type="double"/>
+        <param name="manager/use_multitopology_trajs" value="$(arg use_multitopology_trajs)" type="bool"/>
+        <param name="manager/drone_id" value="$(arg drone_id)"/>
+
+        <!-- optimization -->
+        <param name="optimization/weight_obstacle" value="10000.0" type="double"/>
+        <param name="optimization/weight_obstacle_soft" value="0.0" type="double"/>
+        <param name="optimization/weight_trust_region" value="10.0" type="double"/>
+        <param name="optimization/weight_curve_fitting" value="1000.0" type="double"/>
+        <param name="optimization/weight_plane" value="10.0" type="double"/>
+        <param name="optimization/weight_swarm" value="10000.0" type="double"/>
+        <param name="optimization/weight_feasibility" value="250.0" type="double"/>
+        <param name="optimization/weight_sqrvariance" value="0.0" type="double"/>
+        <param name="optimization/weight_time" value="10.0" type="double"/>
+        <param name="optimization/obstacle_clearance" value="0.1" type="double"/>
+        <param name="optimization/obstacle_clearance_soft" value="1.5" type="double"/>
+        <param name="optimization/swarm_clearance" value="0.45" type="double"/>
+        <param name="optimization/max_jer" value="$(arg max_jer)" type="double"/>
+        <param name="optimization/max_sna" value="$(arg max_sna)" type="double"/>
+    </group>
+</launch>

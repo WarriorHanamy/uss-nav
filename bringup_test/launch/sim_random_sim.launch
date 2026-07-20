@@ -3,6 +3,8 @@
   <arg name="init_x" default="0.0"/>
   <arg name="init_y" default="0.0"/>
   <arg name="init_z" default="1.0"/>
+  <arg name="uav_mass" default="1.64"/>
+  <arg name="uav_grav" default="9.81"/>
 
   <!-- Quadrotor dynamics simulator -->
   <node pkg="so3_quadrotor_simulator" type="quadrotor_simulator_so3"
@@ -11,6 +13,9 @@
     <param name="simulator/init_state_x" value="$(arg init_x)"/>
     <param name="simulator/init_state_y" value="$(arg init_y)"/>
     <param name="simulator/init_state_z" value="$(arg init_z)"/>
+    <rosparam command="load" file="$(find bringup_test)/params/sim_ego_control.yaml"/>
+    <param name="mass" value="$(arg uav_mass)"/>
+    <param name="g" value="$(arg uav_grav)"/>
     <remap from="~odom" to="drone_$(arg drone_id)_visual_slam/odom"/>
     <remap from="~cmd" to="drone_$(arg drone_id)_so3_cmd"/>
   </node>
@@ -33,6 +38,8 @@
     <remap from="~corrections" to="drone_$(arg drone_id)_corrections"/>
     <remap from="~so3_cmd" to="drone_$(arg drone_id)_so3_cmd"/>
     <rosparam command="load" file="$(find bringup_test)/params/sim_ego_control.yaml"/>
+    <param name="mass" value="$(arg uav_mass)"/>
+    <param name="g" value="$(arg uav_grav)"/>
   </node>
 
   <!-- 360° LiDAR sensor simulation (pcl_render_node) -->

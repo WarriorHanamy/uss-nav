@@ -30,7 +30,7 @@ uss-nav/
 │   ├── entrypoint-test.sh       # 无头测试入口（环境变量驱动）
 │   └── entrypoint-release.sh    # 发布模式入口（REAL_YOLOE 切换）
 ├── docker-compose.yml           # 四阶段生命周期：devel / build / test / release
-├── start_uss_nav_sim_rviz.sh    # 一键启动仿真 + RViz（依赖 ~/rviz_ws）
+├── start_uss_nav_sim_ego_rviz.sh # 一键启动 EGO 仿真 + RViz（依赖 ~/rviz_ws）
 ├── docs/                        # 架构文档（VIEW, EGO, SCENEGRAPH, CODEBASE）
 ├── tools/                       # md2html 文档渲染工具（Bun）
 ├── src/                         # CLI 工具（TypeScript，测试管理/流水线）
@@ -63,7 +63,7 @@ docker compose run --rm devel   # 启动仿真（需有 X11 DISPLAY）
 ### 一键仿真 + RViz
 
 ```bash
-./start_uss_nav_sim_rviz.sh     # 启动 devel 容器 + RViz（依赖 ~/rviz_ws）
+./start_uss_nav_sim_ego_rviz.sh # 启动 EGO devel 容器 + RViz（依赖 ~/rviz_ws）
 ```
 
 ### 无头测试
