@@ -86,6 +86,11 @@ namespace traj_opt {
             Mat3Df waypoint_attractor;
             VecDf waypoint_attractor_dead_d;
 
+            Mat3Df curve_fit_anchor;
+            Mat3Df curve_fit_dir;
+            double curve_fit_a2inv{0.01};
+            double curve_fit_b2inv{1.0};
+
             VecDi pieceIdx;
             VecDi vPolyIdx;
             VecDi hPolyIdx;
@@ -112,6 +117,10 @@ namespace traj_opt {
                                           const PolyhedraH &hPolys,
                                           const Mat3Df &waypoint_attractor,
                                           const VecDf &waypoint_attractor_dead_d,
+                                          const Mat3Df &curve_fit_anchor,
+                                          const Mat3Df &curve_fit_dir,
+                                          const double &curve_fit_a2inv,
+                                          const double &curve_fit_b2inv,
                                           const double &smoothFactor,
                                           const int &integralResolution,
                                           const VecDf &magnitudeBounds,
@@ -125,6 +134,14 @@ namespace traj_opt {
         bool processCorridor();
 
         bool processCorridorWithGuideTraj();
+
+        /**
+         * Precompute one guide-path tangent line per trajectory piece (EGO-style curve fitting).
+         *
+         * Each piece gets an anchor point on the guide path at its normalized arclength midpoint
+         * and the local segment direction; used by the anisotropic curve-fitting penalty.
+         */
+        void prepareCurveFitLines();
 
         void defaultInitialization();
 

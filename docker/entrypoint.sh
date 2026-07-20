@@ -68,7 +68,7 @@ trap cleanup_trace EXIT
 if [ "$LAUNCH_MODE" = "random" ]; then
     echo "Mode: random (procedural map)"
     roslaunch bringup_test sim_random_main.launch \
-      flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
+      flight_type:=2 max_vel:=3.0 max_acc:=4.0 \
       &>"${ROSLAUNCH_LOG}" &
 elif [ "$LAUNCH_MODE" = "super" ]; then
     echo "Mode: super planner (PCD + super planner backend)"
@@ -78,7 +78,7 @@ elif [ "$LAUNCH_MODE" = "super" ]; then
       exit 1
     fi
     roslaunch bringup_test sim_scenegraph_super_main.launch \
-      max_vel:=0.6 max_acc:=1.0 \
+      max_vel:=3.0 max_acc:=4.0 \
       map_pcd:="$MAP_PCD" \
       support_pcd_enable:="$SUPPORT_PCD_ENABLE" \
       support_pcd:="$SUPPORT_PCD" \
@@ -91,7 +91,7 @@ else
       exit 1
     fi
     roslaunch bringup_test sim_scenegraph_main.launch \
-      flight_type:=2 max_vel:=0.6 max_acc:=1.0 \
+      flight_type:=2 max_vel:=3.0 max_acc:=4.0 \
       map_pcd:="$MAP_PCD" \
       support_pcd_enable:="$SUPPORT_PCD_ENABLE" \
       support_pcd:="$SUPPORT_PCD" \

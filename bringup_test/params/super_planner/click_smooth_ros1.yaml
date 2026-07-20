@@ -63,6 +63,9 @@ traj_opt:
     penna_acc: 5.0e+5
     penna_jerk: -5.0e+5
     penna_attract: 1.0e+3
+    penna_curve_fit: 1.0e+3
+    curve_fit_a2inv: 0.01
+    curve_fit_b2inv: 1.0
     penna_omg:  5.0e+5
     penna_thr: 1.0e+5
 

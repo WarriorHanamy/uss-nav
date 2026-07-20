@@ -32,6 +32,7 @@
 #define ATT_IDX 5
 #define OMG_IDX 6
 #define THR_IDX 7
+#define CURVE_FIT_IDX 8
 
 using namespace traj_opt;
 using namespace color_text;
@@ -48,6 +49,10 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
                                        const PolyhedraH &hPolys,
                                        const Mat3Df &waypoint_attractor,
                                        const VecDf &waypoint_attractor_dead_d,
+                                       const Mat3Df &curve_fit_anchor,
+                                       const Mat3Df &curve_fit_dir,
+                                       const double &curve_fit_a2inv,
+                                       const double &curve_fit_b2inv,
                                        const double &smoothFactor,
                                        const int &integralResolution,
                                        const VecDf &magnitudeBounds,
@@ -82,11 +87,12 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
     const auto &weightAtt = penaltyWeights[4];
     const auto &weightOmg = penaltyWeights[5];
     const auto &weightAccThr = penaltyWeights[6];
+    const auto &weightCurveFit = penaltyWeights[7];
 
     const auto &piece_num = T.size();
 
     const double integralFrac = 1.0 / integralResolution;
-    VecDf max_pena(8);
+    VecDf max_pena(9);
     max_pena.setZero();
 
     /* 2) add integral cost */
@@ -152,6 +158,22 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
                         tmp_cost += weightAtt * violaAttPena;
                     }
                 }
+            }
+
+            /* 2.2b Curve fitting cost: anisotropic attraction to the local guide-path tangent.
+             * Along-track deviation is nearly free (a2inv), cross-track is penalized (b2inv),
+             * which keeps the trajectory glued to the guide path without dead zone. */
+            if (weightCurveFit > 0.0) {
+                const Vec3f x = pos - curve_fit_anchor.col(i);
+                const Vec3f v = curve_fit_dir.col(i);
+                const double xdotv = x.dot(v);
+                const double f = curve_fit_a2inv * xdotv * xdotv +
+                                 curve_fit_b2inv * (x.squaredNorm() - xdotv * xdotv);
+                if (f > max_pena(CURVE_FIT_IDX)) max_pena(CURVE_FIT_IDX) = f;
+                tmp_cost += weightCurveFit * f * f;
+                gradPos += weightCurveFit * 2.0 * f *
+                           (2.0 * curve_fit_a2inv * xdotv * v +
+                            2.0 * curve_fit_b2inv * (x - xdotv * v));
             }
 
             /* 2.3 For vel cost  */
@@ -240,7 +262,7 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
     }
 
     /* 3) log all violations */
-    pena_log.tail(7) = max_pena.tail(7);
+    pena_log.tail(8) = max_pena.tail(8);
 }
 
 
@@ -313,6 +335,8 @@ double ExpTrajOpt::costFunctional(void *ptr,
     constraintsFunctional(times, obj.minco.getCoeffs(),
                           hPolyIdx, hPolytopes,
                           waypoint_attractor, waypoint_attractor_dead_d,
+                          obj.curve_fit_anchor, obj.curve_fit_dir,
+                          obj.curve_fit_a2inv, obj.curve_fit_b2inv,
                           smooth_eps, integral_res,
                           magnitudeBounds, penaltyWeights,
                           quadrotor_flatness,
@@ -351,6 +375,43 @@ static void truncateToSixDecimals(double &num) {
  * @ brief: This function pre-process the corridor
  *
  */
+void ExpTrajOpt::prepareCurveFitLines() {
+    const int N = opt_vars.piece_num;
+    const auto &gp = opt_vars.guide_path;
+    opt_vars.curve_fit_anchor.resize(3, N);
+    opt_vars.curve_fit_dir.resize(3, N);
+    if (gp.size() < 2) {
+        for (int i = 0; i < N; i++) {
+            opt_vars.curve_fit_anchor.col(i) = opt_vars.headPVAJ.col(0);
+            opt_vars.curve_fit_dir.col(i) = Vec3f(1, 0, 0);
+        }
+        return;
+    }
+    std::vector<double> s(gp.size(), 0.0);
+    for (size_t k = 1; k < gp.size(); k++) {
+        s[k] = s[k - 1] + (gp[k] - gp[k - 1]).norm();
+    }
+    const double S = std::max(1e-6, s.back());
+    for (int i = 0; i < N; i++) {
+        const double si = S * (i + 0.5) / N;
+        size_t k = 0;
+        while (k + 1 < gp.size() && s[k + 1] < si) {
+            k++;
+        }
+        if (k + 1 >= gp.size()) {
+            k = gp.size() - 2;
+        }
+        Vec3f dir = gp[k + 1] - gp[k];
+        if (dir.norm() < 1e-6) {
+            dir = Vec3f(1, 0, 0);
+        } else {
+            dir.normalize();
+        }
+        opt_vars.curve_fit_anchor.col(i) = gp[k] + dir * (si - s[k]);
+        opt_vars.curve_fit_dir.col(i) = dir;
+    }
+}
+
 bool ExpTrajOpt::processCorridor() {
     const long sizeCorridor = static_cast<long>(opt_vars.hPolytopes.size() - 1);
 
@@ -591,6 +652,7 @@ bool ExpTrajOpt::setupProblemAndCheck() {
     opt_vars.gradByTimes.resize(opt_vars.piece_num);
     opt_vars.partialGradByCoeffs.resize(8 * opt_vars.piece_num, 3);
     opt_vars.partialGradByTimes.resize(opt_vars.piece_num);
+    prepareCurveFitLines();
     return true;
 }
 
@@ -618,7 +680,7 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     Eigen::Map<VecDf> tau(x.data(), opt_vars.temporalDim);
     Eigen::Map<VecDf> xi(x.data() + opt_vars.temporalDim, opt_vars.spatialDim);
 
-    opt_vars.penalty_log.resize(8);
+    opt_vars.penalty_log.resize(9);
     opt_vars.penalty_log.setZero();
 
     /* 2) check the initial value of the optimization varibles */
@@ -776,13 +838,15 @@ ExpTrajOpt::ExpTrajOpt(const traj_opt::Config &cfg, const ros_interface::RosInte
     }
 
     opt_vars.magnitudeBounds.resize(6);
-    opt_vars.penaltyWeights.resize(7);
+    opt_vars.penaltyWeights.resize(8);
     opt_vars.magnitudeBounds << cfg_.max_vel, cfg_.max_acc, cfg_.max_jerk,
             cfg_.max_omg, cfg_.min_acc_thr * cfg_.mass, cfg_.max_acc_thr * cfg_.mass;
     opt_vars.penaltyWeights << cfg_.penna_pos, cfg_.penna_vel,
             cfg_.penna_acc, cfg_.penna_jerk,
             cfg_.penna_attract, cfg_.penna_omg,
-            cfg_.penna_thr;
+            cfg_.penna_thr, cfg_.penna_curve_fit;
+    opt_vars.curve_fit_a2inv = cfg_.curve_fit_a2inv;
+    opt_vars.curve_fit_b2inv = cfg_.curve_fit_b2inv;
     opt_vars.rho = cfg_.penna_t;
     opt_vars.pos_constraint_type = cfg_.pos_constraint_type;
     opt_vars.block_energy_cost = cfg_.block_energy_cost;

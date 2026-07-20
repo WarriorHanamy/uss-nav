@@ -9,6 +9,7 @@
 | `README.md` | 项目概述、工作区结构、核心模块说明、构建与部署指南 |
 | `docs/VIEW.md` | 架构总览入口，包含 SceneGraph 和 EGO Planner 章节概要，多文档导航 |
 | `docs/EGO.md` | EGO-Planner 实时轨迹优化文档：12 状态 FSM、算法管道、ROS 话题接口、消息契约、代码组织 |
+| `docs/SUPER.md` | SUPER 后端定制：curve fitting 局部切线吸引、SFC 地图边界修复、goal 棘轮修复、调参指引 |
 | `docs/SCENEGRAPH.md` | SceneGraph 上层环境表征：骨架生成、物体管线、区域聚类、LLM 交互、API 参考 |
 | `docs/NEXT_SCENEGRAPH.md` | SceneGraph 重构提案：问题分析、目标架构、迁移计划 |
 | `docs/CODEBASE.md` | 全量代码库参考：仓库结构、三层架构、62 个 ROS 消息定义、算法与数据流 |
