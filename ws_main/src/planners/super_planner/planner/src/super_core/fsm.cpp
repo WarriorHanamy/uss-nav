@@ -60,8 +60,8 @@ namespace fsm {
             return;
         }
 
-        planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, gi_.goal_p, gi_.goal_p, 3.0);
-
+        /* Do NOT snap gi_.goal_p here: in-place mutation every replan cycle ratchets the
+         * goal away (A* already repairs occupied/out-of-map goals into a local copy). */
         TimeConsuming replan_once_time("replan_once_time", false);
 
         RET_CODE ret_code = planner_ptr_->ReplanOnce(gi_.goal_p, gi_.goal_yaw, gi_.new_goal);

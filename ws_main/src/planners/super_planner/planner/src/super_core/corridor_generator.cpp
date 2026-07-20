@@ -88,10 +88,15 @@ namespace super_planner {
 
         while (cnt_loop++ < max_loop) {
             second_id = first_id;
+            bool hit_map_bound = false;
             for (int j = first_id + 1; j < path.size(); j++) {
                 bool reach_segment = false;
-                if (!map_ptr_->isLineFree(path[first_id], path[j], seed_line_max_length_,
-                                          line_seed_neighbor_list)) {
+                if (!map_ptr_->insideLocalMap(path[j])) {
+                    /* guide-path points outside the local map terminate the corridor here */
+                    reach_segment = true;
+                    hit_map_bound = true;
+                } else if (!map_ptr_->isLineFree(path[first_id], path[j], seed_line_max_length_,
+                                                 line_seed_neighbor_list)) {
                     reach_segment = true;
                 }
                 if (reach_segment) {
@@ -104,7 +109,7 @@ namespace super_planner {
                 second_id = j;
             }
 
-            if (second_id == first_id && second_id + 1 < path.size()) {
+            if (second_id == first_id && second_id + 1 < path.size() && !hit_map_bound) {
                 second_id += 1;
             }
 
@@ -176,7 +181,7 @@ namespace super_planner {
             }
 
             sfcs.push_back(temp_poly);
-            if (second_id == path.size() - 1) {
+            if (second_id == path.size() - 1 || hit_map_bound) {
                 break;
             }
             first_id = second_id;
@@ -221,6 +226,8 @@ namespace super_planner {
         box_max.y() -= robot_r_;
         MatD4f planes;
         Eigen::Vector3d a = pt, b = pt;
+        a = a.cwiseMax(box_min).cwiseMin(box_max);
+        b = a;
         Eigen::Matrix<double, 6, 4> bd = Eigen::Matrix<double, 6, 4>::Zero();
         bd(0, 0) = 1.0;
         bd(1, 0) = -1.0;
@@ -320,6 +327,10 @@ namespace super_planner {
         box_min.y() += robot_r_;
         box_max.y() -= robot_r_;
         MatD4f planes;
+        /* Clamp seed endpoints into the map-bounded box: a guide-path point at the local
+         * map boundary would otherwise stick out of the clamped box and make CIRI fail. */
+        line.first = line.first.cwiseMax(box_min).cwiseMin(box_max);
+        line.second = line.second.cwiseMax(box_min).cwiseMin(box_max);
         Eigen::Vector3d a = line.first, b = line.second;
         Eigen::Matrix<double, 6, 4> bd = Eigen::Matrix<double, 6, 4>::Zero();
         bd(0, 0) = 1.0;

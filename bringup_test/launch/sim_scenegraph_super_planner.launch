@@ -1,7 +1,5 @@
 <launch>
   <arg name="drone_id" default="0"/>
-  <arg name="max_vel" default="3.0"/>
-  <arg name="max_acc" default="4.0"/>
   <arg name="uav_mass" default="1.64"/>
   <arg name="uav_grav" default="9.81"/>
   <arg name="scene_graph_name" default="J30V2_202607010-0957"/>
@@ -26,8 +24,8 @@
     <arg name="scene_graph_data_path" value="/workspace/.data/scene_graph"/>
     <arg name="scene_graph_load_name" value="$(arg scene_graph_name)"/>
     <arg name="object_id_nav_autostart_enable" value="true"/>
-    <arg name="object_id_nav_autostart_target_id" value="6"/>
-    <arg name="object_id_nav_autostart_delay_sec" value="1.0"/>
+    <arg name="object_id_nav_autostart_target_id" value="5"/>
+    <arg name="object_id_nav_autostart_delay_sec" value="3.0"/>
   </include>
 
   <!-- Scene graph params (skeleton, obj, topo_block) -->
