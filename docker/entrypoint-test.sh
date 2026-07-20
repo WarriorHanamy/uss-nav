@@ -39,7 +39,7 @@ TRACE_ID="${TRACE_ID:-${TEST_ID}}"
 TRACE_DIR="${TRACE_DIR:-/workspace/.artifacts/traces/${TRACE_ID}}"
 TRACE_BAG_PROFILE="${TRACE_BAG_PROFILE:-core}"
 CORE_TRACE_BAG_TOPICS="/tf /tf_static /bridge/Instruct /Instruct_res /planner/fsm_state /tracking_finish /planning/ego_plan_result /planning/ego_state_trigger /drone_0_visual_slam/odom /drone_0_ego_planner_node/local_goal /drone_0_planning/pos_cmd"
-VIZ_TRACE_BAG_TOPICS="${CORE_TRACE_BAG_TOPICS} /planning/fsm_vis /planning/fsm_path /map_generator/global_cloud /drone_0_ego_planner_node/grid_map/occupancy_inflate /drone_0_ego_planner_node/grid_map/occupancy_inflateBig"
+VIZ_TRACE_BAG_TOPICS="${CORE_TRACE_BAG_TOPICS} /planning/fsm_vis /planning/fsm_path"
 if [ "${TRACE_BAG_PROFILE}" = "viz" ]; then
   DEFAULT_TRACE_BAG_TOPICS="${VIZ_TRACE_BAG_TOPICS}"
 else
