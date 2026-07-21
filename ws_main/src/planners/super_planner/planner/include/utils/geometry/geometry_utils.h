@@ -71,8 +71,11 @@ namespace geometry_utils {
         auto calc_dis = [](double a, double t) { return 0.5 * a * t * t; };
         auto calc_time = [](double a, double cur_dis) { return sqrt(2 * cur_dis / a); };
         auto solve_quadratic = [](double a, double b, double c) {
+            /* Clamp the discriminant: at the cur_dis == total_dis boundary the
+             * theoretical value is 0 but float accumulation makes it slightly
+             * negative, yielding NaN piece times downstream. */
             double delta = b * b - 4 * a * c;
-            return (-b + sqrt(delta)) / (2 * a);
+            return (-b + sqrt(std::max(delta, 0.0))) / (2 * a);
         };
 
         // Precompute reusable values

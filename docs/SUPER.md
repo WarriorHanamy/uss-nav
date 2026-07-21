@@ -154,6 +154,81 @@ curve_fit_b2inv: 1.0       # 横向度量倒数 (1/b^2)
 
 ---
 
+## 3.6 Waypoint Window（多航点窗口 + SUPER 内部进度判定）
+
+上层（MissionFSM）一次向 SUPER 发布**最多 3 个航点的滑动窗口**（当前目标 + 后续 2 个），
+SUPER 对每个航点重投影到最近 free voxel，链式 A* 依次通过所有可达航点，轨迹优化以
+**软约束**通过重投影后的中间航点；航点 progress 判定全部在 SUPER 内部完成。
+
+### 消息契约（`quadrotor_msgs`)
+
+- `LocalGoalSet.msg` 扩展：`uint32 batch_id` + `float32[] waypoints`（扁平 xyz，≤3 点，
+  行进序；`goal` 字段 = 窗口末点，yaw 仅作用末点）。`waypoints` 为空 → 兼容单点模式。
+- 新增 `WaypointProgress.msg`（SUPER → 上层，`/drone_0_ego_planner_node/waypoint_progress`):
+  `batch_id / consumed_count / active_idx / skipped_mask / all_consumed`。
+
+### SUPER 侧管道
+
+```
+goalCallback (fsm_ros1.hpp)
+  → setGoalWindow (fsm.cpp): 逐点 getNearestInfCellNot(OCCUPIED, wp, out, 3.0) 重投影
+      失败点 → skipped_mask + event=wp_reproject_fail；全部失败 → 拒绝批次
+  → gi_.goal_p = 当前目标 wp_list[active_idx]；lookahead 存入 planner gi_.wp_lookahead
+  → generateExpTraj (super_planner.cpp): 链式 A*（逐段 horizon 预算递减 + 截断）
+      到达的中间航点收集为 pass_wps
+  → ExpTrajOpt::optimize(..., pass_wps): 映射到最近 corridor 交界内点 q_j
+      软约束 J = penna_wp_pass * ||q_j - wp||²（热初始化 q_j = wp）
+  → updateWaypointProgress (fsm.cpp, FOLLOW_TRAJ 每 tick):
+      消费条件 = 距当前目标 < wp_reach_radius(0.4m)，或沿行进方向越过航点平面且横向 < 2m
+      消费 → active_idx++ → 发布 WaypointProgress → 强制 new_goal replan
+  → 批次末点到达 = 原 traj_finish_ + closeToGoal(0.1) → all_consumed + exec_finish_trigger
+```
+
+### MissionFSM 侧
+
+- `pubLocalGoalWindow()`: 从 `path_inx_` 起打包 ≤3 点，单调递增 `batch_id` 发布；
+  `waypointProgressCallback()`: `batch_id` 匹配时 `path_inx_ = batch_start + consumed_count`
+  并重发滑动窗口（新 batch_id)。
+- 删除了 `goTargetObject`/`goTargetWithWaypoint` 中基于 `dis_2_local_aim` 的航点推进调用
+  （保留"末点不可达 → 强制 replan"检查与 stuck_force_advance 兜底）。
+- yaw 仅在窗口末点成为当前目标后生效（中间航点 yaw 自由）。
+
+### 配置与日志
+
+```yaml
+fsm/wp_reach_radius: 0.4          # 中间航点消费半径 [m]
+traj_opt/exp_traj/penna_wp_pass: 1.0e+4   # 软过点权重（corridor=5e6 仍主导安全）
+```
+
+| 事件 | 内容 |
+|------|------|
+| `event=wp_batch_recv` | batch_id / size / valid / skipped_mask |
+| `event=wp_reproject_fail` | 深占据跳过的航点 |
+| `event=wp_consumed` | 消费 batch_id / wp_idx / orig_idx / dist |
+| `event=wp_batch_done` | 批次末点到达 |
+| `event=wp_pass_deviation` | 优化后交界点与航点的偏差（调权依据） |
+| `event=wp_pass_map_failed` | 航点距所有 corridor 交界 >3m，约束被丢弃 |
+| `event=guide_dt_nan` | 时间分配产出非法 dt（防御性守卫，正常为 0） |
+
+### 3.6.1 后端适配与调试记录
+
+- **后端门控**:MissionFSM 读 `fsm/enable_ego_replan`(super launch 置 false）推断后端；
+  仅 SUPER 后端走窗口协议（`pubLocalGoalWindow` + `waypointProgressCallback`),
+  EGO 后端保持原单点发布 + 距离推进逻辑不变。
+- **`simplePMTimeAllocator` NaN 修复**（根因）：链式 A* 的段间起点是上一段 A* 终点
+  （grid cell center)，下一段 A* 起点 snap 后 connection=0，导致 `dis[1] == total_dis`，
+  命中 case 2/3.3 二次方程判别式理论零点，浮点误差使 delta 略负 → `sqrt(负)` = NaN
+  piece time → L-BFGS 初值病态（8ms piece、vel 140+）→ 全部优化失败、飞机不动。
+  修复：`geometry_utils.h` 判别式 clamp 到 ≥0；`generateExpTraj` 过滤 A* 连续重复点。
+- **热初始化重叠区门控**:pass waypoint 交界点热初始化仅在 waypoint 落在该交界
+  overlap polytope 内（-0.02 margin）时生效，避免不可行初值被饱和 smoothed-L1 卡住。
+- **`entrypoint-test.sh` 遗留 ROS_PACKAGE_PATH 覆盖删除**：该覆盖在 bringup_test 迁移
+  前写入，缺 `bringup_test` 等包导致 `$(find bringup_test)` 解析失败、roslaunch 启动即死。
+  devel 空间的 setup.bash 本身提供完整路径。注意：entrypoint 烤进镜像，改动后需
+  `docker compose build devel`。
+
+---
+
 ## 4. 全链路记录（waypoint → A* → traj）
 
 诊断链路数据分两层（符合项目 trace 规则）：

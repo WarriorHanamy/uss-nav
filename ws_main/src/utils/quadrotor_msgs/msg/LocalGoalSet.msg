@@ -1,6 +1,12 @@
 uint8      drone_id
 uint8      source_task_id
 float32[3] goal
+
+# Waypoint window (multi-goal batch). waypoints is a flattened xyz array with
+# at most 3 points in travel order; the last point duplicates `goal` (yaw fields
+# apply to the final waypoint only). Empty array => single-goal legacy behavior.
+uint32    batch_id
+float32[] waypoints
 float32    yaw
 bool       look_forward
 bool       goal_to_follower

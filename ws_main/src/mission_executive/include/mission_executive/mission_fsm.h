@@ -17,6 +17,7 @@
 #include <quadrotor_msgs/HgridMsg.h>
 #include <quadrotor_msgs/PerceptionMsg.h>
 #include <quadrotor_msgs/LocalGoalSet.h>
+#include <quadrotor_msgs/WaypointProgress.h>
 #include <quadrotor_msgs/EgoStateTrigger.h>
 #include <quadrotor_msgs/DetectOut.h>
 #include <quadrotor_msgs/PositionCommand.h>
@@ -78,7 +79,7 @@ private:
   /* ROS utils */
   ros::NodeHandle node_;
   ros::Timer exec_timer_, vla_search_map_timer_;
-  ros::Subscriber trigger_sub_, odom_sub_, ego_exec_finish_sub_;
+  ros::Subscriber trigger_sub_, odom_sub_, ego_exec_finish_sub_, wp_progress_sub_;
   ros::Subscriber track_command_sub_, target_sub_;
   ros::Subscriber instruction_sub_, ego_plan_res_sub_, battery_sub_, perception_data_sub_, emergency_stop_sub_;
   ros::Subscriber vla_search_target_sub_, vla_search_camera_sub_;
@@ -95,6 +96,11 @@ private:
 
   ros::Publisher ego_goal_pub_, perception_data_pub_, instruction_resp_pub_;
   ros::Publisher vis_marker_pub_, vis_path_pub_;
+  // SUPER waypoint window state (multi-goal batch protocol)
+  bool use_super_backend_{false};
+  uint32_t wp_batch_seq_{0};
+  int wp_batch_start_inx_{0};
+  bool wp_window_active_{false};
   ros::Publisher fsm_state_pub_;
   ros::Publisher tracking_finish_pub_;
   ros::Publisher tracking_target_odom_pub_;
@@ -541,6 +547,28 @@ private:
       const Eigen::Vector3d local_goal, const double yaw = 0.0, const bool look_forward = true,
       uint8_t yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL,
       uint8_t yaw_path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST);
+  /**
+   * Publish a waypoint window (up to 3 waypoints in travel order) to SUPER.
+   *
+   * Waypoint progress is determined inside SUPER; each consumption is reported back via
+   * /drone_0_ego_planner_node/waypoint_progress and advances path_inx_ here.
+   *
+   * @param[in] window       Waypoints in travel order (1-3 points) [m]
+   * @param[in] yaw          Yaw applied at the batch-final waypoint [rad]
+   * @param[in] look_forward Whether to face forward
+   * @param[in] yaw_mode     Yaw mode enum
+   * @param[in] yaw_path_mode Yaw path mode enum
+   */
+  void pubLocalGoalWindow(
+      const std::vector<Eigen::Vector3d>& window, const double yaw = 0.0,
+      const bool look_forward = true,
+      uint8_t yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL,
+      uint8_t yaw_path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST);
+  /**
+   * SUPER waypoint window consumption feedback: advance path_inx_ and republish the
+   * sliding window. Stale batch_id messages are ignored.
+   */
+  void waypointProgressCallback(const quadrotor_msgs::WaypointProgressConstPtr& msg);
   /**
    * Stop all robot motion by publishing a zero-velocity command.
    */

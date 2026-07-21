@@ -70,6 +70,16 @@ namespace fsm {
             int yaw_mode{0};
             int yaw_path_mode{0};
             bool look_forward{false};
+            /* Waypoint window state (multi-goal batch from the upper layer).
+             * wp_list holds the valid reprojected waypoints in travel order;
+             * wp_list[wp_active_idx] == goal_p while the batch is active. */
+            uint32_t batch_id{0};
+            vec_E<Vec3f> wp_list;
+            std::vector<int> wp_orig_idx;
+            int wp_window_size{0};
+            int wp_active_idx{0};
+            uint8_t wp_skipped_mask{0};
+            double pending_goal_yaw{NAN};
         } gi_;
 
         Eigen::Vector3d auto_pilot_vel_w_;
@@ -168,6 +178,27 @@ namespace fsm {
         void logNavigationProgress();
 
         void setGoalPosiAndYaw(const Vec3f &p, const Quatf &q, int yaw_mode = 0, int yaw_path_mode = 0, bool look_forward = false);
+
+        /**
+         * Accept a waypoint window: reproject each waypoint onto the nearest free cell,
+         * drop deeply occupied ones (reported via skipped_mask), and track wp_list[0].
+         *
+         * @param[in] batch_id  Monotonic batch identifier from the upper layer
+         * @param[in] raw_wps   Raw waypoints in travel order (at most 3) [m]
+         * @return True if at least one waypoint survived reprojection
+         */
+        bool setGoalWindow(uint32_t batch_id, const std::vector<Vec3f> &raw_wps,
+                           const Quatf &q, int yaw_mode, int yaw_path_mode, bool look_forward);
+
+        /**
+         * Advance the active waypoint when the robot reaches (or passes by) the current
+         * target; publishes WaypointProgress on every consumption.
+         */
+        void updateWaypointProgress();
+
+        void pushWaypointLookaheadToPlanner();
+
+        virtual void publishWaypointProgress(bool all_consumed) = 0;
 
         void ChangeState(const string &call_func, const MACHINE_STATE &new_state);
 

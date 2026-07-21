@@ -54,6 +54,8 @@ namespace fsm {
         string cmd_topic, mpc_cmd_topic, click_goal_topic;
         double yaw_dot_max{};
         int yaw_mode{};
+        // Radius around an intermediate window waypoint that counts as consumption [m].
+        double wp_reach_radius{0.4};
 
         Config() = default;
 
@@ -67,6 +69,7 @@ namespace fsm {
             loader.LoadParam("fsm/cmd_topic", cmd_topic, string("/planning/pos_cmd"));
             loader.LoadParam("fsm/mpc_cmd_topic", mpc_cmd_topic, string("/planning_cmd/mpc"));
             loader.LoadParam("fsm/click_goal_topic", click_goal_topic, string("/planning/click_goal_topic"));
+            loader.LoadParam("fsm/wp_reach_radius", wp_reach_radius, 0.4);
 
 
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 1.0, true);

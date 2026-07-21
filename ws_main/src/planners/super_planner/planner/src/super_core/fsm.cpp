@@ -170,6 +170,7 @@ namespace fsm {
             }
             case FOLLOW_TRAJ: {
                 publishCurPoseToPath();
+                updateWaypointProgress();
                 logNavigationProgress();
                 break;
             }
@@ -276,6 +277,99 @@ namespace fsm {
         last_progress_dist_ = -1.0;
         last_progress_move_t_ = ros_ptr_->getSimTime();
         consecutive_replan_failures_ = 0;
+    }
+
+    bool Fsm::setGoalWindow(const uint32_t batch_id, const std::vector<Vec3f> &raw_wps,
+                            const Quatf &q, const int yaw_mode, const int yaw_path_mode,
+                            const bool look_forward) {
+        gi_.wp_list.clear();
+        gi_.wp_orig_idx.clear();
+        gi_.wp_skipped_mask = 0;
+        gi_.wp_window_size = static_cast<int>(raw_wps.size());
+        /* Reproject every waypoint onto the nearest non-occupied cell on the inflate map;
+         * deeply occupied ones are skipped and reported through skipped_mask. */
+        for (size_t i = 0; i < raw_wps.size(); i++) {
+            Vec3f reproj;
+            if (planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, raw_wps[i], reproj, 3.0)) {
+                gi_.wp_list.push_back(reproj);
+                gi_.wp_orig_idx.push_back(static_cast<int>(i));
+            } else {
+                gi_.wp_skipped_mask |= static_cast<uint8_t>(1u << i);
+                ros_ptr_->warn(" -- [SUPER][Progress] event=wp_reproject_fail batch_id={} wp_idx={} wp={}",
+                               batch_id, i, raw_wps[i].transpose());
+            }
+        }
+        if (gi_.wp_list.empty()) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=wp_batch_rejected batch_id={} reason=all_reproject_failed",
+                           batch_id);
+            return false;
+        }
+        gi_.batch_id = batch_id;
+        gi_.wp_active_idx = 0;
+        ros_ptr_->info(" -- [SUPER][Progress] event=wp_batch_recv batch_id={} size={} valid={} skipped_mask={}",
+                       batch_id, raw_wps.size(), gi_.wp_list.size(),
+                       static_cast<int>(gi_.wp_skipped_mask));
+        /* If the robot is already on top of the first waypoint, consume it immediately. */
+        planner_ptr_->getRobotState(robot_state_);
+        while (gi_.wp_list.size() > 1 &&
+               (robot_state_.p - gi_.wp_list.front()).norm() < cfg_.wp_reach_radius) {
+            gi_.wp_list.erase(gi_.wp_list.begin());
+            gi_.wp_orig_idx.erase(gi_.wp_orig_idx.begin());
+        }
+        setGoalPosiAndYaw(gi_.wp_list.front(), q, yaw_mode, yaw_path_mode, look_forward);
+        /* Yaw only applies when the batch-final waypoint becomes the active target. */
+        gi_.pending_goal_yaw = gi_.goal_yaw;
+        if (gi_.wp_list.size() > 1) {
+            gi_.goal_yaw = NAN;
+        }
+        pushWaypointLookaheadToPlanner();
+        return true;
+    }
+
+    void Fsm::pushWaypointLookaheadToPlanner() {
+        vec_E<Vec3f> la;
+        for (size_t i = gi_.wp_active_idx + 1; i < gi_.wp_list.size(); i++) {
+            la.push_back(gi_.wp_list[i]);
+        }
+        planner_ptr_->setWaypointLookahead(la);
+    }
+
+    void Fsm::updateWaypointProgress() {
+        if (!started_ || gi_.wp_list.empty() ||
+            gi_.wp_active_idx >= static_cast<int>(gi_.wp_list.size())) {
+            return;
+        }
+        const Vec3f tgt = gi_.wp_list[gi_.wp_active_idx];
+        const double dist = (robot_state_.p - tgt).norm();
+        bool reached = dist < cfg_.wp_reach_radius;
+        if (!reached && gi_.wp_active_idx + 1 < static_cast<int>(gi_.wp_list.size())) {
+            /* Pass-by: the robot crossed the waypoint's plane along the travel direction
+             * with bounded lateral error (the soft pass cost may legitimately deviate). */
+            const Vec3f dir = (gi_.wp_list[gi_.wp_active_idx + 1] - tgt).normalized();
+            const Vec3f rel = robot_state_.p - tgt;
+            const double along = rel.dot(dir);
+            const double lateral = (rel - along * dir).norm();
+            reached = along > 0.0 && lateral < 2.0;
+        }
+        if (!reached) {
+            return;
+        }
+        ros_ptr_->info(" -- [SUPER][Progress] event=wp_consumed batch_id={} wp_idx={} orig_idx={} dist={}",
+                       gi_.batch_id, gi_.wp_active_idx, gi_.wp_orig_idx[gi_.wp_active_idx], dist);
+        gi_.wp_active_idx++;
+        if (gi_.wp_active_idx < static_cast<int>(gi_.wp_list.size())) {
+            gi_.goal_p = gi_.wp_list[gi_.wp_active_idx];
+            if (gi_.wp_active_idx == static_cast<int>(gi_.wp_list.size()) - 1) {
+                gi_.goal_yaw = gi_.pending_goal_yaw;
+            }
+            gi_.new_goal = true;
+            pushWaypointLookaheadToPlanner();
+        } else {
+            /* The batch-final arrival is still reported through the exec_finish path
+             * (traj_finish + closeToGoal); only clear the lookahead here. */
+            planner_ptr_->setWaypointLookahead({});
+        }
+        publishWaypointProgress(false);
     }
 
     void Fsm::ChangeState(const string &call_func, const MACHINE_STATE &new_state) {

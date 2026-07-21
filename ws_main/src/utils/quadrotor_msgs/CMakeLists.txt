@@ -46,6 +46,7 @@ add_message_files(
   Px4ctrlDebug.msg
   TakeoffLand.msg
   LocalGoalSet.msg
+  WaypointProgress.msg
   Instruction.msg
   TrackCommand.msg
   EgoPlannerResult.msg

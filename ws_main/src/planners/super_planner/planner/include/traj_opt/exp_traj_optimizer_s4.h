@@ -36,6 +36,7 @@
 
 #include <utils/header/scope_timer.hpp>
 #include <utils/header/type_utils.hpp>
+#include <utils/header/fmt_eigen.hpp>
 #include <utils/optimization/optimization_utils.h>
 #include <utils/geometry/geometry_utils.h>
 
@@ -85,6 +86,12 @@ namespace traj_opt {
             vec_Vec3f init_ps;
             Mat3Df waypoint_attractor;
             VecDf waypoint_attractor_dead_d;
+
+            /* Soft pass-through waypoints: raw input positions (reprojected upper-level
+             * waypoints) and their resolved (junction inner-point index, position) pairs. */
+            vec_E<Vec3f> pass_wps_raw;
+            std::vector<std::pair<int, Vec3f>> pass_waypoints;
+            double penna_wp_pass{0.0};
 
             Mat3Df curve_fit_anchor;
             Mat3Df curve_fit_dir;
@@ -348,10 +355,17 @@ namespace traj_opt {
                       PolytopeVec &sfcs,
                       Trajectory &out_traj);
 
+        /**
+         * Optimize the exp trajectory through the SFC along the guide path.
+         *
+         * @param[in] pass_wps  Reprojected intermediate waypoints the trajectory should
+         *                      pass through (soft constraint at corridor junctions) [m]
+         */
         bool optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
                       const vec_E<Vec3f> &guide_path, const vector<double> &guide_t,
                       PolytopeVec &sfcs,
-                      Trajectory &out_traj);
+                      Trajectory &out_traj,
+                      const vec_E<Vec3f> &pass_wps = {});
 
         void getInitValue(VecDf &ts, vec_Vec3f &ps) const {
             ts = opt_vars.init_ts;

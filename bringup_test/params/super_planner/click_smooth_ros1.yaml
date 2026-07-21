@@ -6,6 +6,8 @@ fsm:
   cmd_topic: "/drone_0_planning/pos_cmd"
   mpc_cmd_topic: "/planning_cmd/poly_traj"
   timer_en: true
+  # Waypoint window: radius around an intermediate waypoint that counts as consumed [m].
+  wp_reach_radius: 0.4
 
 camera_fov:
   top_angle: 0.6
@@ -30,9 +32,9 @@ super_planner:
   iris_iter_num: 2
   obs_skip_num: 2
   replan_forward_dt: 0.1
-  planning_horizon: 10.0
-  sensing_horizon: 2.0
-  receding_dis: 3.5
+  planning_horizon: 6.5
+  sensing_horizon: -1.0
+  receding_dis: 2.0
   robot_r: 0.2
   yaw_dot_max: 2.0
   # Yaw mode: 1 heading to velocity, 2 heading to goal
@@ -68,10 +70,12 @@ traj_opt:
     penna_vel: 5.0e+5
     penna_acc: 5.0e+5
     penna_jerk: -5.0e+5
-    penna_attract: 1.0e+3
-    penna_curve_fit: 1.0e+3
+    penna_attract: 0.0
+    penna_curve_fit: 0.0
     curve_fit_a2inv: 0.01
     curve_fit_b2inv: 1.0
+    # Soft pass-through weight for reprojected window waypoints (corridor junction pull).
+    penna_wp_pass: 1.0e+3
     penna_omg:  5.0e+5
     penna_thr: 1.0e+5
 

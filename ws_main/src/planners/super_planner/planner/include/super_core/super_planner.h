@@ -89,6 +89,9 @@ namespace super_planner {
             double goal_yaw{0};
             bool new_goal{true};
             bool goal_valid{true};
+            /* Reprojected waypoints after the current target (travel order), supplied by
+             * the FSM waypoint window. Empty => legacy single-goal behavior. */
+            vec_E<Vec3f> wp_lookahead;
         } gi_;
 
         FOVChecker::Ptr fov_checker_;
@@ -117,6 +120,15 @@ namespace super_planner {
 
         bool goalValid() const {
             return gi_.goal_valid;
+        }
+
+        /**
+         * Update the lookahead waypoints planned through beyond the current target.
+         *
+         * @param[in] wps  Reprojected waypoints in travel order [m], empty to clear
+         */
+        void setWaypointLookahead(const vec_E<Vec3f> &wps) {
+            gi_.wp_lookahead = wps;
         }
 
         typedef std::shared_ptr<SuperPlanner> Ptr;

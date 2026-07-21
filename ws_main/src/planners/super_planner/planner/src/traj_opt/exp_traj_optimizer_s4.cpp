@@ -350,6 +350,19 @@ double ExpTrajOpt::costFunctional(void *ptr,
     cost += weightT * times.sum();
     gradByTimes.array() += weightT;
 
+    /* 5b) Soft pass-through waypoint cost on junction inner points: pulls q_j toward the
+     * reprojected waypoint; corridor and dynamics penalties still dominate on conflict. */
+    if (obj.penna_wp_pass > 0.0) {
+        for (const auto &[idx, wp] : obj.pass_waypoints) {
+            if (idx < 0 || idx >= points.cols()) {
+                continue;
+            }
+            const Vec3f d = points.col(idx) - wp;
+            cost += obj.penna_wp_pass * d.squaredNorm();
+            gradByPoints.col(idx) += 2.0 * obj.penna_wp_pass * d;
+        }
+    }
+
     /* 6) Propagate the gradient from PT to optimization varibles*/
     gcopter::propagateGradientTToTau(tau, gradByTimes, gradTau);
     switch (pos_constraint_type) {
@@ -525,6 +538,26 @@ bool ExpTrajOpt::processCorridorWithGuideTraj() {
         opt_vars.vPolytopes.push_back(curIOB);
     }
 
+    // * 2.5) Map soft pass-through waypoints to their nearest corridor junction
+    opt_vars.pass_waypoints.clear();
+    for (const auto &wp : opt_vars.pass_wps_raw) {
+        int best_j = -1;
+        double best_d = std::numeric_limits<double>::max();
+        for (int j = 0; j < sizeCorridor; j++) {
+            const double d = (wp - opt_vars.waypoint_attractor.col(j)).norm();
+            if (d < best_d) {
+                best_d = d;
+                best_j = j;
+            }
+        }
+        if (best_j >= 0 && best_d < 3.0) {
+            opt_vars.pass_waypoints.emplace_back(best_j, wp);
+        } else {
+            ros_ptr_->warn(" -- [ExpOpt] event=wp_pass_map_failed wp={} best_junction_dis={}",
+                           wp.transpose(), best_d);
+        }
+    }
+
     // * 3) Time and waypoint allocation for hot initialization
     VecDf min_dis(opt_vars.waypoint_attractor.cols());
     VecDi min_id(opt_vars.waypoint_attractor.cols());
@@ -548,6 +581,23 @@ bool ExpTrajOpt::processCorridorWithGuideTraj() {
     for (int i = 1; i < time_stamps.size(); i++) {
         opt_vars.times(i - 1) = time_stamps(i) - time_stamps(i - 1);
         opt_vars.times(i - 1) = std::max(0.01, opt_vars.times(i - 1));
+    }
+
+    /* Hot-init pass-through junctions on the waypoint, but only when it lies inside the
+     * junction overlap polytope: an infeasible init gets stuck because the corridor
+     * smoothed-L1 gradient saturates, leaving >0.2 m violation at convergence. */
+    for (const auto &[j, wp] : opt_vars.pass_waypoints) {
+        bool inside = true;
+        const auto &hp = opt_vars.hOverlapPolytopes[j];
+        for (int k = 0; k < hp.rows(); k++) {
+            if (hp.block<1, 3>(k, 0).dot(wp) + hp(k, 3) > -0.02) {
+                inside = false;
+                break;
+            }
+        }
+        if (inside) {
+            opt_vars.points.col(j) = wp;
+        }
     }
 
     if (!geometry_utils::enumerateVs(opt_vars.hPolytopes.back(), curIV)) {
@@ -847,6 +897,7 @@ ExpTrajOpt::ExpTrajOpt(const traj_opt::Config &cfg, const ros_interface::RosInte
             cfg_.penna_thr, cfg_.penna_curve_fit;
     opt_vars.curve_fit_a2inv = cfg_.curve_fit_a2inv;
     opt_vars.curve_fit_b2inv = cfg_.curve_fit_b2inv;
+    opt_vars.penna_wp_pass = cfg_.penna_wp_pass;
     opt_vars.rho = cfg_.penna_t;
     opt_vars.pos_constraint_type = cfg_.pos_constraint_type;
     opt_vars.block_energy_cost = cfg_.block_energy_cost;
@@ -932,7 +983,8 @@ ExpTrajOpt::~ExpTrajOpt() {
 bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
                           const vec_E<Vec3f> &guide_path, const vector<double> &guide_t,
                           PolytopeVec &sfcs,
-                          Trajectory &out_traj) {
+                          Trajectory &out_traj,
+                          const vec_E<Vec3f> &pass_wps) {
     /// Check if hot init is valid
     if (guide_path.size() != guide_t.size()) {
         cout << YELLOW << " -- [TrajOpt] Error, the guide trajectory has wrong path and time stamp." << RESET
@@ -959,6 +1011,8 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
     opt_vars.tailPVAJ = tailPVAJ;
     opt_vars.guide_path = guide_path;
     opt_vars.guide_t = guide_t;
+    opt_vars.pass_wps_raw = pass_wps;
+    opt_vars.pass_waypoints.clear();
     opt_vars.hPolytopes.resize(sfcs.size());
 
     for (long i = 0; i < sfcs.size(); i++) {
@@ -974,7 +1028,6 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
 
     out_traj.clear();
 
-
     if (success && std::isinf(optimize(out_traj, cfg_.opt_accuracy))) {
         cout << YELLOW << " -- [SUPER] Minco exp_traj opt failed." << RESET << endl;
         success = false;
@@ -984,6 +1037,13 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
 
     if (success) {
         out_traj.start_WT = ros_ptr_->getSimTime();
+        for (size_t k = 0; k < opt_vars.pass_waypoints.size(); k++) {
+            const auto &[j, wp] = opt_vars.pass_waypoints[k];
+            if (j >= 0 && j < opt_vars.points.cols()) {
+                ros_ptr_->info(" -- [ExpOpt] event=wp_pass_deviation wp_idx={} junction={} dev={} wp={}",
+                               k, j, (opt_vars.points.col(j) - wp).norm(), wp.transpose());
+            }
+        }
     }
 
     if (!success && cfg_.save_log_en) {
@@ -1011,6 +1071,8 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
                           const vec_Vec3f &init_ps,
                           const VecDf &init_ts,
                           Trajectory &out_traj) {
+    opt_vars.pass_wps_raw.clear();
+    opt_vars.pass_waypoints.clear();
     vec_Vec3f guide_path;
     guide_path.emplace_back(headPVAJ.col(0));
     for (const auto &i: init_ps) {

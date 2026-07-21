@@ -67,6 +67,8 @@ namespace traj_opt {
         double penna_curve_fit{0};
         // Anisotropy of the curve-fitting metric: along-track ~free (a2inv), cross-track penalized (b2inv).
         double curve_fit_a2inv{0.01}, curve_fit_b2inv{1.0};
+        // Weight of the soft pass-through waypoint penalty on corridor junction inner points.
+        double penna_wp_pass{0};
         // penna_ts only for backupTraj;
         double penna_ts{0};
         // for backup traj piece num
@@ -129,6 +131,7 @@ namespace traj_opt {
             loader.LoadParam("traj_opt" + ns + "penna_curve_fit", penna_curve_fit, 0.0);
             loader.LoadParam("traj_opt" + ns + "curve_fit_a2inv", curve_fit_a2inv, 0.01);
             loader.LoadParam("traj_opt" + ns + "curve_fit_b2inv", curve_fit_b2inv, 1.0);
+            loader.LoadParam("traj_opt" + ns + "penna_wp_pass", penna_wp_pass, 0.0);
             loader.LoadParam("traj_opt" + ns + "penna_omg", penna_omg, -1.0);
             loader.LoadParam("traj_opt" + ns + "penna_thr", penna_thr, -1.0);
 
@@ -141,6 +144,7 @@ namespace traj_opt {
                 penna_jerk = penna_jerk * penna_scale;
                 penna_attract = penna_attract * penna_scale;
                 penna_curve_fit = penna_curve_fit * penna_scale;
+                penna_wp_pass = penna_wp_pass * penna_scale;
                 penna_omg = penna_omg * penna_scale;
                 penna_thr = penna_thr * penna_scale;
             }

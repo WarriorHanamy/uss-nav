@@ -29,6 +29,8 @@
 
 #include "fsm/fsm.h"
 
+#include <algorithm>
+
 #include "ros/ros.h"
 #include "nav_msgs/Path.h"
 #include "nav_msgs/Odometry.h"
@@ -36,6 +38,7 @@
 #include "quadrotor_msgs/EgoPlannerResult.h"
 #include "quadrotor_msgs/PositionCommand.h"
 #include "quadrotor_msgs/LocalGoalSet.h"
+#include "quadrotor_msgs/WaypointProgress.h"
 #include "camera_fov/camera_fov.h"
 
 
@@ -43,7 +46,7 @@ namespace fsm {
     class FsmRos1 : public Fsm {
         ros::NodeHandle nh_;
         ros::Subscriber goal_sub_;
-        ros::Publisher cmd_pub, path_pub_, plan_result_pub_, exec_finish_pub_;
+        ros::Publisher cmd_pub, path_pub_, plan_result_pub_, exec_finish_pub_, wp_progress_pub_;
         ros::Timer execution_timer_, replan_timer_, cmd_timer_;
         quadrotor_msgs::PositionCommand pid_cmd_;
         quadrotor_msgs::LocalGoalSet latest_goal_;
@@ -76,6 +79,28 @@ namespace fsm {
 
         void resetVisualizedPath() override {
             path.poses.clear();
+        }
+
+        void publishWaypointProgress(bool all_consumed) override {
+            quadrotor_msgs::WaypointProgress msg;
+            msg.batch_id = gi_.batch_id;
+            msg.skipped_mask = gi_.wp_skipped_mask;
+            msg.all_consumed = all_consumed;
+            if (all_consumed) {
+                msg.consumed_count = static_cast<uint8_t>(gi_.wp_window_size);
+                msg.active_idx = static_cast<uint8_t>(gi_.wp_window_size);
+            } else {
+                msg.consumed_count = gi_.wp_active_idx > 0
+                                     ? static_cast<uint8_t>(gi_.wp_orig_idx[gi_.wp_active_idx - 1] + 1) : 0;
+                msg.active_idx = gi_.wp_active_idx < static_cast<int>(gi_.wp_list.size())
+                                 ? static_cast<uint8_t>(gi_.wp_orig_idx[gi_.wp_active_idx])
+                                 : static_cast<uint8_t>(gi_.wp_window_size);
+            }
+            wp_progress_pub_.publish(msg);
+            ROS_INFO("[SUPER][Progress] event=wp_progress_pub batch_id=%u consumed=%u active=%u skipped_mask=%u all_consumed=%d",
+                     msg.batch_id, msg.consumed_count, msg.active_idx,
+                     static_cast<unsigned int>(msg.skipped_mask),
+                     static_cast<int>(msg.all_consumed));
         }
 
         void publishCurPoseToPath() override {
@@ -202,6 +227,11 @@ namespace fsm {
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
                 if (closeToGoal(0.1)) {
+                    if (!gi_.wp_list.empty()) {
+                        publishWaypointProgress(true);
+                        gi_.wp_list.clear();
+                        gi_.wp_orig_idx.clear();
+                    }
                     ChangeState("getPoseFromTraj", WAIT_GOAL);
                 } else {
                     ChangeState("getPoseFromTraj", GENERATE_TRAJ);
@@ -262,6 +292,27 @@ namespace fsm {
 
             super_utils::Quatf goal_q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
             publishMissionFeedback(true, true, false);
+
+            /* Waypoint window: waypoints is a flattened xyz array (at most 3 points in
+             * travel order). Non-empty => multi-goal batch with SUPER-internal progress. */
+            const size_t n_floats = msg->waypoints.size();
+            if (n_floats >= 3 && n_floats % 3 == 0) {
+                std::vector<Vec3f> raw_wps;
+                const size_t n_wp = std::min<size_t>(n_floats / 3, 3);
+                raw_wps.reserve(n_wp);
+                for (size_t i = 0; i < n_wp; i++) {
+                    raw_wps.emplace_back(msg->waypoints[3 * i], msg->waypoints[3 * i + 1],
+                                         msg->waypoints[3 * i + 2]);
+                }
+                if (setGoalWindow(msg->batch_id, raw_wps, goal_q, yaw_mode, yaw_path_mode,
+                                  msg->look_forward)) {
+                    return;
+                }
+            }
+            /* Legacy single-goal path: no active window. */
+            gi_.wp_list.clear();
+            gi_.wp_orig_idx.clear();
+            planner_ptr_->setWaypointLookahead({});
             setGoalPosiAndYaw(goal_p, goal_q, yaw_mode, yaw_path_mode, msg->look_forward);
         }
 
@@ -285,6 +336,8 @@ namespace fsm {
             percep_utils_ = std::make_shared<ego_planner::PerceptionUtils>(nh_);
             plan_result_pub_ = nh_.advertise<quadrotor_msgs::EgoPlannerResult>("/planning/ego_plan_result", 10);
             exec_finish_pub_ = nh_.advertise<std_msgs::Bool>("/drone_0_ego_planner_node/exec_finish_trigger", 10);
+            wp_progress_pub_ = nh_.advertise<quadrotor_msgs::WaypointProgress>(
+                    "/drone_0_ego_planner_node/waypoint_progress", 10);
 
             int cmd_cnt = 0;
 
@@ -353,6 +406,12 @@ namespace fsm {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
                 if (closeToGoal(0.1)) {
                     publishMissionFeedback(true, true, true);
+                    if (!gi_.wp_list.empty()) {
+                        publishWaypointProgress(true);
+                        gi_.wp_list.clear();
+                        gi_.wp_orig_idx.clear();
+                        ros_ptr_->info(" -- [SUPER][Progress] event=wp_batch_done batch_id={}", gi_.batch_id);
+                    }
                     ChangeState("PubCmdCallback", WAIT_GOAL);
                 } else {
                     ChangeState("PubCmdCallback", GENERATE_TRAJ);

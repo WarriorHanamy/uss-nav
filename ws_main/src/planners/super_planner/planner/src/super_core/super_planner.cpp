@@ -478,7 +478,7 @@ namespace super_planner {
                     }
                 }
 
-                if (!gi_.new_goal &&
+                if (!gi_.new_goal && gi_.wp_lookahead.empty() &&
                     (gi_.goal_p - last_exp_traj.getPos(replan_state_TT)).norm() < cfg_.resolution * 3) {
                     // Return if the traj close to goal
                     out_exp_traj_info = last_exp_traj_info;
@@ -596,6 +596,9 @@ namespace super_planner {
         vector<int> path_passed_waypoint_id;
         vec_Vec3f inside_poly_goals;
         vector<int> sfc_waypoint_ids;
+        /* Intermediate waypoints fully reached by the chained A* within the horizon;
+         * handed to the exp_traj optimizer as soft pass-through constraints. */
+        vec_E<Vec3f> pass_wps;
 
         if (guide_path.empty() ||
             ((guide_path.front() - pos_init_state.col(0)).norm() > 1e-2)) {
@@ -605,79 +608,89 @@ namespace super_planner {
 
         // if need a geometry path
         if (temp_horizon > cfg_.resolution * 2) {
-            /// start point TT + exp_traj start_WT
-//            double path_search_start_point_WT = guide_stamp.back() + guide_pos_traj.start_WT;
-            // if the goal is close to the last point of the guide path, just add the goal to the guide path
-            if ((guide_path.back() - gi_.goal_p).norm() < cfg_.resolution * 5) {
-                guide_stamp.push_back(guide_stamp.back() +
-                                      (guide_path.back() - gi_.goal_p).norm() / cfg_.exp_traj_cfg.max_vel);
-                guide_path.push_back(gi_.goal_p);
-                // NO NEED
-            } else {
+            /* Waypoint chain: current target first, then the reprojected lookahead
+             * waypoints. A* searches segment by segment within the remaining horizon
+             * budget, so the guide path passes through every reachable reprojected
+             * waypoint instead of stopping at the first target. */
+            vec_E<Vec3f> wp_chain;
+            wp_chain.push_back(gi_.goal_p);
+            for (const auto &wp : gi_.wp_lookahead) {
+                wp_chain.push_back(wp);
+            }
+            double searched_len{0.0};
+            for (size_t w = 0; w < wp_chain.size(); w++) {
+                const double remain_horizon = temp_horizon - searched_len;
+                if (remain_horizon <= cfg_.resolution * 2) {
+                    break;
+                }
+                const Vec3f &wp = wp_chain[w];
+                const bool has_next = (w + 1 < wp_chain.size());
+                // if the waypoint is close to the last point of the guide path, just append it
+                if ((guide_path.back() - wp).norm() < cfg_.resolution * 5) {
+                    searched_len += (guide_path.back() - wp).norm();
+                    guide_stamp.push_back(guide_stamp.back() +
+                                          (guide_path.back() - wp).norm() / cfg_.exp_traj_cfg.max_vel);
+                    guide_path.push_back(wp);
+                    if (has_next) {
+                        pass_wps.push_back(wp);
+                    }
+                    continue;
+                }
                 vec_Vec3f new_path;
-                // project goal within the planning horizon
-//                const Vec3f dir = (gi_.goal_p - robot_state_.p).normalized();
-//                const double dis2goal = (gi_.goal_p - robot_state_.p).norm();
-//                Vec3f cadi_p = gi_.goal_p;
-//                if(dis2goal > cfg_.planning_horizon) {
-//                    double proj_l = cfg_.planning_horizon;
-//                    Vec3f cadi_p = robot_state_.p + dir * proj_l;
-//                    int max_iter = 100;
-//                    while(map_ptr_->isOccupiedInflate(cadi_p) && max_iter-- > 0) {
-//                        if(map_ptr_->getNearestInfCellNot(OCCUPIED, cadi_p, cadi_p, 1.0)) {
-//                            break;
-//                        }
-//                        proj_l -= 2.0;
-//                        if(proj_l < 1){
-//                            ros_ptr_->warn(" -- [SUPER] Project goal failed");
-//                            gi_.goal_valid = false;
-//                            return FAILED;
-//                        }
-//                        cadi_p = robot_state_.p + dir * proj_l;
-//                    }
-//                    if(max_iter <= 0) {
-//                        ros_ptr_->warn(" -- [SUPER] Project goal failed");
-//                        gi_.goal_valid = false;
-//                        return FAILED;
-//                    }
-//                }
-                /* Truncate the waypoint onto the planning horizon before searching, so the
-                 * A* path ends at a well-defined point on the straight line toward the real
-                 * goal instead of at wherever the search front runs out of budget. */
-                Vec3f eff_goal = gi_.goal_p;
+                /* Truncate the waypoint onto the remaining planning horizon before
+                 * searching, so the A* path ends at a well-defined point on the straight
+                 * line toward the real waypoint instead of at wherever the search front
+                 * runs out of budget. */
+                Vec3f eff_goal = wp;
                 const Vec3f seg_start = guide_path.back();
-                const double seg_dis = (gi_.goal_p - seg_start).norm();
-                if (seg_dis > temp_horizon) {
-                    const Vec3f dir = (gi_.goal_p - seg_start).normalized();
-                    double proj_l = temp_horizon;
+                const double seg_dis = (wp - seg_start).norm();
+                bool truncated{false};
+                if (seg_dis > remain_horizon) {
+                    truncated = true;
+                    const Vec3f dir = (wp - seg_start).normalized();
+                    double proj_l = remain_horizon;
                     eff_goal = seg_start + dir * proj_l;
                     int proj_iter = 20;
                     while (map_ptr_->isOccupiedInflate(eff_goal) && proj_iter-- > 0) {
                         proj_l -= cfg_.resolution * 5;
                         if (proj_l < cfg_.resolution * 10) {
                             ros_ptr_->warn(" -- [SUPER][Progress] event=goal_truncate_failed goal={} temp_horizon={}",
-                                           gi_.goal_p.transpose(), temp_horizon);
+                                           wp.transpose(), remain_horizon);
                             return FAILED;
                         }
                         eff_goal = seg_start + dir * proj_l;
                     }
                     map_ptr_->getNearestInfCellNot(OCCUPIED, eff_goal, eff_goal, 1.0);
                     ros_ptr_->info(" -- [SUPER][Progress] event=goal_truncated original_dis={} temp_horizon={} eff_goal={} goal={}",
-                                   seg_dis, temp_horizon, eff_goal.transpose(), gi_.goal_p.transpose());
+                                   seg_dis, remain_horizon, eff_goal.transpose(), wp.transpose());
                 }
-                if (!PathSearch(seg_start, eff_goal, temp_horizon, new_path)) {
-                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_failed start={} goal={} temp_horizon={} dist_to_goal={} guide_path_len={}",
-                                   guide_path.back().transpose(), eff_goal.transpose(), temp_horizon,
+                if (!PathSearch(seg_start, eff_goal, remain_horizon, new_path)) {
+                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_failed seg_idx={} start={} goal={} temp_horizon={} dist_to_goal={} guide_path_len={}",
+                                   w, guide_path.back().transpose(), eff_goal.transpose(), remain_horizon,
                                    (robot_state_.p - gi_.goal_p).norm(),
                                    geometry_utils::computePathLength(guide_path));
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
                     return FAILED;
                 }
                 if (new_path.size() < 2) {
-                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_too_short start={} goal={} temp_horizon={} new_path_size={}",
-                                   guide_path.back().transpose(), gi_.goal_p.transpose(), temp_horizon, new_path.size());
+                    ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_too_short seg_idx={} start={} goal={} temp_horizon={} new_path_size={}",
+                                   w, guide_path.back().transpose(), eff_goal.transpose(), remain_horizon, new_path.size());
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
                     return FAILED;
+                }
+
+                /* Drop consecutive duplicate grid points (A* may repeat the snapped start
+                 * cell); they corrupt the backward distance accumulation below. */
+                {
+                    vec_Vec3f filtered;
+                    filtered.reserve(new_path.size());
+                    filtered.push_back(new_path.front());
+                    for (size_t pi = 1; pi < new_path.size(); pi++) {
+                        if ((new_path[pi] - filtered.back()).norm() > 1e-3) {
+                            filtered.push_back(new_path[pi]);
+                        }
+                    }
+                    new_path.swap(filtered);
                 }
 
                 // compute total dis
@@ -721,12 +734,29 @@ namespace super_planner {
 //                }
 //                cout << endl;
 
+                double seg_path_len{0.0};
                 for (long unsigned int i = 1; i < new_path.size(); i++) {
                     double t = dt[i];
+                    if (std::isnan(t) || t < 0.0) {
+                        ros_ptr_->warn(" -- [SUPER][Progress] event=guide_dt_nan seg={} i={} dis={} total_dis={} end_vel={} stamps={}",
+                                       w, i, dis[i], total_dis, guide_path_end_vel, stamps[i]);
+                    }
                     time_stamp += t;
+                    seg_path_len += (new_path[i] - new_path[i - 1]).norm();
                     guide_path.emplace_back(new_path[i]);
                     guide_stamp.emplace_back(time_stamp);
                 }
+                searched_len += seg_path_len;
+                if (truncated) {
+                    break;
+                }
+                if (has_next) {
+                    pass_wps.push_back(wp);
+                }
+            }
+            /* The chain tail is the trajectory terminal, not a pass-through constraint. */
+            while (!pass_wps.empty() && (pass_wps.back() - guide_path.back()).norm() < cfg_.resolution) {
+                pass_wps.pop_back();
             }
         }
 
@@ -778,7 +808,8 @@ namespace super_planner {
                                            guide_path,
                                            guide_stamp,
                                            sfc,
-                                           out_traj);
+                                           out_traj,
+                                           pass_wps);
         time_consuming_[EXP_TRAJ_OPT] = t_exp_opt.stop();
         {
             VecDf init_ts;

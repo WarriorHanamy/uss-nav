@@ -88,6 +88,13 @@ void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Pt
   nh.param("fsm/drone_id", md_->drone_id_, 0);
   md_->is_initialized_=false;//swarm info callback
 
+  /* The SUPER backend owns waypoint progress; the EGO backend keeps the legacy
+   * single-goal protocol with distance-based advancement. */
+  bool enable_ego_replan = true;
+  nh.param("fsm/enable_ego_replan", enable_ego_replan, true);
+  use_super_backend_ = !enable_ego_replan;
+  ROS_INFO("[MissionFSM] planner_backend=%s", use_super_backend_ ? "super" : "ego");
+
   fd_->target_cmd_ = "None";
   fd_->prior_knowledge_ = "Toilet is derictly connected to living room";
   fd_->target_cmd_ = nh.param<std::string>("fsm/target_cmd",    "None");
@@ -298,6 +305,7 @@ void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Pt
   ego_plan_res_sub_= nh.subscribe("/planning/ego_plan_result", 100, &MissionFSM::egoPlanResCallback, this, ros::TransportHints().tcpNoDelay());
   trigger_sub_     = nh.subscribe("/move_base_simple/goal", 2, &MissionFSM::triggerCallback, this, ros::TransportHints().tcpNoDelay());
   ego_exec_finish_sub_ = nh.subscribe("exec_finish_trigger", 10, &MissionFSM::egoExecFinishCallback, this, ros::TransportHints().tcpNoDelay());
+  wp_progress_sub_ = nh.subscribe("/drone_0_ego_planner_node/waypoint_progress", 10, &MissionFSM::waypointProgressCallback, this, ros::TransportHints().tcpNoDelay());
   track_command_sub_ = nh.subscribe("/planning/track_command", 2, &MissionFSM::trackCommandCallback, this,
                                     ros::TransportHints().tcpNoDelay());
   target_sub_ = nh.subscribe("/tracking_target", 2, &MissionFSM::targetCallbackReal, this,
@@ -2641,7 +2649,8 @@ void MissionFSM::goTargetObject() {
       return;
     }
 
-    // Local goal
+    // Local goal. With the SUPER backend, waypoint progress is determined inside SUPER
+    // and fed back via waypoint_progress; the EGO backend keeps distance-based advance.
     if (fd_->path_res_.size() > 2 && dis_2_local_aim < 1.5){
       if (fd_->path_inx_ == fd_->path_res_.size() - 1 && dis_2_local_aim < 1.0
           && fd_->ego_exec_finished_ && fd_->ego_modify_status_) {
@@ -2650,27 +2659,28 @@ void MissionFSM::goTargetObject() {
         transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "can't reach local goal");
         return ;
       }
-      ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_reached target_obj_id=" << fd_->object_target_id_
-                      << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
-                      << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
-                      << " reached_path_index=" << fd_->path_inx_
-                      << " path_size=" << fd_->path_res_.size()
-                      << " is_final_path_index="
-                      << (fd_->path_res_.empty() ? 0 : (fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1))
-                      << " dis_2_local_aim=" << dis_2_local_aim
-                      << " reach_thresh=1.5"
-                      << " ego_exec_finished=" << fd_->ego_exec_finished_
-                      << " ego_plan_status=" << fd_->ego_plan_status_
-                      << " ego_modify_status=" << fd_->ego_modify_status_
-                      << " odom_pos=" << fd_->odom_pos_.transpose()
-                      << " local_aim=" << fd_->local_aim_pos_.transpose());
-      getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
-      fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
-      fd_->stuck_force_advance_triggered_ = false;
-      fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 正常推进时重置新replan卡死计时
-      fd_->object_id_nav_replan_stuck_count_ = 0;           // 正常推进时重置replan计数
-      fd_->last_pub_time_ = ros::Time::now();
-      // INFO_MSG_GREEN("[TARG Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
+      if (!use_super_backend_) {
+        ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_reached target_obj_id=" << fd_->object_target_id_
+                        << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                        << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                        << " reached_path_index=" << fd_->path_inx_
+                        << " path_size=" << fd_->path_res_.size()
+                        << " is_final_path_index="
+                        << (fd_->path_res_.empty() ? 0 : (fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1))
+                        << " dis_2_local_aim=" << dis_2_local_aim
+                        << " reach_thresh=1.5"
+                        << " ego_exec_finished=" << fd_->ego_exec_finished_
+                        << " ego_plan_status=" << fd_->ego_plan_status_
+                        << " ego_modify_status=" << fd_->ego_modify_status_
+                        << " odom_pos=" << fd_->odom_pos_.transpose()
+                        << " local_aim=" << fd_->local_aim_pos_.transpose());
+        getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+        fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
+        fd_->stuck_force_advance_triggered_ = false;
+        fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 正常推进时重置新replan卡死计时
+        fd_->object_id_nav_replan_stuck_count_ = 0;           // 正常推进时重置replan计数
+        fd_->last_pub_time_ = ros::Time::now();
+      }
     }
   }
 }
@@ -2780,8 +2790,11 @@ void MissionFSM::goTargetWithWaypoint() {
         transitState(MISSION_FSM_STATE::WAIT_TRIGGER, "can't reach local goal");
         return;
       }
-      getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
-      fd_->last_pub_time_ = ros::Time::now();
+      // SUPER backend advances via waypoint_progress; EGO backend advances by distance.
+      if (!use_super_backend_) {
+        getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+        fd_->last_pub_time_ = ros::Time::now();
+      }
     }
   }
 }
@@ -3047,7 +3060,11 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
                     << " local_goal=" << fd_->local_aim_pos_.transpose()
                     << " aim_yaw=" << aim_yaw
                     << " look_forward=" << look_forward);
-    pubLocalGoal(fd_->local_aim_pos_, aim_yaw, look_forward);
+    if (use_super_backend_) {
+      pubLocalGoalWindow({fd_->local_aim_pos_}, aim_yaw, look_forward);
+    } else {
+      pubLocalGoal(fd_->local_aim_pos_, aim_yaw, look_forward);
+    }
     if (md_->mission_state_ == MISSION_FSM_STATE::GO_TARGET_OBJECT) {
       ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_command target_obj_id=" << fd_->object_target_id_
                       << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
@@ -3077,7 +3094,18 @@ bool MissionFSM::getAndPublishNextAim(vector<Eigen::Vector3d>& path_res,
           fd_->aim_pos_[2] = fd_->local_aim_pos_[2];
         }
       }
-      pubLocalGoal(fd_->local_aim_pos_, aim_yaw, true);
+      if (use_super_backend_) {
+        // Waypoint window: current aim + up to 2 following path points; SUPER plans A*
+        // and the trajectory through all of them and reports consumption feedback.
+        std::vector<Eigen::Vector3d> window;
+        window.push_back(fd_->local_aim_pos_);
+        for (int k = 1; k <= 2 && fd_->path_inx_ + k < static_cast<int>(path_res.size()); k++) {
+          window.push_back(path_res[fd_->path_inx_ + k]);
+        }
+        pubLocalGoalWindow(window, aim_yaw, true);
+      } else {
+        pubLocalGoal(fd_->local_aim_pos_, aim_yaw, true);
+      }
       if (md_->mission_state_ == MISSION_FSM_STATE::GO_TARGET_OBJECT) {
         ROS_INFO_STREAM("[MissionFSM] object_topo_waypoint_command target_obj_id=" << fd_->object_target_id_
                         << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
@@ -3106,6 +3134,7 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
   // yaw-only全景命令不占用EGO位置轨迹完成标志，目标续接由odometry角度驱动。
   if (yaw_mode != quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA)
     fd_->ego_exec_finished_ = false;
+  wp_window_active_ = false;
 
   quadrotor_msgs::LocalGoalSet msg;
   msg.drone_id = md_->drone_id_;
@@ -3126,6 +3155,72 @@ void MissionFSM::pubLocalGoal(const Eigen::Vector3d local_goal, const double yaw
                   << " look_forward=" << look_forward
                   << " yaw_mode=" << static_cast<unsigned int>(yaw_mode)
                   << " yaw_path_mode=" << static_cast<unsigned int>(yaw_path_mode));
+}
+
+void MissionFSM::pubLocalGoalWindow(const std::vector<Eigen::Vector3d>& window, const double yaw,
+                                    const bool look_forward, const uint8_t yaw_mode,
+                                    const uint8_t yaw_path_mode)
+{
+  if (window.empty()) return;
+  fd_->ego_exec_finished_ = false;
+
+  quadrotor_msgs::LocalGoalSet msg;
+  msg.drone_id = md_->drone_id_;
+  msg.source_task_id = active_instruction_task_id_;
+  const Eigen::Vector3d& final_wp = window.back();
+  msg.goal[0] = static_cast<float>(final_wp.x());
+  msg.goal[1] = static_cast<float>(final_wp.y());
+  msg.goal[2] = static_cast<float>(final_wp.z());
+  msg.look_forward = look_forward;
+  msg.yaw = yaw;
+  msg.yaw_low_speed = yaw_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED;
+  msg.yaw_mode = yaw_mode;
+  msg.yaw_path_mode = yaw_path_mode;
+  msg.batch_id = ++wp_batch_seq_;
+  msg.waypoints.reserve(window.size() * 3);
+  for (const auto& wp : window) {
+    msg.waypoints.push_back(static_cast<float>(wp.x()));
+    msg.waypoints.push_back(static_cast<float>(wp.y()));
+    msg.waypoints.push_back(static_cast<float>(wp.z()));
+  }
+  ego_goal_pub_.publish(msg);
+  wp_batch_start_inx_ = fd_->path_inx_;
+  wp_window_active_ = true;
+  ROS_INFO_STREAM("[MissionFSM] local_goal_window_published batch_id=" << wp_batch_seq_
+                  << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
+                  << " task_session_id=" << static_cast<int>(active_instruction_session_id_)
+                  << " window_size=" << window.size()
+                  << " start_path_index=" << wp_batch_start_inx_
+                  << " final_goal=" << final_wp.transpose()
+                  << " yaw=" << yaw
+                  << " look_forward=" << look_forward);
+}
+
+void MissionFSM::waypointProgressCallback(const quadrotor_msgs::WaypointProgressConstPtr& msg)
+{
+  if (!wp_window_active_ || msg->batch_id != wp_batch_seq_) return;
+  ROS_INFO_STREAM("[MissionFSM] waypoint_progress_received batch_id=" << msg->batch_id
+                  << " consumed_count=" << static_cast<int>(msg->consumed_count)
+                  << " active_idx=" << static_cast<int>(msg->active_idx)
+                  << " skipped_mask=" << static_cast<int>(msg->skipped_mask)
+                  << " all_consumed=" << static_cast<int>(msg->all_consumed));
+  if (msg->all_consumed) {
+    wp_window_active_ = false;
+    return;
+  }
+  const int new_inx = wp_batch_start_inx_ + static_cast<int>(msg->consumed_count);
+  if (new_inx > fd_->path_inx_ && new_inx < static_cast<int>(fd_->path_res_.size())) {
+    fd_->path_inx_ = new_inx;
+    ROS_INFO_STREAM("[MissionFSM] waypoint_progress_advance batch_id=" << msg->batch_id
+                    << " new_path_index=" << fd_->path_inx_
+                    << " path_size=" << fd_->path_res_.size());
+    getAndPublishNextAim(fd_->path_res_, true, fd_->aim_yaw_);
+    fd_->last_pub_time_ = ros::Time::now();
+    fd_->stuck_force_advance_count_ = 0;       // 正常推进时重置卡死强制推进计数
+    fd_->stuck_force_advance_triggered_ = false;
+    fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;  // 正常推进时重置新replan卡死计时
+    fd_->object_id_nav_replan_stuck_count_ = 0;           // 正常推进时重置replan计数
+  }
 }
 
 
