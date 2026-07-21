@@ -86,7 +86,7 @@ TEST_ID=my-test DURATION=60 docker compose run --rm test
 mkdir -p .data/pcd .data/scene_graph
 
 # PCD 地图
-ln -s /path/to/J30V2_20260629.pcd .data/pcd/J30V2_latest.pcd
+ln -s /path/to/J30V2_rec.pcd .data/pcd/J30V2-rec-latest.pcd
 
 # Scene graph 快照 (需包含 manifest.json / scene_graph.json / objects/)
 cp -r /path/to/J30V2_snapshot .data/scene_graph/

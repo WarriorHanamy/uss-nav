@@ -32,10 +32,10 @@ super_planner:
   iris_iter_num: 2
   obs_skip_num: 2
   replan_forward_dt: 0.1
-  planning_horizon: 6.5
+  planning_horizon: 4.5
   sensing_horizon: -1.0
   receding_dis: 2.0
-  robot_r: 0.2
+  robot_r: 0.1
   yaw_dot_max: 2.0
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1
@@ -50,7 +50,7 @@ traj_opt:
   boundary:
     max_vel: 2.5
     max_acc: 4.0
-    max_jerk: 15.0
+    max_jerk: 10.0
     max_omg: 2.5
     max_acc_thr: 18.0
     min_acc_thr: 6.0
@@ -61,12 +61,12 @@ traj_opt:
     pos_constraint_type: 1
     energy_cost_type: 4
     block_energy_cost: false
-    opt_accuracy: 5.0e-6
+    opt_accuracy: 5.0e-5
     scale_factor: 1.0
     integral_reso: 10
     smooth_eps: 0.01
     penna_t: 5000.0
-    penna_pos: 5.0e+6
+    penna_pos: 5.0e+5
     penna_vel: 5.0e+5
     penna_acc: 5.0e+5
     penna_jerk: -5.0e+5
@@ -125,13 +125,13 @@ rog_map:
   inflation_step: 2
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 40,40,8 ]
+  map_size: [ 20,20,6 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0, 1.5 ]
   frontier_extraction_en: false
 
   # Virtual ceil and ground
-  virtual_ceil_height: 1.5
+  virtual_ceil_height: 2.0
   virtual_ground_height: -12.5
 
   load_pcd_en: false
@@ -165,7 +165,7 @@ rog_map:
     # The frame rate of visualization [Hz], if set to 0, the visualization will not be triggered by frame.
     frame_rate: 0
     # visualization range along the odom [m].
-    range: [ 15, 15,4 ]
+    range: [ 20, 20,6 ]
     frame_id: "world"
     pub_unknown_map_en: false
 
@@ -182,7 +182,7 @@ rog_map:
     # will be considered as unknown.
     enable: true
     batch_update_size: 1
-    local_update_box: [ 20,20,8 ]
+    local_update_box: [ 20,20,6 ]
     # The range of raycasting [m].
     ray_range: [0.5, 40 ]
 
@@ -200,4 +200,4 @@ rog_map:
     #         2) if unk_thresh is set to 1.0, then only all cells in prob map are unknown,
     #             the cell will be considered as unknown.
     # in all, 1.0 is more aggressive while 0.0 is more conservative.
-    unk_thresh: 0.0
+    unk_thresh: 0.3

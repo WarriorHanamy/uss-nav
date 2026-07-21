@@ -5,7 +5,7 @@
   <arg name="init_z" default="1.0"/>
   <arg name="uav_mass" default="1.64"/>
   <arg name="uav_grav" default="9.81"/>
-  <arg name="map_pcd" default="/workspace/.data/pcd/J30V2_latest.pcd"/>
+  <arg name="map_pcd" default="/workspace/.data/pcd/J30V2-rec-latest.pcd"/>
 
   <!-- prior_local support cloud (ported from FAST_LIO prior_local):
        cut a local patch from a prior PCD around current pose and merge

@@ -23,7 +23,7 @@ echo "Starting simulation..."
 echo "RViz managed by ~/rviz_ws (external), not started here."
 
 LAUNCH_MODE="${LAUNCH_MODE:-scenegraph}"
-MAP_PCD="${MAP_PCD:-/workspace/.data/pcd/J30V2_latest.pcd}"
+MAP_PCD="${MAP_PCD:-/workspace/.data/pcd/J30V2-rec-latest.pcd}"
 SUPPORT_PCD_ENABLE="${SUPPORT_PCD_ENABLE:-true}"
 SUPPORT_PCD="${SUPPORT_PCD:-/workspace/.data/pcd/20260705-magic2-d0.05.pcd}"
 TRACE_ENABLE="${TRACE_ENABLE:-0}"
@@ -77,7 +77,7 @@ elif [ "$LAUNCH_MODE" = "super" ]; then
     echo "Mode: super planner (PCD + super planner backend)"
     if [ ! -f "$MAP_PCD" ]; then
       echo "Missing scene map: $MAP_PCD" >&2
-      echo "Mount or create .data/pcd/J30V2_latest.pcd, or set LAUNCH_MODE=random." >&2
+      echo "Mount or create .data/pcd/J30V2-rec-latest.pcd, or set LAUNCH_MODE=random." >&2
       exit 1
     fi
     roslaunch bringup_test sim_scenegraph_super_main.launch \
@@ -90,7 +90,7 @@ else
     echo "Mode: scenegraph (PCD + offline scene graph)"
     if [ ! -f "$MAP_PCD" ]; then
       echo "Missing scene map: $MAP_PCD" >&2
-      echo "Mount or create .data/pcd/J30V2_latest.pcd, or set LAUNCH_MODE=random." >&2
+      echo "Mount or create .data/pcd/J30V2-rec-latest.pcd, or set LAUNCH_MODE=random." >&2
       exit 1
     fi
     roslaunch bringup_test sim_scenegraph_main.launch \
