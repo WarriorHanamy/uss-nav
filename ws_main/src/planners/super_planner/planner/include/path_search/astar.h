@@ -93,6 +93,7 @@ namespace path_search {
         static constexpr int DIAG = 0;
         static constexpr int MANH = 1;
         static constexpr int EUCL = 2;
+        static constexpr int XY_OCTILE_MANH_Z = 3;
 
         struct MissionData {
             rog_map::Vec3f start_pt;

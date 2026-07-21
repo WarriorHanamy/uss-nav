@@ -242,21 +242,28 @@ namespace fsm {
         gi_.yaw_path_mode = yaw_path_mode;
         gi_.look_forward = look_forward;
 
-        if (cfg_.click_yaw_en) {
-            if (isnan(q.w()) || isnan(q.x()) || isnan(q.y()) || isnan(q.z())) {
+        if (cfg_.yaw_mode == fsm::Config::YAW_TO_VEL) {
+            gi_.goal_yaw = NAN;
+            ros_ptr_->info(" -- [SUPER] [Fsm] yaw_mode=YAW_TO_VEL goal yaw free (velocity heading) goal=[{:.3f},{:.3f},{:.3f}]",
+                           gi_.goal_p.x(), gi_.goal_p.y(), gi_.goal_p.z());
+        } else if (cfg_.yaw_mode == fsm::Config::YAW_TO_GOAL) {
+            if (look_forward || !cfg_.click_yaw_en) {
                 gi_.goal_yaw = NAN;
-                ros_ptr_->info(" -- [Fsm] Receive click goal at: [{}, {}, {}]; goal yaw disabled",
+                ros_ptr_->info(" -- [SUPER] [Fsm] yaw_mode=YAW_TO_GOAL look_forward={} goal yaw free goal=[{:.3f},{:.3f},{:.3f}]",
+                               static_cast<int>(look_forward),
                                gi_.goal_p.x(), gi_.goal_p.y(), gi_.goal_p.z());
             } else {
-                gi_.goal_yaw = geometry_utils::get_yaw_from_quaternion(q);
-                cout << GREEN << " -- [Fsm] Receive click goal at: [" << gi_.goal_p.transpose() << "]; goal yaw: "
-                     << gi_.goal_yaw * 57.3 << " deg" << RESET << endl;
+                if (isnan(q.w()) || isnan(q.x()) || isnan(q.y()) || isnan(q.z())) {
+                    gi_.goal_yaw = NAN;
+                    ros_ptr_->info(" -- [SUPER] [Fsm] goal yaw disabled (NaN quat) goal=[{:.3f},{:.3f},{:.3f}]",
+                                   gi_.goal_p.x(), gi_.goal_p.y(), gi_.goal_p.z());
+                } else {
+                    gi_.goal_yaw = geometry_utils::get_yaw_from_quaternion(q);
+                    ros_ptr_->info(" -- [SUPER] [Fsm] goal yaw={:.2f} deg goal=[{:.3f},{:.3f},{:.3f}]",
+                                   gi_.goal_yaw * 57.3,
+                                   gi_.goal_p.x(), gi_.goal_p.y(), gi_.goal_p.z());
+                }
             }
-
-        } else {
-            gi_.goal_yaw = NAN;
-            cout << GREEN << " -- [Fsm] Receive click goal at: [" << gi_.goal_p.transpose() << "]; goal yaw disabled"
-                 << RESET << endl;
         }
 
         planner_ptr_->getRobotState(robot_state_);

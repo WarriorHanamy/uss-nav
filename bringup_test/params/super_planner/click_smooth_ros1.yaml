@@ -7,6 +7,13 @@ fsm:
   mpc_cmd_topic: "/planning_cmd/poly_traj"
   timer_en: true
 
+camera_fov:
+  top_angle: 0.6
+  left_angle: 0.76
+  right_angle: 0.76
+  max_dist: 6.0
+  vis_dist: 1.0
+
 super_planner:
   backup_traj_en: true
   detailed_log_en: false
@@ -25,7 +32,7 @@ super_planner:
   replan_forward_dt: 0.1
   planning_horizon: 10.0
   sensing_horizon: 2.0
-  receding_dis: 2.5
+  receding_dis: 3.5
   robot_r: 0.2
   yaw_dot_max: 2.0
   # Yaw mode: 1 heading to velocity, 2 heading to goal
@@ -100,8 +107,10 @@ astar:
   map_voxel_num: [ 500, 500, 100 ]
   visual_process: false
   allow_diag: true
-  # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
-  heu_type: 1
+  # Diagonals allowed in the horizontal plane only; no vertical-mixed diagonals.
+  xy_diag_only: true
+  # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN; 3 XY_OCTILE_MANH_Z (admissible for xy_diag_only)
+  heu_type: 3
   z_cost_penalty: 1.0
   debug_visualization_en: false
 

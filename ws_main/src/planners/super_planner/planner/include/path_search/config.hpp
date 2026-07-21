@@ -43,6 +43,7 @@ namespace path_search {
         bool visual_process;
         bool debug_visualization_en;
         bool allow_diag{false};
+        bool xy_diag_only{false};
         int heu_type{0};
         /* Z-axis step cost multiplier: >1 makes vertical moves more expensive so the
          * search prefers horizontal progress (breaks z-first tie artifacts). */
@@ -57,6 +58,7 @@ namespace path_search {
             vector<int> vox_;
             loader.LoadParam(name_space + "/map_voxel_num", vox_, vox_);
             loader.LoadParam(name_space + "/allow_diag", allow_diag, false);
+            loader.LoadParam(name_space + "/xy_diag_only", xy_diag_only, false);
             loader.LoadParam(name_space + "/debug_visualization_en", debug_visualization_en, false);
             loader.LoadParam(name_space + "/heu_type", heu_type, 0);
             loader.LoadParam(name_space + "/z_cost_penalty", z_cost_penalty, 1.0);

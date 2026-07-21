@@ -39,6 +39,11 @@ namespace fsm {
 
     class Config {
     public:
+        enum YawMode{
+            YAW_TO_VEL = 1,
+            YAW_TO_GOAL = 2
+        };
+
         bool timer_en{true};
 
         // Fsm Params
@@ -48,6 +53,7 @@ namespace fsm {
         bool click_yaw_en{};
         string cmd_topic, mpc_cmd_topic, click_goal_topic;
         double yaw_dot_max{};
+        int yaw_mode{};
 
         Config() = default;
 
@@ -64,6 +70,7 @@ namespace fsm {
 
 
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 1.0, true);
+            loader.LoadParam("super_planner/yaw_mode", yaw_mode, 1);
             loader.LoadParam("super_planner/visualization_en", visualization_en, false, true);
             loader.LoadParam("rog_map/resolution", resolution, 0.1, true);
 

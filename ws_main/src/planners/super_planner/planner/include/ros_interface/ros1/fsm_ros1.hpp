@@ -36,6 +36,7 @@
 #include "quadrotor_msgs/EgoPlannerResult.h"
 #include "quadrotor_msgs/PositionCommand.h"
 #include "quadrotor_msgs/LocalGoalSet.h"
+#include "camera_fov/camera_fov.h"
 
 
 namespace fsm {
@@ -47,6 +48,7 @@ namespace fsm {
         quadrotor_msgs::PositionCommand pid_cmd_;
         quadrotor_msgs::LocalGoalSet latest_goal_;
         rog_map::ROGMapROS::Ptr map_ptr_;
+        ego_planner::PerceptionUtils::Ptr percep_utils_;
         quadrotor_msgs::PositionCommand latest_cmd;
         Vec3f latest_attitude_;
         nav_msgs::Path path;
@@ -273,6 +275,14 @@ namespace fsm {
             planner_ptr_ = std::make_shared<SuperPlanner>(cfg_path, ros_ptr_, map_ptr_);
             cmd_pub = nh_.advertise<quadrotor_msgs::PositionCommand>(cfg_.cmd_topic, 10);
             path_pub_ = nh_.advertise<nav_msgs::Path>("fsm/path", 100);
+
+            // camera_fov params for FOV visualization
+            nh_.setParam("camera_fov/top_angle", 0.6);
+            nh_.setParam("camera_fov/left_angle", 0.76);
+            nh_.setParam("camera_fov/right_angle", 0.76);
+            nh_.setParam("camera_fov/max_dist", 6.0);
+            nh_.setParam("camera_fov/vis_dist", 1.0);
+            percep_utils_ = std::make_shared<ego_planner::PerceptionUtils>(nh_);
             plan_result_pub_ = nh_.advertise<quadrotor_msgs::EgoPlannerResult>("/planning/ego_plan_result", 10);
             exec_finish_pub_ = nh_.advertise<std_msgs::Bool>("/drone_0_ego_planner_node/exec_finish_trigger", 10);
 
@@ -327,6 +337,18 @@ namespace fsm {
 
             getOnePositionCommand(pid_cmd_, traj_finish_);
             cmd_pub.publish(pid_cmd_);
+
+            // Draw FOV at current command pose (throttled ~20Hz)
+            static int fov_cnt = 0;
+            if (++fov_cnt % 5 == 0) {
+                Vec3f pos(pid_cmd_.position.x, pid_cmd_.position.y, pid_cmd_.position.z);
+                percep_utils_->setPose(Eigen::Vector3d(pos.x(), pos.y(), pos.z()), pid_cmd_.yaw);
+                std::vector<Eigen::Vector3d> l1, l2;
+                percep_utils_->getFOV(l1, l2);
+                auto ros1_ptr = std::dynamic_pointer_cast<ros_interface::Ros1Interface>(ros_ptr_);
+                if (ros1_ptr) ros1_ptr->vizFov(l1, l2);
+            }
+
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
                 if (closeToGoal(0.1)) {

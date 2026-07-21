@@ -147,6 +147,16 @@ namespace path_search {
                 const double zp = cfg_.z_cost_penalty;
                 return tie_breaker_ * sqrt(d.x() * d.x() + d.y() * d.y() + zp * zp * d.z() * d.z());
             }
+            case XY_OCTILE_MANH_Z: {
+                /* Octile distance in the xy plane plus z-penalized Manhattan in z:
+                 * admissible and consistent for the 10-neighbor metric (xy diagonals
+                 * cost sqrt(2), axis moves cost 1, vertical moves cost zp). */
+                const double dx = std::abs(node1->id_g(0) - node2->id_g(0));
+                const double dy = std::abs(node1->id_g(1) - node2->id_g(1));
+                const double dz = std::abs(node1->id_g(2) - node2->id_g(2));
+                const double zp = cfg_.z_cost_penalty;
+                return tie_breaker_ * (std::max(dx, dy) + (sqrt(2.0) - 1.0) * std::min(dx, dy) + zp * dz);
+            }
             default: {
                 fmt::print(fg(fmt::color::indian_red), " -- [A*] Wrong hue type.\n");
                 return 0;
@@ -424,6 +434,11 @@ namespace path_search {
                         }
                         if (!cfg_.allow_diag &&
                             (std::abs(dx) + std::abs(dy) + std::abs(dz) > 1)) {
+                            continue;
+                        }
+                        /* Horizontal-plane diagonals only: forbid any move that
+                         * combines vertical with horizontal displacement. */
+                        if (cfg_.xy_diag_only && dz != 0 && (dx != 0 || dy != 0)) {
                             continue;
                         }
 

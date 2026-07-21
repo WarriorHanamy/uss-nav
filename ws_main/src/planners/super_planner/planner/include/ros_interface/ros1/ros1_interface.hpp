@@ -51,6 +51,8 @@ namespace ros_interface {
 
             yaw_traj_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization/yaw_traj", 100);
 
+            fov_pub_ = nh_.advertise<visualization_msgs::Marker>("visualization/fov", 10);
+
             /*=============================FOR A* debug ========================================*/
             astar_mkr_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization/astar_debug", 100);
 
@@ -261,6 +263,43 @@ namespace ros_interface {
             yaw_traj_pub_.publish(mkr_arr);
         }
 
+        void vizFov(const std::vector<Eigen::Vector3d>& list1,
+                     const std::vector<Eigen::Vector3d>& list2) {
+            if (!visualization_en_) return;
+            if (fov_pub_.getNumSubscribers() <= 0) return;
+
+            visualization_msgs::Marker mk;
+            mk.header.frame_id = "world";
+            mk.header.stamp = ros::Time::now();
+            mk.id = 0;
+            mk.ns = "current_pose";
+            mk.type = visualization_msgs::Marker::LINE_LIST;
+            mk.pose.orientation.w = 1.0;
+            mk.color.r = 1.0;
+            mk.color.g = 0.0;
+            mk.color.b = 0.0;
+            mk.color.a = 1.0;
+            mk.scale.x = 0.04;
+
+            mk.action = visualization_msgs::Marker::DELETE;
+            fov_pub_.publish(mk);
+
+            if (list1.empty()) return;
+
+            mk.action = visualization_msgs::Marker::ADD;
+            geometry_msgs::Point pt;
+            for (size_t i = 0; i < list1.size(); ++i) {
+                pt.x = list1[i].x();
+                pt.y = list1[i].y();
+                pt.z = list1[i].z();
+                mk.points.push_back(pt);
+                pt.x = list2[i].x();
+                pt.y = list2[i].y();
+                pt.z = list2[i].z();
+                mk.points.push_back(pt);
+            }
+            fov_pub_.publish(mk);
+        }
 
         /*=============================FOR A* debug ========================================*/
         void vizAstarBoundingBox(const super_utils::Vec3f &bbox_min, const super_utils::Vec3f &bbox_max) override {

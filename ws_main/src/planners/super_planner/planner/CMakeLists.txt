@@ -33,6 +33,7 @@ find_package(catkin REQUIRED COMPONENTS
         message_filters
         rog_map
         tf
+        camera_fov
 )
 find_package(yaml-cpp REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system filesystem regex iostreams)
