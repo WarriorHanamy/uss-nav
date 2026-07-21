@@ -223,14 +223,9 @@ namespace fsm {
         }
     }
 
-    void Fsm::setGoalPosiAndYaw(const Vec3f &p, const Quatf &q) {
+    void Fsm::setGoalPosiAndYaw(const Vec3f &p, const Quatf &q, int yaw_mode, int yaw_path_mode, bool look_forward) {
 
-        auto click_point = p;
-        if (cfg_.click_height > -5) {
-            click_point.z() = cfg_.click_height;
-        }
-
-        if (planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, click_point, gi_.goal_p, 3.0)) {
+        if (planner_ptr_->getMap()->getNearestInfCellNot(GridType::OCCUPIED, p, gi_.goal_p, 3.0)) {
             cout << GREEN << " -- [Fsm] Get goal at " << RESET << gi_.goal_p.transpose() << endl;
         } else {
             fmt::print(fg(fmt::color::indian_red), "Goal is deeply occupied, skip this goal.\n");
@@ -242,6 +237,10 @@ namespace fsm {
             //                print(fg(color::gray), " -- [Rviz] Too close to goal, skip this target.\n");
             return;
         }
+
+        gi_.yaw_mode = yaw_mode;
+        gi_.yaw_path_mode = yaw_path_mode;
+        gi_.look_forward = look_forward;
 
         if (cfg_.click_yaw_en) {
             if (isnan(q.w()) || isnan(q.x()) || isnan(q.y()) || isnan(q.z())) {

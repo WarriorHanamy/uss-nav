@@ -1,8 +1,8 @@
 <launch>
   <arg name="drone_id" default="0"/>
-  <arg name="init_x" default="10.43"/>
-  <arg name="init_y" default="12.03"/>
-  <arg name="init_z" default="-6.41"/>
+  <arg name="init_x" default="0.0"/>
+  <arg name="init_y" default="0.0"/>
+  <arg name="init_z" default="0.0"/>
   <arg name="uav_mass" default="1.64"/>
   <arg name="uav_grav" default="9.81"/>
 

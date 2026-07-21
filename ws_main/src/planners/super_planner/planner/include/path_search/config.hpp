@@ -44,6 +44,11 @@ namespace path_search {
         bool debug_visualization_en;
         bool allow_diag{false};
         int heu_type{0};
+        /* Z-axis step cost multiplier: >1 makes vertical moves more expensive so the
+         * search prefers horizontal progress (breaks z-first tie artifacts). */
+        double z_cost_penalty{1.0};
+        // Heuristic inflation factor; 1.0 = pure A*.
+        double tie_breaker{1.00001};
 
         PathSearchConfig() {};
 
@@ -54,6 +59,8 @@ namespace path_search {
             loader.LoadParam(name_space + "/allow_diag", allow_diag, false);
             loader.LoadParam(name_space + "/debug_visualization_en", debug_visualization_en, false);
             loader.LoadParam(name_space + "/heu_type", heu_type, 0);
+            loader.LoadParam(name_space + "/z_cost_penalty", z_cost_penalty, 1.0);
+            loader.LoadParam(name_space + "/tie_breaker", tie_breaker, 1.00001);
             loader.LoadParam(name_space + "/visual_process", visual_process, false);
             map_voxel_num = Vec3i(vox_[0], vox_[1], vox_[2]);
             map_size_i = map_voxel_num / 2;

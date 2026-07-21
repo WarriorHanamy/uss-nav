@@ -34,7 +34,10 @@ namespace path_search {
                  const ros_interface::RosInterface::Ptr &ros_ptr,
                  rog_map::ROGMapROS::Ptr rm) : ros_ptr_(ros_ptr), map_ptr_(rm) {
         cfg_ = PathSearchConfig(cfg_path);
+        tie_breaker_ = cfg_.tie_breaker;
         cout << rog_map::GREEN << " -- [RM] Init Astar-map." << rog_map::RESET << endl;
+        cout << rog_map::BLUE << "\tz_cost_penalty: " << cfg_.z_cost_penalty
+             << ", tie_breaker: " << tie_breaker_ << rog_map::RESET << endl;
         int map_buffer_size = cfg_.map_voxel_num(0) * cfg_.map_voxel_num(1) * cfg_.map_voxel_num(2);
         grid_node_buffer_.resize(map_buffer_size);
         for (auto &i: grid_node_buffer_) {
@@ -138,7 +141,11 @@ namespace path_search {
                 return tie_breaker_ * (dx + dy + dz);
             }
             case EUCL: {
-                return tie_breaker_ * (node2->id_g - node1->id_g).norm();
+                /* Weighted norm induced by the z-penalized metric: stays admissible and
+                 * consistent w.r.t. the anisotropic edge cost (triangle inequality). */
+                const auto d = (node2->id_g - node1->id_g).template cast<double>();
+                const double zp = cfg_.z_cost_penalty;
+                return tie_breaker_ * sqrt(d.x() * d.x() + d.y() * d.y() + zp * zp * d.z() * d.z());
             }
             default: {
                 fmt::print(fg(fmt::color::indian_red), " -- [A*] Wrong hue type.\n");
@@ -483,7 +490,8 @@ namespace path_search {
                         }
 
                         neighborPtr->rounds = rounds_;
-                        double distance_score = sqrt(dx * dx + dy * dy + dz * dz);
+                        double distance_score = sqrt(dx * dx + dy * dy +
+                                                     cfg_.z_cost_penalty * cfg_.z_cost_penalty * dz * dz);
                         distance_score = current->distance_score + distance_score;
                         rog_map::Vec3f pos;
                         globalIndexToPos(neighborIdx, pos);
@@ -680,7 +688,8 @@ namespace path_search {
                         }
 
                         neighborPtr->rounds = rounds_;
-                        double distance_score = sqrt(dx * dx + dy * dy + dz * dz);
+                        double distance_score = sqrt(dx * dx + dy * dy +
+                                                     cfg_.z_cost_penalty * cfg_.z_cost_penalty * dz * dz);
                         distance_score = current->distance_score + distance_score;
                         rog_map::Vec3f pos;
                         globalIndexToPos(neighborIdx, pos);

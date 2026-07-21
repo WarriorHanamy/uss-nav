@@ -15,6 +15,7 @@ RVIZ_DEVEL_SETUP="${RVIZ_WS_DIR}/.artifacts/devel/setup.bash"
 export LAUNCH_MODE="${LAUNCH_MODE:-super}"
 export TRACE_ENABLE="${TRACE_ENABLE:-1}"
 export TRACE_ID="${TRACE_ID:-super-$(date +%Y%m%d-%H%M%S)}"
+export TRACE_BAG_PROFILE="${TRACE_BAG_PROFILE:-viz}"
 
 # ── check prerequisites ────────────────────────────────────────────
 if [[ -z "${DISPLAY:-}" ]]; then

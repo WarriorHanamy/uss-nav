@@ -641,9 +641,33 @@ namespace super_planner {
 //                        return FAILED;
 //                    }
 //                }
-                if (!PathSearch(guide_path.back(), gi_.goal_p, temp_horizon, new_path)) {
+                /* Truncate the waypoint onto the planning horizon before searching, so the
+                 * A* path ends at a well-defined point on the straight line toward the real
+                 * goal instead of at wherever the search front runs out of budget. */
+                Vec3f eff_goal = gi_.goal_p;
+                const Vec3f seg_start = guide_path.back();
+                const double seg_dis = (gi_.goal_p - seg_start).norm();
+                if (seg_dis > temp_horizon) {
+                    const Vec3f dir = (gi_.goal_p - seg_start).normalized();
+                    double proj_l = temp_horizon;
+                    eff_goal = seg_start + dir * proj_l;
+                    int proj_iter = 20;
+                    while (map_ptr_->isOccupiedInflate(eff_goal) && proj_iter-- > 0) {
+                        proj_l -= cfg_.resolution * 5;
+                        if (proj_l < cfg_.resolution * 10) {
+                            ros_ptr_->warn(" -- [SUPER][Progress] event=goal_truncate_failed goal={} temp_horizon={}",
+                                           gi_.goal_p.transpose(), temp_horizon);
+                            return FAILED;
+                        }
+                        eff_goal = seg_start + dir * proj_l;
+                    }
+                    map_ptr_->getNearestInfCellNot(OCCUPIED, eff_goal, eff_goal, 1.0);
+                    ros_ptr_->info(" -- [SUPER][Progress] event=goal_truncated original_dis={} temp_horizon={} eff_goal={} goal={}",
+                                   seg_dis, temp_horizon, eff_goal.transpose(), gi_.goal_p.transpose());
+                }
+                if (!PathSearch(seg_start, eff_goal, temp_horizon, new_path)) {
                     ros_ptr_->warn(" -- [SUPER][Progress] event=path_search_failed start={} goal={} temp_horizon={} dist_to_goal={} guide_path_len={}",
-                                   guide_path.back().transpose(), gi_.goal_p.transpose(), temp_horizon,
+                                   guide_path.back().transpose(), eff_goal.transpose(), temp_horizon,
                                    (robot_state_.p - gi_.goal_p).norm(),
                                    geometry_utils::computePathLength(guide_path));
                     ros_ptr_->warn(" -- [SUPER] PathSearch for new path failed");
@@ -783,6 +807,11 @@ namespace super_planner {
             ros_ptr_->vizExpTraj(out_traj);
             time_consuming_[VISUALIZATION] += t_viz.stop();
         }
+        ros_ptr_->info(" -- [SUPER][Progress] event=exp_traj_result duration={} sfc_count={} connected_goal={} guide_path_len={} start={} end={} goal={}",
+                       out_traj.getTotalDuration(), sfc.size(), connected_goal,
+                       geometry_utils::computePathLength(guide_path),
+                       out_traj.getPos(0.0).transpose(), out_traj.getPos(out_traj.getTotalDuration()).transpose(),
+                       gi_.goal_p.transpose());
 
         double new_traj_WT = replan_process_start_WT;
 
@@ -1215,6 +1244,9 @@ namespace super_planner {
         if (ret_code == REACH_GOAL) {
             path.push_back(goal);
         }
+        ros_ptr_->info(" -- [SUPER][Progress] event=astar_result ret={} path_size={} path_len={} horizon={} start={} goal={}",
+                       RET_CODE_STR[ret_code], path.size(), geometry_utils::computePathLength(path),
+                       searching_horizon, start_pt.transpose(), goal.transpose());
         return true;
     }
 

@@ -82,7 +82,7 @@ namespace path_search {
         ros_interface::RosInterface::Ptr ros_ptr_;
 
         PathSearchConfig cfg_;
-        const double tie_breaker_ = 1.0 + 1e-5;
+        double tie_breaker_{1.0 + 1e-5};
         rog_map::vec_Vec3i sorted_pts;
         rog_map::vec_Vec3i neighbor_list;
 

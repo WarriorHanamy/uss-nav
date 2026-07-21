@@ -126,7 +126,24 @@ curve_fit_b2inv: 1.0       # 横向度量倒数 (1/b^2)
 
 修复：删除该原地吸附（A* 已有无损的 goal clamp/投影，astar.cpp `local_end_pt`）。
 
-### 3.3 pitch 极限环参数建议
+### 3.3 goal 先截断到 planning horizon 再搜索
+
+原行为：A* 直接搜原始 waypoint（可能远超 `planning_horizon: 10.2`），g 预算耗尽后以 `REACH_HORIZON` 返回，路径终点是搜索前沿的任意节点，形状不可控。
+
+修复（`super_planner.cpp` `generateExpTraj`）：waypoint 先沿 robot→goal 方向投影截断到 `temp_horizon`（占据时逐步回缩并投影到最近自由格），A* 改搜截断点 `eff_goal` → 路径终点精确落在朝向真实目标的直线上。`connected_goal` 仍对原始 goal 计算（避免截断点误触发 early-termination）。日志事件：`event=goal_truncated`。
+
+### 3.4 A* z 方向代价惩罚（消除 z-first 平局伪影）
+
+纯 A*（`tie_breaker≈1`）+ 欧氏代价下，所有单调路径 f 值几乎相等，堆平局弹出顺序由实现细节决定，系统性偏向"先走完 z 轴"（下楼段先垂直下降再平飞，贴楼梯边缘）。
+
+修复（`astar.cpp`）：
+
+- 边代价：`cost = sqrt(dx² + dy² + z_pen²·dz²)`
+- EUCL 启发式：配套加权范数（正定矩阵诱导范数满足三角不等式 → 仍可采纳且一致）
+- 配置：`astar/z_cost_penalty: 2.0`（1.0 = 原行为）；`astar/tie_breaker` 同步暴露为配置
+- 效果：z 移动变贵 → 平局决定性偏向水平方向，下楼路径贴合坡道；guide path 更水平 → 与 curve fitting 协同更好
+
+### 3.5 pitch 极限环参数建议
 
 长直线 pitch ±20° 摆动的主因排序：
 
@@ -137,7 +154,41 @@ curve_fit_b2inv: 1.0       # 横向度量倒数 (1/b^2)
 
 ---
 
-## 4. ROG-Map 关键语义（易踩坑）
+## 4. 全链路记录（waypoint → A* → traj）
+
+诊断链路数据分两层（符合项目 trace 规则）：
+
+### 文本事件（ROS log → fluentbit / OpenSearch）
+
+| 事件 | 内容 |
+|------|------|
+| `event=goal_truncated` | waypoint 截断：original_dis / temp_horizon / eff_goal / goal |
+| `event=astar_result` | ret（REACH_GOAL/REACH_HORIZON）/ path_size / path_len / horizon / start / goal |
+| `event=exp_traj_result` | duration / sfc_count / connected_goal / guide_path_len / start / end / goal |
+| `event=goal_truncate_failed` | 截断点占据回缩失败 |
+
+### bag 几何数据（viz profile）
+
+`start_uss_nav_sim_rviz_super.sh` 默认 `TRACE_BAG_PROFILE=viz`，`docker/entrypoint.sh` 的 `VIZ_TRACE_BAG_TOPICS` 已含：
+
+- `/super_planner_node/visualization/frontend_path`（A* guide path）
+- `/super_planner_node/visualization/exp_traj`（优化轨迹）
+- `/super_planner_node/visualization/exp_sfc`（安全走廊）
+- `/super_planner_node/visualization/committed_traj`、`visualization/goal`
+
+### 离线对齐分析
+
+```bash
+# 提取（容器内 rosbag → pickle）
+docker run --rm --entrypoint bash -v <trace_dir>:/traces:ro -v /tmp/opencode:/work ego-planner-sim \
+  -c "source /opt/ros/noetic/setup.bash && python3 /work/extract_chain.py /traces/run.bag /work/chain.pkl"
+# 绘图（XY/XZ/YZ 快照 + z/v/a 时序）
+uv run --script /tmp/opencode/plot_chain.py /tmp/opencode/chain.pkl /tmp/opencode/chain.png [t_snapshot]
+```
+
+---
+
+## 5. ROG-Map 关键语义（易踩坑）
 
 | 语义 | 位置 | 行为 |
 |------|------|------|

@@ -232,9 +232,35 @@ namespace fsm {
             latest_goal_ = *msg;
             ++plan_count_;
             super_utils::Vec3f goal_p = Vec3f{msg->goal[0], msg->goal[1], msg->goal[2]};
-            super_utils::Quatf goal_q(Eigen::AngleAxisd(static_cast<double>(msg->yaw), Eigen::Vector3d::UnitZ()));
+
+            double yaw = msg->yaw;
+            int yaw_mode = msg->yaw_mode;
+            int yaw_path_mode = msg->yaw_path_mode;
+
+            if (yaw_path_mode == quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST) {
+                while (yaw > M_PI) yaw -= 2 * M_PI;
+                while (yaw < -M_PI) yaw += 2 * M_PI;
+            }
+
+            if (yaw_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL && msg->yaw_low_speed) {
+                yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_LOW_SPEED;
+            }
+
+            const bool panorama_source_allowed =
+                msg->source_task_id == quadrotor_msgs::LocalGoalSet::SOURCE_TASK_EXPLORATION ||
+                msg->source_task_id == quadrotor_msgs::LocalGoalSet::SOURCE_TASK_COUNTING;
+            if (yaw_mode == quadrotor_msgs::LocalGoalSet::YAW_MODE_PANORAMA && !panorama_source_allowed) {
+                ROS_WARN("[SUPER] Reject panorama mode from source_task_id=%u, fallback to NORMAL + SHORTEST.",
+                         static_cast<unsigned int>(msg->source_task_id));
+                yaw_mode = quadrotor_msgs::LocalGoalSet::YAW_MODE_NORMAL;
+                yaw_path_mode = quadrotor_msgs::LocalGoalSet::YAW_PATH_SHORTEST;
+                while (yaw > M_PI) yaw -= 2 * M_PI;
+                while (yaw < -M_PI) yaw += 2 * M_PI;
+            }
+
+            super_utils::Quatf goal_q(Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()));
             publishMissionFeedback(true, true, false);
-            setGoalPosiAndYaw(goal_p, goal_q);
+            setGoalPosiAndYaw(goal_p, goal_q, yaw_mode, yaw_path_mode, msg->look_forward);
         }
 
         void init(const ros::NodeHandle &nh, const std::string &cfg_path) {

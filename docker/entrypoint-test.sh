@@ -4,6 +4,9 @@ set -e
 source /opt/ros/noetic/setup.bash
 source /workspace/devel/setup.bash
 
+# Hostname may resolve only to link-local IPv6 (multi-NIC mDNS); pin ROS to loopback.
+export ROS_IP="${ROS_IP:-127.0.0.1}"
+
 # Bind mount preserves source tree (ws_main/src/planner/...), but the
 # catkin devel space was built with flattened paths (e.g. /bringup_test).
 # Override ROS_PACKAGE_PATH to point to the actual source locations.

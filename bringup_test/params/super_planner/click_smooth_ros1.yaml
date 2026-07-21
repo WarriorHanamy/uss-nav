@@ -1,7 +1,6 @@
 fsm:
   click_goal_en: true
   click_goal_topic: "/drone_0_ego_planner_node/local_goal"
-  click_height: -10.0
   click_yaw_en: true
   replan_rate: 10.0
   cmd_topic: "/drone_0_planning/pos_cmd"
@@ -15,18 +14,18 @@ super_planner:
   use_fov_cut: false
   print_log: false
   visual_process: false
-  frontend_in_known_free: false
+  frontend_in_known_free: true
   goal_yaw_en: true
   goal_vel_en: false
   corridor_bound_dis: 0.7
-  corridor_line_max_length: 1.5
+  corridor_line_max_length: 2.5
   safe_corridor_line_max_length: 0.8
   iris_iter_num: 2
   obs_skip_num: 2
   replan_forward_dt: 0.1
-  planning_horizon: 11.0
-  sensing_horizon: -1
-  receding_dis: 5.5
+  planning_horizon: 10.0
+  sensing_horizon: 2.0
+  receding_dis: 2.5
   robot_r: 0.2
   yaw_dot_max: 2.0
   # Yaw mode: 1 heading to velocity, 2 heading to goal
@@ -40,9 +39,9 @@ traj_opt:
     print_optimizer_log: false
 
   boundary:
-    max_vel: 3.0
-    max_acc: 6.0
-    max_jerk: 20.0
+    max_vel: 2.5
+    max_acc: 4.0
+    max_jerk: 15.0
     max_omg: 2.5
     max_acc_thr: 18.0
     min_acc_thr: 6.0
@@ -74,14 +73,14 @@ traj_opt:
     pos_constraint_type: 1
     piece_num: 2
     energy_cost_type: 4
-    block_energy_cost: true
+    block_energy_cost: false
     opt_accuracy: 1.0e-6
     scale_factor: 1.0
     integral_reso: 12
     smooth_eps: 0.01
     penna_t: 1200.0
     penna_ts: 1.0e+5
-    penna_pos: 1.0e+6
+    penna_pos: 1.0e+5
     penna_vel: 1.0e+5
     penna_acc: 1.0e+5
     penna_jerk: -1.0e+5
@@ -102,7 +101,8 @@ astar:
   visual_process: false
   allow_diag: true
   # 0 DIAG; 1 MANHATTAN; 2 EUCLIDEAN
-  heu_type: 2
+  heu_type: 1
+  z_cost_penalty: 1.0
   debug_visualization_en: false
 
 
@@ -112,7 +112,7 @@ rog_map:
   inflation_step: 2
   unk_inflation_en: false
   unk_inflation_step: 1
-  map_size: [ 100,100,8 ]
+  map_size: [ 40,40,8 ]
   # If the map rolling is disable, the map origin [m] should be set.
   fix_map_origin: [ 0,0, 1.5 ]
   frontier_extraction_en: false
@@ -169,7 +169,7 @@ rog_map:
     # will be considered as unknown.
     enable: true
     batch_update_size: 1
-    local_update_box: [ 10,10,8 ]
+    local_update_box: [ 20,20,8 ]
     # The range of raycasting [m].
     ray_range: [0.5, 40 ]
 
