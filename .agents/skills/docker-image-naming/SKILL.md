@@ -18,23 +18,22 @@ description: Canonical Docker image naming for USS-NAV test infrastructure. Use 
 
 ## Current Images
 
-| Role                  | Image ref               | Dockerfile                  | Base                  |
-| --------------------- | ----------------------- | --------------------------- | --------------------- |
-| Base simulation       | `ego-planner-sim:latest` | `Dockerfile` (root)         | `ros:noetic-perception` |
-| Test (adds MQTT bridge) | `ego-planner-test:latest` | `docker/Dockerfile.test`  | `ego-planner-sim`     |
+| Role                     | Image ref               | Dockerfile                  | Base                  |
+| ------------------------ | ----------------------- | --------------------------- | --------------------- |
+| Unified sim/build/test   | `ego-planner-sim:latest` | `docker/Dockerfile.devel`   | `ros:noetic-ros-base` |
+
+The historical `ego-planner-test` image (separate MQTT-bridge variant) is retired:
+`devel`, `build`, and `test` compose services all run the single `ego-planner-sim`
+image. Source compilation happens at runtime into `.artifacts/`, not in the image.
 
 ## Build Commands
 
 ```bash
-# Build base simulation image
-docker build -t ego-planner-sim .
+# Build the single image (system deps only, no source compile)
+docker compose build devel
 
-# Build test image (based on ego-planner-sim)
-docker build -f docker/Dockerfile.test -t ego-planner-test .
-
-# Via Bun CLI
-bun test:build              # builds ego-planner-test
-bun test:build no-cache     # --no-cache
+# Compile ROS workspace at runtime (artifacts persist to .artifacts/)
+docker compose run --rm build
 ```
 
 ## Tag Rules
@@ -60,11 +59,10 @@ FROM ros:noetic-perception
   └── Entrypoint → /entrypoint.sh
 ```
 
-### `ego-planner-test`
+### Entry points (same image, different roles)
 
 ```
-FROM ego-planner-sim
-  ├── python3-pip + paho-mqtt
-  ├── docker/bridge/ego_mqtt_bridge.py  → /bridge/
-  └── docker/entrypoint-test.sh          → /entrypoint.sh
+devel   → /entrypoint.sh        (interactive sim)
+test    → /entrypoint-test.sh   (headless DURATION-bounded run + trace)
+build   → catkin build into .artifacts/{build,devel}
 ```

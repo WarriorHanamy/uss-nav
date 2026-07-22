@@ -33,18 +33,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   apt-get update && apt-get install -y --no-install-recommends \
   xvfb
 
-# ── ROS runtime + MQTT ────────────────────────────────────────────
+# ── ROS runtime ───────────────────────────────────────────────────
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
   apt-get update && apt-get install -y --no-install-recommends \
   ros-noetic-tf ros-noetic-nodelet ros-noetic-cv-bridge \
   ros-noetic-image-transport ros-noetic-pcl-ros \
   ros-noetic-dynamic-reconfigure \
-  mosquitto-clients \
   ros-noetic-mavros ros-noetic-mavros-extras \
   libdw-dev libyaml-cpp-dev
-
-RUN pip3 install paho-mqtt
 
 # ── 预编译依赖：igraph 0.10 + libleidenalg（静态库）──────────────
 COPY docker/assets/igraph/libigraph.a /usr/lib/x86_64-linux-gnu/libigraph.a
@@ -63,10 +60,6 @@ RUN source /opt/ros/noetic/setup.bash && \
     mkdir -p /workspace/.artifacts/{pcd,csv}
 
 WORKDIR /workspace
-
-# ── MQTT bridge ──────────────────────────────────────────────────
-COPY docker/bridge /bridge
-RUN chmod +x /bridge/ego_mqtt_bridge.py
 
 # ── entrypoints ─────────────────────────────────────────────────
 COPY docker/entrypoint.sh /entrypoint.sh

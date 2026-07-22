@@ -12,16 +12,7 @@
     "view:ego": "cd tools/md2html && bun run view:ego",
     "view:next_scenegraph": "cd tools/md2html && bun run view:next_scenegraph",
 
-    "doxygen": "bun tools/doxygen/render.ts",
-    "test:llm-mode": "bun src/cli/index.ts explore",
-    "server": "bun src/server/index.ts",
-    "dashboard": "bun src/cli/index.ts dashboard"
-  },
-  "dependencies": {
-    "@langchain/langgraph": "^1.4.7",
-    "@langchain/openai": "^1.5.5",
-    "mqtt": "^5.15.1",
-    "zod": "3"
+    "doxygen": "bun tools/doxygen/render.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

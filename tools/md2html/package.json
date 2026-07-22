@@ -11,7 +11,6 @@
     "render:scenegraph": "bun render.ts ../../docs/SCENEGRAPH.md ../../_site/SCENEGRAPH.html",
     "render:next_scenegraph": "bun render.ts ../../docs/NEXT_SCENEGRAPH.md ../../_site/NEXT_SCENEGRAPH.html",
     "render:view": "bun render.ts --multi ../../_site/VIEW.html EGO:../../docs/EGO.md SCENEGRAPH:../../docs/SCENEGRAPH.md NEXT_SCENEGRAPH:../../docs/NEXT_SCENEGRAPH.md",
-
     "view": "bun run render:view && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/VIEW.html'),{stdio:'inherit'})\"",
     "view:ego": "bun run render:ego && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/EGO.html'),{stdio:'inherit'})\"",
     "view:scenegraph": "bun run render:scenegraph && bun -e \"const{execSync}=require('child_process');execSync('xdg-open '+require('path').resolve(__dirname,'../..','_site/SCENEGRAPH.html'),{stdio:'inherit'})\"",
@@ -21,6 +20,7 @@
   "dependencies": {
     "highlight.js": "^11.11.0",
     "marked": "^15.0.11",
+    "marked-highlight": "^2.2.4",
     "marked-katex-extension": "^5.1.10",
     "mermaid": "^11.15.0"
   },

@@ -15,10 +15,9 @@ Replace `catkin_make` in the Dockerfile with pre-built artifacts from a working 
 
 | Component                     | Purpose                                              | Location                    |
 | ----------------------------- | ---------------------------------------------------- | --------------------------- |
-| `docker/Dockerfile`           | Base simulation image                                | `Dockerfile` (repo root)    |
-| `docker/Dockerfile.test`      | Test image (adds MQTT bridge)                        | `docker/Dockerfile.test`    |
+| `docker/Dockerfile.devel`     | Unified devel/build/test image                       | `docker/Dockerfile.devel`   |
+| `docker/entrypoint.sh`        | Devel entrypoint                                     | `docker/entrypoint.sh`      |
 | `docker/entrypoint-test.sh`   | Test entrypoint (env var parameterization)           | `docker/entrypoint-test.sh` |
-| `docker/bridge/ego_mqtt_bridge.py` | ROS→MQTT telemetry bridge                       | `docker/bridge/`            |
 
 ## Phase 1: Experiment
 

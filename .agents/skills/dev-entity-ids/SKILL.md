@@ -19,16 +19,11 @@ description: Four runtime entities in the USS-NAV test infrastructure (devel-hos
 ```
 devel-host (x86_64 Arch Linux)
     │
-    ├── TypeScript CLI (bun src/cli/)
-    ├── Bun Server (:3000) — data collection + WebSocket
-    ├── Mosquitto MQTT (:1883) — data bus
-    │
     └── devel-docker
             ├── build ego-planner-sim      (base: ROS Noetic + planner)
-            ├── build ego-planner-test     (base-image + MQTT bridge)
-            └── run ego-test-<config>      (headless test containers)
+            └── run uss-nav-{devel,test}-* (sim / headless test containers)
                     │
-                    └── MQTT → test/<id>/{odom,plan_result}
+                    └── ROS logs + trace bags → .artifacts/traces/<TRACE_ID>/
 ```
 
 ### Host → Container Comparison
@@ -41,7 +36,7 @@ devel-host (x86_64 Arch Linux)
 | Network              | Direct internet + LAN               | Docker bridge (`host.docker.internal` → host) |
 | Filesystem           | Full project tree                   | `/catkin_ws/` (image) + bind-mounts           |
 | Display              | Wayland (Hyprland)                  | Xvfb :99 (headless)                           |
-| Visualization        | None (RViz via ~/rviz_ws Docker)    | None (telemetry only via MQTT)                |
+| Visualization        | None (RViz via ~/rviz_ws Docker)    | None (diagnostics via ROS logs + trace bags)  |
 
 ## 2. Workspace Path
 
@@ -69,26 +64,18 @@ devel-host (Dockerfile) ──docker build──> test-image
 ### Test Chain
 
 ```
-bun test:run [scenario]
+TEST_ID=<id> DURATION=60 docker compose run --rm test
     │
-    ├── cmdTestStop()         ← kill all previous ego-test-* containers
-    ├── docker run -d ...     ← start batch of test containers
-    └── (blocking poll)       ← docker ps + MQTT data → progress table
-
-MQTT bridge (inside container) ──→ Mosquitto (:1883) ──→ Bun Server (:3000)
-                                                              │
-                                                           WebSocket
-                                                              │
-                                                              ▼
-                                                     Frontend (:5173/3000)
+    ├── entrypoint-test.sh    ← launch sim + planner, wait DURATION
+    └── trace artifacts       ← .artifacts/traces/<TRACE_ID>/{roslaunch.log,ros/,run.bag}
 ```
 
 ### Data Chain
 
 ```
-test-container → ROS topics
-    ├── /drone_0_visual_slam/odom      → MQTT test/<id>/odom
-    ├── /planning/ego_plan_result      → MQTT test/<id>/plan_result
+test-container → ROS topics + ROS logs
+    ├── key decisions      → [MissionFSM]/[SUPER] ROS_INFO/WARN → rosout.log / fluentbit_roslog.log
+    └── visualization data → run.bag (/tf, /bridge/Instruct, /planner/fsm_state, odom, pos_cmd, ...)
 ```
 
 ## 4. Container Runtime Configuration
@@ -100,7 +87,6 @@ test-container → ROS topics
 --gpus all                    GPU for pcl_render_node OpenGL
 --ipc=host                    shared memory for inter-process
 --security-opt seccomp=unconfined  ROS nodelet compatibility
---add-host host.docker.internal:host-gateway  MQTT bridge routing
 ```
 
 ### Environment variables per container
@@ -108,7 +94,6 @@ test-container → ROS topics
 | Variable      | Default  | Description                  |
 | ------------- | -------- | ---------------------------- |
 | `TEST_ID`     | `default`| Unique test run identifier   |
-| `MQTT_HOST`   | `host.docker.internal` | MQTT broker address |
 | `FLIGHT_TYPE` | `2`      | EGO planner flight mode      |
 | `MAX_VEL`     | `0.6`    | Max velocity [m/s]           |
 | `MAX_ACC`     | `1.0`    | Max acceleration [m/s²]      |
@@ -131,7 +116,6 @@ Captures from nodes with `output="screen"`:
 | Node                | What to look for                       |
 | ------------------- | -------------------------------------- |
 | entrypoint-test.sh  | Planner readiness, test timing         |
-| ego_mqtt_bridge.py  | Bridge status, topic registration      |
 | exploration_node    | FSM state, planning results, errors    |
 
 ### ROS logs (inside container)
@@ -151,26 +135,21 @@ _site/test-results/<scenario>/<config>.json
 
 | Operation                     | Command                                    |
 | ----------------------------- | ------------------------------------------ |
-| Build test image              | `bun test:build`                           |
-| Run test scenario             | `bun test:run [scenario]`                  |
-| List running containers       | `bun test:status`                          |
-| Stop all containers           | `bun test:stop`                            |
-| Stop one container            | `bun test:stop velocity_sweep-0_6`         |
-| Start dashboard               | `bun dashboard`                            |
-| Start data server only        | `bun server`                               |
-| Shell into test container     | `docker exec -it ego-test-<config> bash`   |
-| Inspect container logs        | `docker logs ego-test-<config>`            |
-| Inspect test results (API)    | `curl http://localhost:3000/api/tests`     |
-| View MQTT traffic             | `mosquitto_sub -t 'test/#' -v`             |
+| Build devel image             | `docker compose build devel`               |
+| Compile workspace             | `docker compose run --rm build`            |
+| Run headless test             | `TEST_ID=<id> DURATION=60 docker compose run --rm test` |
+| List running containers       | `docker ps --filter name=uss-nav`          |
+| Stop all containers           | `docker rm -f $(docker ps -aq --filter name=uss-nav)` |
+| Shell into test container     | `docker exec -it uss-nav-devel-local bash` |
+| Inspect container logs        | `docker logs uss-nav-devel-local`          |
+| Inspect trace artifacts       | `ls .artifacts/traces/<TRACE_ID>/`         |
 
 ## 7. Design Principles
 
 1. **All operations are local** — No SSH, no remote devices, no cross-network deployment. devel-host and devel-docker are the only two runtime environments.
 
-2. **Container is transient** — Containers are headless, ephemeral, and self-contained. They publish telemetry via MQTT and exit after `DURATION` seconds.
+2. **Container is transient** — Containers are headless, ephemeral, and self-contained. They run for `DURATION` seconds and write trace artifacts before exiting.
 
-3. **Data flows outward** — Containers never read from MQTT or the frontend. Data flows one direction: ROS → MQTT → Server → WebSocket → Frontend.
+3. **Data flows outward** — Diagnostics flow one direction: ROS logs → `.artifacts/traces/<TRACE_ID>/` (rosout.log, fluentbit_roslog.log, run.bag). No telemetry bus; text-diagnosable issues must not require the bag.
 
 4. **RViz in separate container** — Visualization via `~/rviz_ws` Docker container, connected to the shared ROS master on localhost:11311.
-
-5. **Test configs are code** — Test scenarios and parameter sweeps are defined in `src/cli/scenarios.ts`.

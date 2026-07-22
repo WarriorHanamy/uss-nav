@@ -22,8 +22,7 @@ immutable image.
 | Map size / obstacle config      | `OBS_NUM`, `X_SIZE`, `Y_SIZE` env vars |
 | Planner tuning                  | `MAX_VEL`, `MAX_ACC`, `FLIGHT_TYPE`    |
 | Test identity                   | `TEST_ID` env var               |
-| Telemetry destination           | `MQTT_HOST` env var             |
-| Log access                      | `docker logs` / `docker exec`   |
+| Log access                      | `docker logs` / `docker exec` / `.artifacts/traces/` |
 
 The entrypoint script (`docker/entrypoint-test.sh`) receives these env vars and
 generates a custom map YAML at runtime:
@@ -41,8 +40,6 @@ sed -e "s/obs_num:.*/obs_num: ${OBS_NUM}/" \
 | `--gpus all`                        | Docker flag  | GPU access for pcl_render_node OpenGL |
 | `--ipc=host`                        | Docker flag  | Shared memory for inter-process       |
 | `--security-opt seccomp=unconfined` | Docker flag  | ROS nodelet syscall compatibility     |
-| `--add-host host.docker.internal:host-gateway` | Docker flag | Container → Host route    |
-| `-e MQTT_HOST=host.docker.internal` | Env var      | MQTT broker addressing               |
 
 Never call these "mounts" in code or docs.
 

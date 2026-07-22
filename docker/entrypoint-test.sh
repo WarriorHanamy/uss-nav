@@ -12,7 +12,6 @@ export ROS_IP="${ROS_IP:-127.0.0.1}"
 # here dropped bringup_test and broke `$(find bringup_test)` in launch files.
 
 TEST_ID="${TEST_ID:-default}"
-MQTT_HOST="${MQTT_HOST:-host.docker.internal}"
 DURATION="${DURATION:-300}"
 FLIGHT_TYPE="${FLIGHT_TYPE:-2}"
 MAX_VEL="${MAX_VEL:-0.6}"
@@ -33,7 +32,6 @@ else
 fi
 TRACE_BAG_TOPICS="${TRACE_BAG_TOPICS:-$DEFAULT_TRACE_BAG_TOPICS}"
 ROSLAUNCH_LOG="/tmp/roslaunch.log"
-BRIDGE_LOG="/tmp/bridge.log"
 ROSBAG_PID=""
 TRACE_IS_ENABLED=0
 
@@ -48,7 +46,6 @@ if [ "$TRACE_ENABLE" = "1" ] || [ "$TRACE_ENABLE" = "true" ] || [ "$TRACE_ENABLE
   export ROS_LOG_DIR="${TRACE_DIR}/ros"
   export ROSCONSOLE_FORMAT='[${severity}] [${time}] [${node}] [${logger}]: ${message}'
   ROSLAUNCH_LOG="${TRACE_DIR}/roslaunch.log"
-  BRIDGE_LOG="${TRACE_DIR}/bridge.log"
   cat > "${TRACE_DIR}/manifest.json" <<EOF
 {"trace_id":"${TRACE_ID}","mode":"test","test_id":"${TEST_ID}","bag_profile":"${TRACE_BAG_PROFILE}","started_at":"$(date -Is)","bag":"${TRACE_DIR}/run.bag","roslaunch_log":"${ROSLAUNCH_LOG}","ros_log_dir":"${ROS_LOG_DIR}","fluentbit_log":"${TRACE_DIR}/fluentbit_roslog.log","bag_topics":"${TRACE_BAG_TOPICS}","status":"starting"}
 EOF
@@ -120,22 +117,11 @@ for i in $(seq 1 30); do
   fi
 done
 
-# Start MQTT bridge
-echo "Starting MQTT bridge → ${MQTT_HOST}:1883 ..."
-python3 /bridge/ego_mqtt_bridge.py \
-  --mqtt-host "$MQTT_HOST" \
-  --mqtt-port 1883 \
-  --test-id "$TEST_ID" \
-  --topic-prefix test \
-  &>"${BRIDGE_LOG}" &
-BRIDGE_PID=$!
-
 echo "✅ Test running for ${DURATION}s"
 sleep "$DURATION"
 
 # Cleanup
 echo "Test complete, stopping..."
-kill $BRIDGE_PID 2>/dev/null || true
 kill $LAUNCH_PID 2>/dev/null || true
 if [ -n "${ROSBAG_PID}" ]; then
   kill "${ROSBAG_PID}" 2>/dev/null || true
