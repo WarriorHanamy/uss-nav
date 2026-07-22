@@ -155,6 +155,10 @@ void MissionFSM::init(ros::NodeHandle& nh, const global_belief::MapInterface::Pt
   nh.param("object_id_nav_replan/stuck_max_consecutive", fp_->object_id_nav_replan_stuck_max_consecutive_, 0);
   nh.param("object_id_nav_replan/mode2_stuck_fallback_delay", fp_->object_id_nav_replan_mode2_stuck_fallback_delay_, 10.0);
   nh.param("object_id_nav/require_final_yaw",             fp_->object_id_nav_require_final_yaw_, true);
+  nh.param("object_id_nav/finish_dwell_sec",              fp_->object_id_nav_finish_dwell_sec_, 2.0);
+  fp_->object_id_nav_finish_dwell_sec_ = std::max(0.0, fp_->object_id_nav_finish_dwell_sec_);
+  nh.param("object_id_nav/finish_vel_thresh",             fp_->object_id_nav_finish_vel_thresh_, 0.3);
+  fp_->object_id_nav_finish_vel_thresh_ = std::max(0.0, fp_->object_id_nav_finish_vel_thresh_);
   nh.param("object_id_nav/autostart_enable", object_id_nav_autostart_enable_, false);
   nh.param("object_id_nav/autostart_target_id", object_id_nav_autostart_target_id_, 2);
   nh.param("object_id_nav/autostart_delay_sec", object_id_nav_autostart_delay_sec_, 1.0);
@@ -2400,7 +2404,24 @@ void MissionFSM::goTargetObject() {
     bool final_path_index = !fd_->path_res_.empty() &&
                             fd_->path_inx_ >= static_cast<int>(fd_->path_res_.size()) - 1;
     bool final_topo_stage = direct_path || final_path_index;
-    bool finish_ready = pos_finish && yaw_finish && final_topo_stage && fd_->ego_exec_finished_;
+    /* Physical arrival dwell: when the drone is at the aim and stationary, the mission
+     * completes even without the planner exec_finish signal (the SUPER backend may never
+     * publish it, e.g. when the final approach stalls outside the SFC in z). */
+    if (pos_finish && yaw_finish && final_topo_stage &&
+        fd_->odom_vel_.norm() <= fp_->object_id_nav_finish_vel_thresh_) {
+      if (fd_->object_id_nav_finish_hold_begin_time_ < 0.0) {
+        fd_->object_id_nav_finish_hold_begin_time_ = ros::Time::now().toSec();
+      }
+    } else {
+      fd_->object_id_nav_finish_hold_begin_time_ = -1.0;
+    }
+    const double finish_hold_sec =
+        fd_->object_id_nav_finish_hold_begin_time_ >= 0.0
+            ? ros::Time::now().toSec() - fd_->object_id_nav_finish_hold_begin_time_
+            : 0.0;
+    const bool dwell_finish = finish_hold_sec >= fp_->object_id_nav_finish_dwell_sec_;
+    bool finish_ready = pos_finish && yaw_finish && final_topo_stage &&
+                        (fd_->ego_exec_finished_ || dwell_finish);
     if (pos_finish && yaw_finish && !finish_ready) {
       ROS_INFO_STREAM_THROTTLE(0.5, "[MissionFSM] object_id_nav_finish_hold target_obj_id=" << fd_->object_target_id_
                                << " source_task_id=" << static_cast<int>(active_instruction_task_id_)
@@ -2413,6 +2434,10 @@ void MissionFSM::goTargetObject() {
                                << " pos_finish=" << pos_finish
                                << " yaw_finish=" << yaw_finish
                                << " ego_exec_finished=" << fd_->ego_exec_finished_
+                               << " finish_hold_sec=" << finish_hold_sec
+                               << " finish_dwell_sec=" << fp_->object_id_nav_finish_dwell_sec_
+                               << " odom_vel_norm=" << fd_->odom_vel_.norm()
+                               << " finish_vel_thresh=" << fp_->object_id_nav_finish_vel_thresh_
                                << " dis_2_aim_2d=" << dis_2_aim_2d
                                << " dis_2_local_aim=" << dis_2_local_aim
                                << " dis_yaw=" << dis_yaw
@@ -2432,6 +2457,8 @@ void MissionFSM::goTargetObject() {
                       << " ego_exec_finished=" << fd_->ego_exec_finished_
                       << " ego_plan_status=" << fd_->ego_plan_status_
                       << " ego_modify_status=" << fd_->ego_modify_status_
+                      << " finish_hold_sec=" << finish_hold_sec
+                      << " finish_source=" << (fd_->ego_exec_finished_ ? "ego_exec_finish" : "arrival_dwell")
                       << " dis_2_aim_2d=" << dis_2_aim_2d
                       << " dis_2_local_aim=" << dis_2_local_aim
                       << " dis_yaw=" << dis_yaw
@@ -2442,6 +2469,9 @@ void MissionFSM::goTargetObject() {
       ROS_WARN("-------------> Finish: [Reach Aim] <-------------");
       ROS_INFO_STREAM("t_cur: " << t_cur);
       fd_->go_object_process_phase = 0;
+      /* Hold position and silence the backend planner (SUPER otherwise keeps
+       * replanning the last goal forever and floods the log). */
+      stopMotion();
       if (fd_->find_terminate_target_mode_) {
         transitState(FINISH, "Find Terminate Target Finish");
       }
@@ -2461,14 +2491,17 @@ void MissionFSM::goTargetObject() {
       // INFO_MSG_GREEN("[Targ Obj] [PubNxtLocalAim] aim: " << fd_->aim_pos_.transpose() << ", local_aim: " << fd_->local_aim_pos_.transpose());
     }
 
-    // Replan after some time
-    if (t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
+    // Replan after some time (skipped while physically at the aim: the arrival
+    // dwell above owns completion there, the drone is arrived rather than stuck)
+    const bool at_aim_hold = pos_finish && yaw_finish && final_topo_stage;
+    if (!at_aim_hold && t_cur > fp_->replan_thresh3_ && fd_->odom_vel_.norm() <= 0.1) {
       ROS_WARN_STREAM("[MissionFSM] object_id_nav_replan_needed reason=periodic_still target_obj_id="
                       << fd_->object_target_id_ << " elapsed_sec=" << t_cur
                       << " odom_vel_norm=" << fd_->odom_vel_.norm());
       ROS_WARN("-------------> Replan: periodic call <-------------");
       ROS_WARN("t_cur: %f s", t_cur);
       fd_->go_object_process_phase = 0;
+      stopMotion();
       transitState(WAIT_TRIGGER, "Go Target Object Replan");
       return;
     }
@@ -3603,6 +3636,7 @@ void MissionFSM::startObjectIdNav(int target_obj_id, uint8_t source_task_id,
   fd_->has_stored_object_id_nav_instruction_ = true;
   fd_->object_id_nav_replan_stuck_begin_time_ = -1.0;
   fd_->object_id_nav_replan_topic_triggered_ = false;
+  fd_->object_id_nav_finish_hold_begin_time_ = -1.0;
   if (reset_replan_count) {
     fd_->object_id_nav_replan_stuck_count_ = 0;
   }

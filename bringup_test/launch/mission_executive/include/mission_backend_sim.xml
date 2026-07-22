@@ -176,6 +176,8 @@
         <param name="object_id_nav_replan/stuck_max_consecutive"   type="int"    value="0"/>
         <param name="object_id_nav_replan/mode2_stuck_fallback_delay" type="double" value="3.0"/>
         <param name="object_id_nav/require_final_yaw"              type="bool"   value="false"/>
+        <param name="object_id_nav/finish_dwell_sec"               type="double" value="2.0"/>
+        <param name="object_id_nav/finish_vel_thresh"              type="double" value="0.3"/>
         <param name="object_id_nav/autostart_enable"               type="bool"   value="$(arg object_id_nav_autostart_enable)"/>
         <param name="object_id_nav/autostart_target_id"            type="int"    value="$(arg object_id_nav_autostart_target_id)"/>
         <param name="object_id_nav/autostart_delay_sec"            type="double" value="$(arg object_id_nav_autostart_delay_sec)"/>

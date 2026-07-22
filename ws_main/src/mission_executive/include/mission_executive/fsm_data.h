@@ -96,6 +96,7 @@ struct FSMData
   double object_id_nav_replan_stuck_begin_time_{-1.0};
   bool object_id_nav_replan_topic_triggered_{false};
   int  object_id_nav_replan_stuck_count_{0};
+  double object_id_nav_finish_hold_begin_time_{-1.0};
   bool new_topo_need_predict_immediately_{false};
   bool find_terminate_target_mode_{false};
   u_int8_t llm_plan_explore_counter_{0};
@@ -152,6 +153,8 @@ struct FSMParam
   int    object_id_nav_replan_stuck_max_consecutive_{0};
   double object_id_nav_replan_mode2_stuck_fallback_delay_{10.0};
   bool   object_id_nav_require_final_yaw_{true};
+  double object_id_nav_finish_dwell_sec_{2.0};
+  double object_id_nav_finish_vel_thresh_{0.3};
 };
 
 }  // namespace mission_executive
