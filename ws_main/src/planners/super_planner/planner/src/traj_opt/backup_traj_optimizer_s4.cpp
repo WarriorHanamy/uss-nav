@@ -485,8 +485,9 @@ double BackupTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     x(x.size() - 1) = tau_s;
     double minCostFunctional;
     lbfgs::lbfgs_parameter_t lbfgs_params;
-    lbfgs_params.mem_size = 256;
-    lbfgs_params.past = 3;
+    lbfgs_params.mem_size = cfg_.lbfgs_mem_size;
+    lbfgs_params.past = cfg_.lbfgs_past;
+    lbfgs_params.max_iterations = cfg_.lbfgs_max_iterations;
     lbfgs_params.min_step = 1.0e-32;
     lbfgs_params.g_epsilon = 0.0;
     lbfgs_params.delta = relCostTol;

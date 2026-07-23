@@ -347,6 +347,23 @@ namespace traj_opt {
     public:
         typedef std::shared_ptr<ExpTrajOpt> Ptr;
 
+        /* Outcome of the last private optimize() run, for difficulty diagnosis
+         * and offline case dumping. */
+        struct LastOptStats {
+            int lbfgs_ret{-9999};
+            int iter_num{0};
+            double final_cost{0.0};
+            VecDf penalty_log;
+        };
+
+    private:
+        LastOptStats last_stats_;
+
+    public:
+        const LastOptStats &getLastOptStats() const {
+            return last_stats_;
+        }
+
         ExpTrajOpt(const traj_opt::Config &cfg, const ros_interface::RosInterface::Ptr & ros_ptr);
 
         ~ExpTrajOpt();

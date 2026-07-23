@@ -80,6 +80,14 @@ target_link_libraries(fsm_node
         ${THIRD_PARTY}
 )
 
+add_executable(opt_case_replay
+        Apps/opt_case_replay.cpp
+)
+target_link_libraries(opt_case_replay
+        super
+        ${THIRD_PARTY}
+)
+
 #add_executable(read_replan_log
 #        Apps/read_replan_log.cpp
 #)

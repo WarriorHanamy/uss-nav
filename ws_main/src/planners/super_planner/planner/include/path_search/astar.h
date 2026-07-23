@@ -78,7 +78,7 @@ namespace path_search {
 
     class Astar {
 
-        rog_map::ROGMapROS::Ptr map_ptr_;
+        rog_map::ROGMap::Ptr map_ptr_;
         ros_interface::RosInterface::Ptr ros_ptr_;
 
         PathSearchConfig cfg_;
@@ -139,7 +139,7 @@ namespace path_search {
 
         Astar(const std::string & cfg_path,
               const ros_interface::RosInterface::Ptr &ros_ptr,
-              rog_map::ROGMapROS::Ptr rm);
+              rog_map::ROGMap::Ptr rm);
 
         ~Astar() {};
 

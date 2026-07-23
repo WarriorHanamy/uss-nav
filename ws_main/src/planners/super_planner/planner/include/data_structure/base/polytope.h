@@ -103,8 +103,17 @@ namespace geometry_utils {
     typedef std::vector<Polytope> PolytopeVec;
 
 
+    /* Minimum overlap depth [m] for the greedy corridor merge in SimplifySFC:
+     * a knife-edge touch (depth ~ 0) between non-adjacent polytopes is not a
+     * valid junction — accepting it drops the healthy middle polytope and
+     * leaves a zero-volume overlap that the optimizer's findInteriorDist
+     * rejects (or resolves randomly, since sdlp shuffles). The corridor
+     * generator guarantees adjacent overlap >= map resolution, so legitimate
+     * merges clear this threshold easily. */
+    static constexpr double kSimplifyMinOverlap{1e-2};
+
     static bool SimplifySFC(const Vec3f& head_p, const Vec3f& tail_p,
-                                 geometry_utils::PolytopeVec& sfcs) {
+                                  geometry_utils::PolytopeVec& sfcs) {
         vec_Vec3f path{head_p, tail_p};
         int start_id{-1}, end_id{-1};
         if (sfcs.size() > 2) {
@@ -132,7 +141,10 @@ namespace geometry_utils {
                 for (int i = 2; i < sfcs_new.size(); i++) {
                     Polytope cross_poly = check_cand.CrossWith(sfcs_new[i]);
                     Vec3f interior_pt;
-                    bool is_overlapped = geometry_utils::findInterior(cross_poly.GetPlanes(), interior_pt);
+                    /* Merge only on a real overlap, not a degenerate touch. */
+                    const double overlap_depth =
+                            geometry_utils::findInteriorDist(cross_poly.GetPlanes(), interior_pt);
+                    const bool is_overlapped = overlap_depth > kSimplifyMinOverlap;
                     if (is_overlapped) {
                         last_overlapped = sfcs_new[i];
                         if (last_overlapped.PointIsInside(path.back())) {
@@ -145,6 +157,13 @@ namespace geometry_utils {
                         check_cand = last_overlapped;
                         i--;
                     }
+                }
+                /* The greedy walk may end without pushing the tail polytope
+                 * (last merge accepted but not tail-containing); without it the
+                 * optimizer terminal leaves the corridor. */
+                if (!sfcs_final.empty() && !sfcs_final.back().PointIsInside(path.back()) &&
+                    sfcs_new.back().PointIsInside(path.back())) {
+                    sfcs_final.push_back(sfcs_new.back());
                 }
                 sfcs = sfcs_final;
             }

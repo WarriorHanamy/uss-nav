@@ -8,6 +8,10 @@ fsm:
   timer_en: true
   # Waypoint window: radius around an intermediate waypoint that counts as consumed [m].
   wp_reach_radius: 0.4
+  # Goal-unreachable escalation: stop replanning and report failure upstream
+  # after this many finished-but-far trajectories, or this long without progress.
+  goal_unreachable_max_unfinish: 3
+  goal_unreachable_timeout_s: 15.0
 
 camera_fov:
   top_angle: 0.6
@@ -18,6 +22,9 @@ camera_fov:
 
 super_planner:
   backup_traj_en: true
+  # Legacy backup hot-restart with discarded outputs (one extra L-BFGS run per
+  # replan); keep off unless debugging the backup optimizer.
+  backup_reopt_en: false
   detailed_log_en: false
   visualization_en: true
   use_fov_cut: false
@@ -40,6 +47,28 @@ super_planner:
   # Yaw mode: 1 heading to velocity, 2 heading to goal
   yaw_mode: 1
   mpc_horizon: 15
+
+# Corner-case dump: hard optimization problem instances are written to
+# output_dir/<case_id>/ (case.yaml + cloud.pcd + config_snapshot.yaml) and
+# correlated to the ROS log via event=case_dumped for offline replay/sweeps.
+case_dump:
+  enable: true
+  output_dir: /workspace/.artifacts/opt_cases
+  dump_on_overtime: true
+  # Dump on success when L-BFGS cost-functional calls reach this count.
+  slow_iter_num: 2000
+  # Dump on success when the corridor penalty exceeds this (failure is 0.2).
+  pos_penna_warn: 0.1
+  # Dump the next replan after this many consecutive replan failures.
+  consec_failures: 3
+  # Minimum wall-time between two dumps (flood protection) [s].
+  min_interval_s: 1.0
+  # Hard cap on dumped cases per process run (0 = unlimited).
+  max_cases: 200
+  # Dump on success when the exp optimizer wall time exceeds this [ms].
+  slow_opt_ms: 15.0
+  # Dump when the exp SFC construction wall time exceeds this [ms].
+  slow_sfc_ms: 10.0
 
 
 traj_opt:
@@ -78,6 +107,9 @@ traj_opt:
     penna_wp_pass: 1.0e+3
     penna_omg:  5.0e+5
     penna_thr: 1.0e+5
+    # L-BFGS history 256 is oversized for these small problems; 16 cuts backup
+    # opt time ~4.5x (swept on dumped cases) without hurting convergence.
+    lbfgs_mem_size: 16
 
   backup_traj:
     uniform_time_en: true
@@ -97,6 +129,7 @@ traj_opt:
     penna_jerk: -1.0e+5
     penna_omg: 1.0e+5
     penna_thr: 1.0e+5
+    lbfgs_mem_size: 16
 
   flatness:
     mass: 1.64

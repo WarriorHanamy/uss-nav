@@ -47,6 +47,7 @@
 #include "utils/header/fmt_eigen.hpp"
 
 #include <super_core/log_utils.hpp>
+#include <super_core/case_dump.hpp>
 #include <data_structure/exp_traj.h>
 #include <data_structure/cmd_traj.h>
 #include <data_structure/backup_traj.h>
@@ -59,7 +60,27 @@ namespace super_planner {
     class SuperPlanner {
         LogOneReplan latest_replan;
         super_planner::Config cfg_;
-        rog_map::ROGMapROS::Ptr map_ptr_;
+        std::string cfg_path_;
+        /* One-shot reason set by notifyConsecutiveFailures(); consumed (cleared)
+         * by the next generateExpTraj case dump. */
+        std::string forced_dump_reason_;
+        /* Flood-protection state for case dumps. */
+        double last_dump_WT_{-1e9};
+        int dump_count_{0};
+        /* Per-replan wall time of the two SFC constructions [s]; the generic
+         * frontend buckets in time_consuming_ include other work. */
+        double last_exp_sfc_t_{0.0};
+        double last_back_sfc_t_{0.0};
+        /* Wall time of the PlanFromRest start-point nearest-free-cell search [s]. */
+        double last_goal_shift_t_{0.0};
+        /* Pending corner case: queued inside generateExpTraj/generateBackupTrajectory,
+         * flushed once at ReplanOnce/PlanFromRest exit so the backup section and
+         * the full timing breakdown are included. */
+        bool pending_case_{false};
+        ExpOptCaseData pending_case_data_;
+
+        friend struct ReplanExitGuard;
+        rog_map::ROGMap::Ptr map_ptr_;
         CorridorGenerator::Ptr cg_ptr_;
         path_search::Astar::Ptr astar_ptr_;
         ros_interface::RosInterface::Ptr ros_ptr_;
@@ -106,7 +127,7 @@ namespace super_planner {
 
         explicit SuperPlanner(const std::string &cfg_path,
                               const ros_interface::RosInterface::Ptr &ros_ptr,
-                              const rog_map::ROGMapROS::Ptr &map_ptr);
+                              const rog_map::ROGMap::Ptr &map_ptr);
 
         ~SuperPlanner() = default;
 
@@ -161,6 +182,18 @@ namespace super_planner {
         RET_CODE generateExpTraj(ExpTraj &last_exp_traj_info,
                                  ExpTraj &out_exp_traj_info);
 
+        /* Fill common context fields and queue a case for dumping at replan exit. */
+        void queueCaseDump(ExpOptCaseData &data);
+
+        /* Write the queued case (with flood protection) and emit case_dumped. */
+        void flushPendingCase();
+
+        /* Emit the per-replan timing breakdown as a structured ROS log event. */
+        void emitReplanTiming(const char *stage, int ret, double total_s);
+
+        /* Replan-exit hook used by ReplanExitGuard (timing event + case flush). */
+        void onReplanExit(const char *stage, int ret, double total_s);
+
         /* For Backup traj generation */
         RET_CODE generateBackupTrajectory(ExpTraj &ref_exp_traj, BackupTraj &back_traj_info);
 
@@ -176,7 +209,7 @@ namespace super_planner {
 
         bool isEasyGoal(const Vec3f &goal_position);
 
-        rog_map::ROGMapROS::Ptr &getMap() {
+        rog_map::ROGMap::Ptr &getMap() {
             return map_ptr_;
         }
 
@@ -201,6 +234,18 @@ namespace super_planner {
 
         void updateROGMap(const rog_map::PointCloud &cloud, const super_utils::Pose &pose) const {
             map_ptr_->updateMap(cloud, pose);
+        }
+
+        /**
+         * Feed the consecutive replan failure count; arms a one-shot corner-case
+         * dump on the next generateExpTraj when the configured threshold is hit.
+         *
+         * @param[in] consecutive_failures  consecutive failed replans so far [-]
+         */
+        void notifyConsecutiveFailures(const int consecutive_failures) {
+            if (cfg_.case_dump.enable && consecutive_failures >= cfg_.case_dump.consec_failures) {
+                forced_dump_reason_ = "repeated_failure";
+            }
         }
 
         LogOneReplan getLatestReplanLog() {

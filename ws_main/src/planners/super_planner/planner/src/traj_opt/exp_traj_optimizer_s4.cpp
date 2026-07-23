@@ -206,6 +206,10 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
             Vec3f totalGradPos{0.0, 0.0, 0.0}, totalGradVel{0.0, 0.0, 0.0},
                     totalGradAcc{0.0, 0.0, 0.0}, totalGradJer{0.0, 0.0, 0.0};
 
+            /* First-non-finite-term trap: pinpoints the exact penalty term and
+             * the trajectory state that produced it. */
+            const double cost_before_flat = tmp_cost;
+
             /* 2.6  For omg amd thr cost  */
             if (weightOmg > 0 && weightAccThr > 0) {
                 double thr;
@@ -242,6 +246,19 @@ void ExpTrajOpt::constraintsFunctional(const VecDf &T,
                 totalGradVel = gradVel;
                 totalGradAcc = gradAcc;
                 totalGradJer = gradJer;
+            }
+
+            if (!std::isfinite(tmp_cost) || !totalGradPos.allFinite() || !totalGradVel.allFinite() ||
+                !totalGradAcc.allFinite() || !totalGradJer.allFinite()) {
+                std::cout << RED << " -- [ExpOpt] event=nan_term piece=" << i << " step=" << j
+                          << " cost_before_flat=" << cost_before_flat
+                          << " tmp_cost=" << tmp_cost
+                          << " thr=" << (weightOmg > 0 && weightAccThr > 0 ? 1 : 0)
+                          << " pos=" << pos.transpose()
+                          << " vel=" << vel.transpose()
+                          << " acc=" << acc.transpose()
+                          << " jer=" << jer.transpose()
+                          << RESET << std::endl;
             }
 
             const auto node = (j == 0 || j == integralResolution) ? 0.5 : 1.0;
@@ -330,6 +347,7 @@ double ExpTrajOpt::costFunctional(void *ptr,
         obj.minco.getEnergyPartialGradByTimes(partialGradByTimes);
     }
     obj.penalty_log(0) = cost;
+    const double cost_after_energy = cost;
 
     /* 4) Compute the constrain cost and gradient  */
     constraintsFunctional(times, obj.minco.getCoeffs(),
@@ -341,6 +359,7 @@ double ExpTrajOpt::costFunctional(void *ptr,
                           magnitudeBounds, penaltyWeights,
                           quadrotor_flatness,
                           cost, partialGradByTimes, partialGradByCoeffs, obj.penalty_log);
+    const double cost_after_constraints = cost;
 
     /* 5) Propagate the gradient from CT to PT */
     Mat3Df gradByPoints;
@@ -376,6 +395,19 @@ double ExpTrajOpt::costFunctional(void *ptr,
             gcopter::normRetrictionLayer(xi, vPolyIdx, vPolytopes, cost, gradXi);
             break;
         }
+    }
+    /* Non-finite guard: identify which term blew up before L-BFGS aborts with
+     * LBFGSERR_INVALID_FUNCVAL; keeps the optimizer alive and diagnosable. */
+    if (!std::isfinite(cost) || !g.allFinite()) {
+        cout << RED << " -- [ExpOpt] event=nan_cost cost=" << cost
+             << " g_finite=" << g.allFinite()
+             << " times=" << times.transpose()
+             << " energy=" << obj.penalty_log(0)
+             << " cost_after_energy=" << cost_after_energy
+             << " cost_after_constraints=" << cost_after_constraints
+             << " pena=" << obj.penalty_log.transpose()
+             << " piece_num=" << obj.piece_num
+             << RESET << endl;
     }
     return cost;
 }
@@ -734,6 +766,8 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     opt_vars.penalty_log.setZero();
 
     /* 2) check the initial value of the optimization varibles */
+    last_stats_ = LastOptStats();
+    last_stats_.penalty_log = opt_vars.penalty_log;
     if (opt_vars.times.minCoeff() < 1e-3) {
         cout << YELLOW << " -- [TrajOpt] Error, the init times have zero, force return." << RESET << endl;
         cout << " -- Head PVAJ: " << endl;
@@ -770,8 +804,9 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
     opt_vars.iter_num = 0;
     double minCostFunctional{0};
     lbfgs::lbfgs_parameter_t lbfgs_params;
-    lbfgs_params.mem_size = 256;
-    lbfgs_params.past = 3;
+    lbfgs_params.mem_size = cfg_.lbfgs_mem_size;
+    lbfgs_params.past = cfg_.lbfgs_past;
+    lbfgs_params.max_iterations = cfg_.lbfgs_max_iterations;
     lbfgs_params.min_step = 1.0e-32;
     lbfgs_params.g_epsilon = 0.0;
     lbfgs_params.delta = relCostTol;
@@ -844,6 +879,11 @@ double ExpTrajOpt::optimize(Trajectory &traj, const double &relCostTol) {
         ros_ptr_->warn(" -- [ExpOpt] Opt failed, Omg or thr or Pos violation.");
         ret = -1;
     }
+
+    last_stats_.lbfgs_ret = ret;
+    last_stats_.iter_num = opt_vars.iter_num;
+    last_stats_.final_cost = minCostFunctional;
+    last_stats_.penalty_log = opt_vars.penalty_log;
 
     if (ret >= 0) {
         gcopter::forwardMapTauToT(tau, opt_vars.times);
@@ -985,6 +1025,9 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
                           PolytopeVec &sfcs,
                           Trajectory &out_traj,
                           const vec_E<Vec3f> &pass_wps) {
+    /* Reset per-call diagnosis stats so a failure before the L-BFGS stage
+     * never leaks the previous call's numbers into the case dump. */
+    last_stats_ = LastOptStats();
     /// Check if hot init is valid
     if (guide_path.size() != guide_t.size()) {
         cout << YELLOW << " -- [TrajOpt] Error, the guide trajectory has wrong path and time stamp." << RESET
@@ -1071,6 +1114,7 @@ bool ExpTrajOpt::optimize(const StatePVAJ &headPVAJ, const StatePVAJ &tailPVAJ,
                           const vec_Vec3f &init_ps,
                           const VecDf &init_ts,
                           Trajectory &out_traj) {
+    last_stats_ = LastOptStats();
     opt_vars.pass_wps_raw.clear();
     opt_vars.pass_waypoints.clear();
     vec_Vec3f guide_path;

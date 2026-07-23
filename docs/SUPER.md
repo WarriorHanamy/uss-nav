@@ -273,3 +273,27 @@ uv run --script /tmp/opencode/plot_chain.py /tmp/opencode/chain.pkl /tmp/opencod
 <!-- table not formatted: invalid structure -->
 
 J30V2 场景注意：下楼后 z 降至 -7~-10，`virtual_ground_height` 必须低于任务最低 z（当前 -12.5），否则楼下空间全部恒 occupied。
+
+---
+
+## 6. 已修复的优化 corner case（2026-07，feat/opt-case-mining）
+
+症状：J30V2 自动任务中 ~98% replan `exp_opt_failed`，无人机悬停空转。经 case dump + 离线 replay 定位为两个独立 bug：
+
+### 6.1 SimplifySFC 刀锋合并（preprocess 失败）
+
+- 现象：`processCorridorWithGuideTraj` 报 `Failed findInteriorDist Vs.`
+- 根因：非相邻 polytope 对（poly0/poly2）重叠深度 ~2e-16（零体积相切），贪心合并把拥有健康重叠（0.39/0.32m）的中间 polytope 丢弃，留下零体积 junction；sdlp 带随机 shuffle，同一输入在不同运行可能给出 ±1e-16，表现为偶发失败
+- 修复：`polytope.h` `SimplifySFC` 合并条件从 `findInterior`（只判相交）改为 `findInteriorDist > 1e-2`（要求最小重叠深度，走廊生成器保证相邻重叠 ≥ resolution=0.1）；顺带修复贪心循环可能不 push 尾部 polytope 导致终点出界的问题
+
+### 6.2 flatness 奇异点 NaN（L-BFGS INVALID_FUNCVAL）
+
+- 现象：`[MINCO] TrajOpt failed, The function value became NaN or Inf`，iter_num=2 即死
+- 根因：悬停 + 目标正下方 0.95m 时，初始 T=0.8s 的 min-snap 下落轨迹需要 acc_z < -g（倒推）,flatness `z2 = -1` 处 `tilt_den = sqrt(2(1+z2))` 与 `omg_den = z2+1` 除零 → cost NaN → L-BFGS 立即中止。T 本应由优化器自行推大（T=1.86s 时物理可行），但 NaN 杀死了这个过程
+- 修复：`quadrotor_flatness.hpp` 三个除零点钳制（`zu_norm ≥ 1e-6`、`tilt_den ≥ 1e-6`、`omg_den ≥ 1e-3`)，奇异区返回巨大但有限的惩罚，优化器得以推大 T 逃离奇异区；正常飞行域（zu_norm≈9.8, omg_den≈2）不受影响
+
+### 验证
+
+- 离线：604 个 dump case 批跑，成功率 27 → **592**(98%)；剩余 12 个为真不可行走廊（penalty violation)+ 1 个 frontend sfc_failed
+- 在线（同任务）：replan FAILED 率 98.3% → ~20%,SUCCESS+FINISH 达 ~80%，任务可持续推进
+- 诊断工具：`[ExpOpt] event=nan_cost` / `event=nan_term`（仅在非有限值时输出，含分段 cost 与轨迹状态）

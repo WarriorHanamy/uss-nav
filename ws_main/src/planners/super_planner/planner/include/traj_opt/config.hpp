@@ -80,6 +80,12 @@ namespace traj_opt {
         int integral_reso{0};
         double opt_accuracy{0};
 
+        /* L-BFGS solver knobs (previously hardcoded): mem_size and past shape the
+         * Hessian approximation cost; max_iterations=0 means unlimited (long tail). */
+        int lbfgs_mem_size{256};
+        int lbfgs_past{3};
+        int lbfgs_max_iterations{0};
+
         Config() = default;
 
         Config(const std::string & cfg_path, string ns) {
@@ -134,6 +140,9 @@ namespace traj_opt {
             loader.LoadParam("traj_opt" + ns + "penna_wp_pass", penna_wp_pass, 0.0);
             loader.LoadParam("traj_opt" + ns + "penna_omg", penna_omg, -1.0);
             loader.LoadParam("traj_opt" + ns + "penna_thr", penna_thr, -1.0);
+            loader.LoadParam("traj_opt" + ns + "lbfgs_mem_size", lbfgs_mem_size, 256);
+            loader.LoadParam("traj_opt" + ns + "lbfgs_past", lbfgs_past, 3);
+            loader.LoadParam("traj_opt" + ns + "lbfgs_max_iterations", lbfgs_max_iterations, 0);
 
             if (penna_scale > 0) {
                 penna_t = penna_t * penna_scale;

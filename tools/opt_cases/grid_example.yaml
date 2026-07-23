@@ -1,0 +1,6 @@
+# Example parameter grid for tools/opt_cases/sweep.py (cartesian product).
+# Time-oriented: solver caps and discretization dominate mean/variance.
+params:
+  traj_opt/exp_traj/lbfgs_max_iterations: [0, 200, 60]
+  traj_opt/exp_traj/lbfgs_mem_size: [256, 16]
+  traj_opt/exp_traj/integral_reso: [10, 6]

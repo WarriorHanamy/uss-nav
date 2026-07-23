@@ -68,6 +68,7 @@ namespace fsm {
         if (ret_code == FAILED) {
 //            cout << YELLOW << " -- [Fsm] ReplanOnce failed." << RESET << endl;
             consecutive_replan_failures_++;
+            planner_ptr_->notifyConsecutiveFailures(consecutive_replan_failures_);
             const double dist_to_goal = (robot_state_.p - gi_.goal_p).norm();
             ros_ptr_->warn(" -- [SUPER][Progress] event=replan_failed state={} consecutive_failures={} dist_to_goal={} pos={} goal={} vel_norm={}",
                            MACHINE_STATE_STR[machine_state_], consecutive_replan_failures_, dist_to_goal,

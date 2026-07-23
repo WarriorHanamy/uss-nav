@@ -28,7 +28,7 @@ using namespace super_utils;
 namespace super_planner {
 
     CorridorGenerator::CorridorGenerator(const ros_interface::RosInterface::Ptr &ros_ptr,
-                                         const rog_map::ROGMapROS::Ptr &map_ptr, const double bound_dis,
+                                         const rog_map::ROGMap::Ptr &map_ptr, const double bound_dis,
                                          const double seed_line_max_dis, const double min_overlap_threshold,
                                          const double virtual_groud_height, const double virtual_ceil_height,
                                          const double robot_r,

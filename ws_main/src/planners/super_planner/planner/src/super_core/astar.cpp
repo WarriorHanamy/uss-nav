@@ -32,7 +32,7 @@ namespace path_search {
 
     Astar::Astar(const std::string &cfg_path,
                  const ros_interface::RosInterface::Ptr &ros_ptr,
-                 rog_map::ROGMapROS::Ptr rm) : ros_ptr_(ros_ptr), map_ptr_(rm) {
+                 rog_map::ROGMap::Ptr rm) : ros_ptr_(ros_ptr), map_ptr_(rm) {
         cfg_ = PathSearchConfig(cfg_path);
         tie_breaker_ = cfg_.tie_breaker;
         cout << rog_map::GREEN << " -- [RM] Init Astar-map." << rog_map::RESET << endl;

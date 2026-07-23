@@ -34,8 +34,32 @@ namespace super_planner {
     using std::cout;
     using std::endl;
 
+    /* Thresholds for dumping hard optimization problem instances (corner cases)
+     * to disk for offline replay and parameter sweeps. */
+    struct CaseDumpConfig {
+        bool enable{false};
+        std::string output_dir{"/tmp/opt_cases"};
+        bool dump_on_overtime{true};
+        // Dump even on success when L-BFGS cost-functional calls reach this count.
+        int slow_iter_num{2000};
+        // Dump even on success when the corridor penalty exceeds this (failure is 0.2).
+        double pos_penna_warn{0.1};
+        // Dump the next replan after this many consecutive replan failures.
+        int consec_failures{3};
+        // Minimum wall-time between two dumps (flood protection) [s].
+        double min_interval_s{1.0};
+        // Hard cap on dumped cases per process run (0 = unlimited).
+        int max_cases{200};
+        // Dump on success when the exp optimizer wall time exceeds this [ms].
+        double slow_opt_ms{15.0};
+        // Dump when the exp SFC construction wall time exceeds this [ms].
+        double slow_sfc_ms{10.0};
+    };
+
     class Config {
     public:
+        CaseDumpConfig case_dump;
+
         enum YawMode{
             YAW_TO_VEL = 1,
             YAW_TO_GOAL = 2
@@ -47,6 +71,9 @@ namespace super_planner {
         bool visualization_en{true};
         bool detailed_log_en{false};
         bool backup_traj_en;
+        /* Legacy hot-restart of the backup optimizer with discarded outputs;
+         * costs one extra L-BFGS run per replan, keep off unless debugging. */
+        bool backup_reopt_en{false};
         bool use_fov_cut, print_log;
         bool goal_vel_en,goal_yaw_en;
         bool visual_process;
@@ -85,6 +112,7 @@ namespace super_planner {
             loader.LoadParam("super_planner/detailed_log_en", detailed_log_en, false);
             loader.LoadParam("super_planner/visualization_en", visualization_en, false);
             loader.LoadParam("super_planner/backup_traj_en", backup_traj_en, false);
+            loader.LoadParam("super_planner/backup_reopt_en", backup_reopt_en, false);
             loader.LoadParam("super_planner/goal_vel_en", goal_vel_en, false);
             loader.LoadParam("super_planner/goal_yaw_en", goal_yaw_en, false);
             loader.LoadParam("super_planner/visual_process", visual_process, false);
@@ -103,6 +131,17 @@ namespace super_planner {
             loader.LoadParam("super_planner/yaw_mode", yaw_mode, 1);
             loader.LoadParam("super_planner/mpc_horizon", mpc_horizon, 1);
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 3.14);
+
+            loader.LoadParam("case_dump/enable", case_dump.enable, false);
+            loader.LoadParam("case_dump/output_dir", case_dump.output_dir, std::string("/tmp/opt_cases"));
+            loader.LoadParam("case_dump/dump_on_overtime", case_dump.dump_on_overtime, true);
+            loader.LoadParam("case_dump/slow_iter_num", case_dump.slow_iter_num, 2000);
+            loader.LoadParam("case_dump/pos_penna_warn", case_dump.pos_penna_warn, 0.1);
+            loader.LoadParam("case_dump/consec_failures", case_dump.consec_failures, 3);
+            loader.LoadParam("case_dump/min_interval_s", case_dump.min_interval_s, 1.0);
+            loader.LoadParam("case_dump/max_cases", case_dump.max_cases, 200);
+            loader.LoadParam("case_dump/slow_opt_ms", case_dump.slow_opt_ms, 15.0);
+            loader.LoadParam("case_dump/slow_sfc_ms", case_dump.slow_sfc_ms, 10.0);
 
             loader.LoadParam("rog_map/resolution", resolution, 0.01, true);
 

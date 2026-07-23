@@ -23,17 +23,34 @@
 
 #include <super_core/super_planner.h>
 #include <memory>
+#include <chrono>
 #include <super_utils/scope_timer.hpp>
 #include <fmt/color.h>
 
 using namespace super_utils;
 
 namespace super_planner {
+    /* RAII replan-exit hook: emits replan_timing and flushes any queued case
+     * dump on every return path. ret should be overwritten with the outcome
+     * RET_CODE once known. */
+    struct ReplanExitGuard {
+        SuperPlanner *self;
+        const char *stage;
+        int ret{-999};
+        std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+
+        ~ReplanExitGuard() {
+            const double total_s =
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+            self->onReplanExit(stage, ret, total_s);
+        }
+    };
+
     SuperPlanner::SuperPlanner
             (const std::string &cfg_path,
              const ros_interface::RosInterface::Ptr &ros_ptr,
-             const rog_map::ROGMapROS::Ptr &map_ptr
-            ) : cfg_(Config(cfg_path)), ros_ptr_(ros_ptr), map_ptr_(map_ptr) {
+             const rog_map::ROGMap::Ptr &map_ptr
+            ) : cfg_(Config(cfg_path)), cfg_path_(cfg_path), ros_ptr_(ros_ptr), map_ptr_(map_ptr) {
 
         ros_ptr_->setResolution(cfg_.resolution);
         ros_ptr_->setVisualizationEn(cfg_.visualization_en);
@@ -65,11 +82,74 @@ namespace super_planner {
         astar_ptr_->setFineInfNeighbors(neighbor_step);
     }
 
+    void SuperPlanner::queueCaseDump(ExpOptCaseData &data) {
+        if (!cfg_.case_dump.enable || pending_case_) {
+            return;
+        }
+        data.sim_time = ros_ptr_->getSimTime();
+        data.robot_p = robot_state_.p;
+        data.goal_p = gi_.goal_p;
+        data.goal_yaw = gi_.goal_yaw;
+        if (data.cloud.empty()) {
+            data.cloud = cg_ptr_->peekLatestCloud();
+        }
+        pending_case_data_ = data;
+        pending_case_ = true;
+    }
+
+    void SuperPlanner::flushPendingCase() {
+        if (!pending_case_) {
+            return;
+        }
+        pending_case_ = false;
+        /* Flood protection: a continuously failing planner would otherwise dump
+         * one case per replan cycle. */
+        const double now_WT = ros_ptr_->getSimTime();
+        if (cfg_.case_dump.max_cases > 0 && dump_count_ >= cfg_.case_dump.max_cases) {
+            return;
+        }
+        if (now_WT - last_dump_WT_ < cfg_.case_dump.min_interval_s) {
+            return;
+        }
+        last_dump_WT_ = now_WT;
+        dump_count_++;
+        const std::string case_id = CaseDumper::dump(cfg_.case_dump, cfg_path_, pending_case_data_);
+        if (case_id.empty()) {
+            ros_ptr_->warn(" -- [SUPER][Progress] event=case_dump_failed reason={} output_dir={}",
+                           pending_case_data_.reason, cfg_.case_dump.output_dir);
+            return;
+        }
+        ros_ptr_->warn(" -- [SUPER][Progress] event=case_dumped case_id={} reason={} stage={} dir={}",
+                       case_id, pending_case_data_.reason, pending_case_data_.stage,
+                       cfg_.case_dump.output_dir + "/" + case_id);
+    }
+
+    void SuperPlanner::emitReplanTiming(const char *stage, int ret, double total_s) {
+        const auto &stats = exp_traj_opt_->getLastOptStats();
+        ros_ptr_->info(
+                " -- [SUPER][Progress] event=replan_timing stage={} ret={} total_t={} frontend_t={} exp_sfc_t={} "
+                "exp_opt_t={} back_frontend_t={} back_sfc_t={} back_opt_t={} viz_t={} goal_shift_t={} iter_num={} final_cost={}",
+                stage, ret, total_s,
+                time_consuming_[EPX_TRAJ_FRONTEND], last_exp_sfc_t_, time_consuming_[EXP_TRAJ_OPT],
+                time_consuming_[BACK_TRAJ_FRONTEND], last_back_sfc_t_, time_consuming_[BACK_TRAJ_OPT],
+                time_consuming_[VISUALIZATION], last_goal_shift_t_, stats.iter_num, stats.final_cost);
+    }
+
+    void SuperPlanner::onReplanExit(const char *stage, int ret, double total_s) {
+        emitReplanTiming(stage, ret, total_s);
+        flushPendingCase();
+    }
+
     RET_CODE
     SuperPlanner::PlanFromRest(const Vec3f &goal_p,
                                const double &goal_yaw,
                                const bool &new_goal) {
         std::lock_guard<std::mutex> guard(replan_lock_);
+        ReplanExitGuard exit_guard{this, "PlanFromRest"};
+        std::fill(time_consuming_.begin(), time_consuming_.end(), 0.0);
+        last_exp_sfc_t_ = 0.0;
+        last_back_sfc_t_ = 0.0;
+        last_goal_shift_t_ = 0.0;
         latest_replan.reset();
         latest_replan.setGoal(goal_p, goal_yaw, robot_state_);
         if (robot_state_.rcv == false) {
@@ -92,7 +172,10 @@ namespace super_planner {
 
         /// 1) First, shift the start_point to free space.
         Vec3f local_star_pt;
-        if (!map_ptr_->getNearestCellNot(GridType::OCCUPIED, robot_state_.p, local_star_pt, 3.0)) {
+        TimeConsuming t_goal_shift("t_goal_shift", false);
+        const bool start_free = map_ptr_->getNearestCellNot(GridType::OCCUPIED, robot_state_.p, local_star_pt, 3.0);
+        last_goal_shift_t_ = t_goal_shift.stop();
+        if (!start_free) {
             ros_ptr_->error(
                     " -- [SUPER] in [PlanFromRest] Local start point is deeply occupied, which should not happened.");
             latest_replan.setRetCode(SUPER_RET_CODE::SUPER_NO_START_POINT);
@@ -106,6 +189,7 @@ namespace super_planner {
         last_exp_traj_info_.setEmpty();
         local_start_p_ = local_star_pt;
         RET_CODE exp_ret_code = generateExpTraj(last_exp_traj_info_, exp_traj_info);
+        exit_guard.ret = exp_ret_code;
         //GenerateRestToRestExpTraj(local_star_pt, exp_traj_info);
         if (exp_ret_code == FAILED) {
             ros_ptr_->warn(" -- [SUPER] in [PlanFromRest] GenerateExpTrajectory failed with {}.",
@@ -117,6 +201,7 @@ namespace super_planner {
 
         back_traj_info.setEmpty();
         RET_CODE back_ret_code = generateBackupTrajectory(exp_traj_info, back_traj_info);;
+        exit_guard.ret = back_ret_code;
 
         if (back_ret_code == SUCCESS) {
             if (cfg_.print_log) {
@@ -167,6 +252,11 @@ namespace super_planner {
                              const bool &new_goal) {
         TimeConsuming replan_total_t("ReplanOnce", false);
         std::lock_guard<std::mutex> guard(replan_lock_);
+        ReplanExitGuard exit_guard{this, "ReplanOnce"};
+        std::fill(time_consuming_.begin(), time_consuming_.end(), 0.0);
+        last_exp_sfc_t_ = 0.0;
+        last_back_sfc_t_ = 0.0;
+        last_goal_shift_t_ = 0.0;
 
         gi_.goal_p = goal_p;
         gi_.goal_yaw = goal_yaw;
@@ -189,6 +279,7 @@ namespace super_planner {
         TimeConsuming t_exp("t_exp", false);
         RET_CODE exp_ret_code = generateExpTraj(last_exp_traj_info_, exp_traj_info);
         time_consuming_[GENERATE_EXP_TRAJ] = t_exp.stop();
+        exit_guard.ret = exp_ret_code;
 
         if (exp_ret_code == FAILED) {
             ros_ptr_->warn(" -- [SUPER][Progress] event=generate_exp_failed stage=ReplanOnce dist_to_goal={} pos={} goal={} vel_norm={} on_backup={}",
@@ -225,6 +316,7 @@ namespace super_planner {
         TimeConsuming t_back("t_back", false);
         RET_CODE back_ret_code = generateBackupTrajectory(exp_traj_info, back_traj_info);
         time_consuming_[GENERATE_BACK_TRAJ] = t_back.stop();
+        exit_guard.ret = back_ret_code;
 
         {
             ft += time_consuming_[EPX_TRAJ_FRONTEND] + time_consuming_[BACK_TRAJ_FRONTEND];
@@ -770,13 +862,29 @@ namespace super_planner {
             time_consuming_[VISUALIZATION] += t_viz.stop();
         }
         shifted_sfc_start_pt_ = Vec3f(9999,9999,9999);
+        TimeConsuming t_exp_sfc("t_exp_sfc", false);
         bool bool_ret_code = cg_ptr_->SearchPolytopeOnPath(guide_path, sfc, shifted_sfc_start_pt_, cfg_.use_fov_cut);
+        last_exp_sfc_t_ = t_exp_sfc.stop();
 
         if (!bool_ret_code) {
             ros_ptr_->warn(" -- [SUPER][Progress] event=sfc_failed guide_path_size={} guide_path_len={} dist_to_goal={} shifted_sfc_start={} connected_goal={}",
                            guide_path.size(), geometry_utils::computePathLength(guide_path),
                            (robot_state_.p - gi_.goal_p).norm(), shifted_sfc_start_pt_.transpose(), connected_goal);
             ros_ptr_->warn(" -- [SUPER] SearchPolytopeOnPath for new path failed");
+            {
+                ExpOptCaseData case_data;
+                case_data.stage = "frontend";
+                case_data.reason = forced_dump_reason_.empty() ? "sfc_failed"
+                                   : "sfc_failed," + forced_dump_reason_;
+                forced_dump_reason_.clear();
+                case_data.connected_goal = connected_goal;
+                case_data.head_pvaj = pos_init_state;
+                case_data.guide_path = guide_path;
+                case_data.guide_t = guide_stamp;
+                case_data.pass_wps = pass_wps;
+                case_data.sfc_time = last_exp_sfc_t_;
+                queueCaseDump(case_data);
+            }
             return FAILED;
         }
         {
@@ -816,6 +924,58 @@ namespace super_planner {
             vec_Vec3f init_ps;
             exp_traj_opt_->getInitValue(init_ts, init_ps);
             latest_replan.setExpCondition(init_ts, init_ps, pos_init_state, pos_fina_state, sfc);
+        }
+        {
+            /* Corner-case detection: collect every triggered reason and dump the
+             * full problem instance once for offline replay / parameter sweeps. */
+            std::string dump_reason;
+            const auto &opt_stats = exp_traj_opt_->getLastOptStats();
+            if (!temp_ret) {
+                dump_reason = "exp_opt_failed";
+            } else {
+                if (opt_stats.iter_num >= cfg_.case_dump.slow_iter_num) {
+                    dump_reason = "slow_convergence";
+                }
+                if (opt_stats.penalty_log.size() > 1 &&
+                    opt_stats.penalty_log(1) >= cfg_.case_dump.pos_penna_warn) {
+                    dump_reason += dump_reason.empty() ? "high_violation" : ",high_violation";
+                }
+                const double replan_t_so_far = ros_ptr_->getSimTime() - replan_process_start_WT;
+                if (replan_t_so_far > cfg_.replan_forward_dt && cfg_.case_dump.dump_on_overtime) {
+                    dump_reason += dump_reason.empty() ? "replan_overtime" : ",replan_overtime";
+                }
+                if (time_consuming_[EXP_TRAJ_OPT] * 1000.0 > cfg_.case_dump.slow_opt_ms) {
+                    dump_reason += dump_reason.empty() ? "slow_opt" : ",slow_opt";
+                }
+            }
+            if (last_exp_sfc_t_ * 1000.0 > cfg_.case_dump.slow_sfc_ms) {
+                dump_reason += dump_reason.empty() ? "slow_sfc" : ",slow_sfc";
+            }
+            if (!forced_dump_reason_.empty()) {
+                dump_reason += dump_reason.empty() ? forced_dump_reason_ : "," + forced_dump_reason_;
+                forced_dump_reason_.clear();
+            }
+            if (!dump_reason.empty()) {
+                ExpOptCaseData case_data;
+                case_data.stage = "backend";
+                case_data.reason = dump_reason;
+                case_data.connected_goal = connected_goal;
+                case_data.head_pvaj = pos_init_state;
+                case_data.tail_pvaj = pos_fina_state;
+                case_data.guide_path = guide_path;
+                case_data.guide_t = guide_stamp;
+                case_data.pass_wps = pass_wps;
+                case_data.sfc = original_sfc;
+                case_data.opt_success = temp_ret;
+                case_data.lbfgs_ret = opt_stats.lbfgs_ret;
+                case_data.iter_num = opt_stats.iter_num;
+                case_data.final_cost = opt_stats.final_cost;
+                case_data.opt_time = time_consuming_[EXP_TRAJ_OPT];
+                case_data.frontend_time = time_consuming_[EPX_TRAJ_FRONTEND];
+                case_data.sfc_time = last_exp_sfc_t_;
+                case_data.penalty_log = opt_stats.penalty_log;
+                queueCaseDump(case_data);
+            }
         }
         if (!temp_ret) {
             ros_ptr_->warn(" -- [SUPER][Progress] event=exp_opt_failed guide_path_size={} guide_path_len={} sfc_count={} connected_goal={} dist_to_goal={} pos={} goal={} init_pos={} final_pos={} max_vel={} max_acc={}",
@@ -903,11 +1063,20 @@ namespace super_planner {
         return SUCCESS;
     }
 
+    /* Scope timer that always writes the backup frontend bucket on exit, so
+     * early-return paths (NO_NEED/FINISH/FAILED) are also accounted for. */
+    struct BackFrontendTimer {
+        TimeConsuming t;
+        double *bucket;
+        explicit BackFrontendTimer(double *b) : t("t_back_frontend", false), bucket(b) {}
+        ~BackFrontendTimer() { *bucket = t.stop(); }
+    };
+
     RET_CODE SuperPlanner::generateBackupTrajectory(ExpTraj &ref_exp_traj, BackupTraj &back_traj_info) {
         drone_state_mutex_.lock();
         back_traj_info.setRobotPos(robot_state_.p);
         drone_state_mutex_.unlock();
-        TimeConsuming t_back_frontend("t_back_frontend", false);
+        BackFrontendTimer back_frontend_timer{&time_consuming_[BACK_TRAJ_FRONTEND]};
         double total_dur = ref_exp_traj.getTotalDuration();
         double start_t = ros_ptr_->getSimTime() - ref_exp_traj.getStartWallTime();
 
@@ -959,7 +1128,10 @@ namespace super_planner {
                 Vec3f seed_pt = ref_exp_traj.getPos(dur);
                 Line line{back_traj_info.getRobotPos(), seed_pt};
                 Polytope temp_poly;
-                if (cg_ptr_->GeneratePolytopeFromLine(line, temp_poly)) {
+                TimeConsuming t_back_sfc("t_back_sfc", false);
+                const bool back_sfc_ok = cg_ptr_->GeneratePolytopeFromLine(line, temp_poly);
+                last_back_sfc_t_ = t_back_sfc.stop();
+                if (back_sfc_ok) {
                     back_traj_info.setSFC(temp_poly);
                     {
                         TimeConsuming t_viz("tviz", false);
@@ -1004,7 +1176,10 @@ namespace super_planner {
 
         Line line{shifted_robot_p, seed_point};
         Polytope temp_poly;
-        if (!cg_ptr_->GeneratePolytopeFromLine(line, temp_poly)) {
+        TimeConsuming t_back_sfc("t_back_sfc", false);
+        const bool back_sfc_ok = cg_ptr_->GeneratePolytopeFromLine(line, temp_poly);
+        last_back_sfc_t_ = t_back_sfc.stop();
+        if (!back_sfc_ok) {
             ros_ptr_->warn(" -- [SUPER] GeneratePolytopeFromLine failed, force return");
             return FAILED;
         }
@@ -1074,7 +1249,6 @@ namespace super_planner {
         double heu_ts = std::max((t0 + te) / 2, te - vel_e_n / cfg_.back_traj_cfg.max_acc);
         double heu_dur = te - heu_ts;
         Vec3f heu_p = seed_point;
-        time_consuming_[BACK_TRAJ_FRONTEND] = t_back_frontend.stop();
         TimeConsuming t_back_opt("t_back_opt", false);
         double opt_ts = heu_ts;
         Trajectory temp_pos_traj;
@@ -1088,8 +1262,6 @@ namespace super_planner {
                                                  back_traj_info.getSFC(),
                                                  temp_pos_traj,
                                                  opt_ts);
-        time_consuming_[BACK_TRAJ_OPT] = t_back_opt.stop();
-
         {
             double init_ts;
             VecDf init_times;
@@ -1098,19 +1270,37 @@ namespace super_planner {
             latest_replan.setBackupCondition(init_ts, init_times, init_ps,
                                              t0, te,
                                              back_traj_info.getSFC());
-            Trajectory traj;
-            double out_ts;
-            back_traj_opt_->optimize(ref_exp_traj.posTraj(),
-                                     t0,
-                                     te,
-                                     init_ts,
-                                     sfc0,
-                                     init_times,
-                                     init_ps,
-                                     traj,
-                                     out_ts
-            );
+            /* Legacy hot-restart whose outputs (traj, out_ts) are discarded; it
+             * costs one extra L-BFGS run per replan and is kept only as a
+             * debugging aid behind backup_reopt_en. */
+            if (cfg_.backup_reopt_en) {
+                Trajectory traj;
+                double out_ts;
+                back_traj_opt_->optimize(ref_exp_traj.posTraj(),
+                                         t0,
+                                         te,
+                                         init_ts,
+                                         sfc0,
+                                         init_times,
+                                         init_ps,
+                                         traj,
+                                         out_ts
+                );
+            }
+        }
+        time_consuming_[BACK_TRAJ_OPT] = t_back_opt.stop();
 
+        if (pending_case_) {
+            /* Attach the backup problem so the case can be replayed end to end. */
+            pending_case_data_.backup.valid = true;
+            pending_case_data_.backup.t0 = t0;
+            pending_case_data_.backup.te = te;
+            pending_case_data_.backup.heu_ts = heu_ts;
+            pending_case_data_.backup.heu_dur = heu_dur;
+            pending_case_data_.backup.heu_p = heu_p;
+            pending_case_data_.backup.sfc = back_traj_info.getSFC();
+            pending_case_data_.backup.opt_success = temp_ret;
+            pending_case_data_.backup.opt_time = time_consuming_[BACK_TRAJ_OPT];
         }
 
         if (!temp_ret) {

@@ -50,7 +50,7 @@ namespace fsm {
         ros::Timer execution_timer_, replan_timer_, cmd_timer_;
         quadrotor_msgs::PositionCommand pid_cmd_;
         quadrotor_msgs::LocalGoalSet latest_goal_;
-        rog_map::ROGMapROS::Ptr map_ptr_;
+        rog_map::ROGMap::Ptr map_ptr_;
         ego_planner::PerceptionUtils::Ptr percep_utils_;
         quadrotor_msgs::PositionCommand latest_cmd;
         Vec3f latest_attitude_;

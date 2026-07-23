@@ -10,6 +10,7 @@
 | `docs/VIEW.md` | 架构总览入口，包含 SceneGraph 和 EGO Planner 章节概要，多文档导航 |
 | `docs/EGO.md` | EGO-Planner 实时轨迹优化文档：12 状态 FSM、算法管道、ROS 话题接口、消息契约、代码组织 |
 | `docs/SUPER.md` | SUPER 后端定制：curve fitting 局部切线吸引、SFC 地图边界修复、goal 棘轮修复、调参指引 |
+| `docs/OPT_CASES.md` | SUPER 优化难例挖掘与并行扫参：case_dump 在线检测、Fluent Bit 事件流、opt_case_replay 离线回放、sweep.py 参数扫描 |
 | `docs/SCENEGRAPH.md` | SceneGraph 上层环境表征：骨架生成、物体管线、区域聚类、LLM 交互、API 参考 |
 | `docs/NEXT_SCENEGRAPH.md` | SceneGraph 重构提案：问题分析、目标架构、迁移计划 |
 | `docs/CODEBASE.md` | 全量代码库参考：仓库结构、三层架构、62 个 ROS 消息定义、算法与数据流 |
@@ -201,6 +202,7 @@ J30V2 场景的 z 参考系中，scenegraph 骨架路径 z 从起飞点 ~1.0 下
 ├── roslaunch.log
 ├── ros/                       # ROS_LOG_DIR
 ├── fluentbit_roslog.log       # Fluent Bit 结构化 key=value 输出
+├── opt_events.ltsv            # Fluent Bit 机器可读结构化事件流（module/event 字段化，见 docs/OPT_CASES.md）
 ├── rosbag.log
 └── run.bag
 ```
