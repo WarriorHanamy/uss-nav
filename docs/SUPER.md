@@ -292,8 +292,27 @@ J30V2 场景注意：下楼后 z 降至 -7~-10，`virtual_ground_height` 必须�
 - 根因：悬停 + 目标正下方 0.95m 时，初始 T=0.8s 的 min-snap 下落轨迹需要 acc_z < -g（倒推）,flatness `z2 = -1` 处 `tilt_den = sqrt(2(1+z2))` 与 `omg_den = z2+1` 除零 → cost NaN → L-BFGS 立即中止。T 本应由优化器自行推大（T=1.86s 时物理可行），但 NaN 杀死了这个过程
 - 修复：`quadrotor_flatness.hpp` 三个除零点钳制（`zu_norm ≥ 1e-6`、`tilt_den ≥ 1e-6`、`omg_den ≥ 1e-3`)，奇异区返回巨大但有限的惩罚，优化器得以推大 T 逃离奇异区；正常飞行域（zu_norm≈9.8, omg_den≈2）不受影响
 
+### 6.3 垂直段 yaw 乱转
+
+- 现象：悬停直下时 yaw 在末端持续旋转（~20°/s)
+- 根因：yaw 路径点由 `atan2(dir.y, dir.x)` 解算，阈值用 3D `dir.norm()` —— 垂直段 z 向位移让模长达标，yaw 取水平噪声方向
+- 修复：`yaw_traj_opt.cpp` 三处（waypoint allocation / free_start / free_goal）改为水平模长 `dir.head(2).norm() > 0.1` 判定，水平位移不足时保持当前 yaw
+
+### 6.4 终点悬停：仿真器地板与场景地板不匹配
+
+- 现象：任务最后一段（object5，目标 z=-10.95）无人机在 z=-10.000000 悬停 6 分钟，replan 持续成功（1.86s 下落轨迹）但位置纹丝不动；末端 yaw 旋转 180°（来回修正轨迹的次生症状）
+- 根因：`so3_quadrotor_simulator/Quadrotor.cpp` 硬编码 `z < -10.0` 地板钳制；场景 PCD 实测该位置真实地板 z≈-12.2，目标在真实地板上方 1.25m 的合法自由空间 —— 是**仿真器地板**挡住了下降，不是规划问题
+- 修复：`simulator/floor_z` 参数化（默认 -10.0 兼容）,`sim_scenegraph_sim.launch` 设为 -13.0（低于 J30V2 最低任务面）
+
+### 6.5 目标不可达时无限重规划
+
+- 现象：traj 执行完但 `closeToGoal(0.1)` 不满足 → FSM 回 GENERATE_TRAJ 再规划，无任何退出机制（stuck_suspect 仅打日志）
+- 修复：FSM 不可达升级 —— `traj_finish && !closeToGoal` 累计 ≥ `fsm/goal_unreachable_max_unfinish`(3）或 `no_progress_duration > fsm/goal_unreachable_timeout_s`(15s)→ `event=goal_unreachable` + `publishMissionFeedback(false,false,false)` + 回 WAIT_GOAL 等新目标，不再无限重规划
+
 ### 验证
 
 - 离线：604 个 dump case 批跑，成功率 27 → **592**(98%)；剩余 12 个为真不可行走廊（penalty violation)+ 1 个 frontend sfc_failed
 - 在线（同任务）：replan FAILED 率 98.3% → ~20%,SUCCESS+FINISH 达 ~80%，任务可持续推进
+- 下落剖面（pos_cmd bag)：垂直段 |vz| p50=0.87、p90=1.17 m/s（缓降）;yaw rate p90=0.7°/s（修复前 ~20°/s)
+- 终点（floor_z=-13)：无人机降至 z=-10.88，距 goal 0.16m,`wp_batch_done batch_id=27` 任务完成；此前该点在 z=-10.0 悬停 >6min 且 yaw 转 180°
 - 诊断工具：`[ExpOpt] event=nan_cost` / `event=nan_term`（仅在非有限值时输出，含分段 cost 与轨迹状态）

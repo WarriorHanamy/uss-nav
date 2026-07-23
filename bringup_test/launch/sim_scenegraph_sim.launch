@@ -35,6 +35,10 @@
     <param name="simulator/init_state_x" value="$(arg init_x)"/>
     <param name="simulator/init_state_y" value="$(arg init_y)"/>
     <param name="simulator/init_state_z" value="$(arg init_z)"/>
+    <!-- Ground plane must sit below the scene's lowest mission floor (J30V2
+         downstairs area reaches z ~ -12.2), otherwise goals there are
+         physically unreachable and the planner replans forever. -->
+    <param name="simulator/floor_z" value="-13.0"/>
     <rosparam command="load" file="$(find bringup_test)/params/sim_ego_control.yaml"/>
     <param name="mass" value="$(arg uav_mass)"/>
     <param name="g" value="$(arg uav_grav)"/>

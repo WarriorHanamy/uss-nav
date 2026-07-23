@@ -77,6 +77,11 @@ namespace fsm {
                      plan_msg.planner_goal.x, plan_msg.planner_goal.y, plan_msg.planner_goal.z);
         }
 
+        /* Goal-unreachable escalation: tell the mission layer the goal failed. */
+        void publishMissionFailure() override {
+            publishMissionFeedback(false, false, false);
+        }
+
         void resetVisualizedPath() override {
             path.poses.clear();
         }
@@ -227,6 +232,7 @@ namespace fsm {
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
                 if (closeToGoal(0.1)) {
+                    goal_unfinish_count_ = 0;
                     if (!gi_.wp_list.empty()) {
                         publishWaypointProgress(true);
                         gi_.wp_list.clear();
@@ -234,7 +240,12 @@ namespace fsm {
                     }
                     ChangeState("getPoseFromTraj", WAIT_GOAL);
                 } else {
-                    ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                    goal_unfinish_count_++;
+                    if (goal_unfinish_count_ >= cfg_.goal_unreachable_max_unfinish) {
+                        declareGoalUnreachable("traj_finish_far");
+                    } else {
+                        ChangeState("getPoseFromTraj", GENERATE_TRAJ);
+                    }
                 }
             }
             pose.first = Vec3f{pid_cmd_.position.x, pid_cmd_.position.y, pid_cmd_.position.z};
@@ -405,6 +416,7 @@ namespace fsm {
             if (traj_finish_) {
                 cout << GREEN << " -- [Fsm] Traj finish." << RESET << endl;
                 if (closeToGoal(0.1)) {
+                    goal_unfinish_count_ = 0;
                     publishMissionFeedback(true, true, true);
                     if (!gi_.wp_list.empty()) {
                         publishWaypointProgress(true);
@@ -414,7 +426,12 @@ namespace fsm {
                     }
                     ChangeState("PubCmdCallback", WAIT_GOAL);
                 } else {
-                    ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                    goal_unfinish_count_++;
+                    if (goal_unfinish_count_ >= cfg_.goal_unreachable_max_unfinish) {
+                        declareGoalUnreachable("traj_finish_far");
+                    } else {
+                        ChangeState("PubCmdCallback", GENERATE_TRAJ);
+                    }
                 }
             }
         }

@@ -56,6 +56,11 @@ namespace fsm {
         int yaw_mode{};
         // Radius around an intermediate window waypoint that counts as consumption [m].
         double wp_reach_radius{0.4};
+        /* Goal-unreachable escalation: after this many trajectory executions that
+         * finish away from the goal, or this much time without progress, the FSM
+         * stops replanning and reports failure upstream instead of looping forever. */
+        int goal_unreachable_max_unfinish{3};
+        double goal_unreachable_timeout_s{15.0};
 
         Config() = default;
 
@@ -70,6 +75,8 @@ namespace fsm {
             loader.LoadParam("fsm/mpc_cmd_topic", mpc_cmd_topic, string("/planning_cmd/mpc"));
             loader.LoadParam("fsm/click_goal_topic", click_goal_topic, string("/planning/click_goal_topic"));
             loader.LoadParam("fsm/wp_reach_radius", wp_reach_radius, 0.4);
+            loader.LoadParam("fsm/goal_unreachable_max_unfinish", goal_unreachable_max_unfinish, 3);
+            loader.LoadParam("fsm/goal_unreachable_timeout_s", goal_unreachable_timeout_s, 15.0);
 
 
             loader.LoadParam("super_planner/yaw_dot_max", yaw_dot_max, 1.0, true);

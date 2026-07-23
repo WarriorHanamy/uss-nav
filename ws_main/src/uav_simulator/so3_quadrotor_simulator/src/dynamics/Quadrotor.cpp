@@ -86,10 +86,10 @@ Quadrotor::step(double dt)
   Eigen::Matrix3d             R = state_.R * P.inverse();
   state_.R                      = R;
 
-  // Don't go below zero, simulate floor
-  if (state_.x(2) < -10.0 && state_.v(2) < 0)
+  // Don't go below the ground plane, simulate floor
+  if (state_.x(2) < floor_z_ && state_.v(2) < 0)
   {
-    state_.x(2) = -10.0;
+    state_.x(2) = floor_z_;
     state_.v(2) = 0;
   }
   updateInternalState();
@@ -271,6 +271,11 @@ void
 Quadrotor::setGravity(double g)
 {
   g_ = g;
+}
+void
+Quadrotor::setFloorZ(double floor_z)
+{
+  floor_z_ = floor_z;
 }
 
 const Eigen::Matrix3d&

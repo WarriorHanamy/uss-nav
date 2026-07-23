@@ -71,7 +71,10 @@ namespace traj_opt {
 
 
             Vec3f dir = pt_g - pt_i;
-            if (dir.norm() > 0.1) {
+            /* Heading from direction is ill-defined for (near-)vertical segments:
+             * judge by horizontal motion only, otherwise the yaw waypoint snaps
+             * to horizontal noise and spins during a straight descent. */
+            if (dir.head(2).norm() > 0.1) {
                 cur_yaw = atan2(dir.y(), dir.x());
                 normalizeNextYaw(last_yaw, cur_yaw);
             } else {
@@ -121,7 +124,11 @@ namespace traj_opt {
                 pt_g = pos_traj.getPos(t_g);
                 dir = pt_g - pt_i;
             }
-            init_state(0) = atan2(dir.y(), dir.x());
+            /* Keep the current yaw for (near-)vertical segments: the heading is
+             * ill-defined when horizontal motion is negligible. */
+            if (dir.head(2).norm() > 0.1) {
+                init_state(0) = atan2(dir.y(), dir.x());
+            }
         }
         if (free_goal_) {
             Vec3f pt_g = pos_traj.getPos(pos_traj_dur);
@@ -133,7 +140,11 @@ namespace traj_opt {
                 pt_i = pos_traj.getPos(t_i);
                 dir = pt_g - pt_i;
             }
-            goal_state(0) = atan2(dir.y(), dir.x());
+            /* Keep the goal yaw for (near-)vertical segments: the heading is
+             * ill-defined when horizontal motion is negligible. */
+            if (dir.head(2).norm() > 0.1) {
+                goal_state(0) = atan2(dir.y(), dir.x());
+            }
         }
 
         VecDf times;

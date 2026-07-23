@@ -34,6 +34,13 @@ public:
   double getGravity(void) const;
   void setGravity(double g);
 
+  /**
+   * Height of the simulated ground plane; the drone is clamped to it.
+   *
+   * @param[in] floor_z  ground plane height [m]
+   */
+  void setFloorZ(double floor_z);
+
   const Eigen::Matrix3d& getInertia(void) const;
   void setInertia(const Eigen::Matrix3d& inertia);
 
@@ -88,6 +95,7 @@ private:
   double          alpha0; // AOA
   double          g_;     // gravity
   double          mass_;
+  double          floor_z_{-10.0}; // simulated ground plane height [m]
   Eigen::Matrix3d J_; // Inertia
   double          kf_;
   double          km_;

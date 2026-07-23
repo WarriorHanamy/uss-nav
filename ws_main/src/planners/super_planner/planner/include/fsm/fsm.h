@@ -200,6 +200,17 @@ namespace fsm {
 
         virtual void publishWaypointProgress(bool all_consumed) = 0;
 
+        /* Goal-unreachable escalation state: counts trajectory executions that
+         * finish away from the goal; reset on new goal or successful finish. */
+        int goal_unfinish_count_{0};
+
+        /* Report the unreachable goal upstream (plan_status=false); subclass hook. */
+        virtual void publishMissionFailure() {}
+
+        /* Stop the replan loop for a goal that cannot be reached: report failure
+         * and wait for a new goal instead of replanning forever. */
+        void declareGoalUnreachable(const std::string &reason);
+
         void ChangeState(const string &call_func, const MACHINE_STATE &new_state);
 
         virtual void publishPolyTraj() = 0;

@@ -184,6 +184,20 @@ namespace fsm {
         }
     }
 
+    void Fsm::declareGoalUnreachable(const std::string &reason) {
+        const double dist_to_goal = (robot_state_.p - gi_.goal_p).norm();
+        ros_ptr_->warn(" -- [SUPER][Progress] event=goal_unreachable reason={} dist_to_goal={} pos={} goal={} "
+                       "goal_unfinish_count={} consecutive_replan_failures={}",
+                       reason, dist_to_goal, robot_state_.p.transpose(), gi_.goal_p.transpose(),
+                       goal_unfinish_count_, consecutive_replan_failures_);
+        publishMissionFailure();
+        goal_unfinish_count_ = 0;
+        consecutive_replan_failures_ = 0;
+        gi_.new_goal = false;
+        finish_plan = true;
+        ChangeState("declareGoalUnreachable", WAIT_GOAL);
+    }
+
     bool Fsm::closeToGoal(const double &thresh_dis) {
         /// The close to goal should consider the the local shift
         /// All goal should be in the known free on inf map.
@@ -222,6 +236,9 @@ namespace fsm {
             ros_ptr_->warn(" -- [SUPER][Progress] event=stuck_suspect dist_to_goal={} no_progress_duration={} pos={} goal={} vel_norm={} consecutive_replan_failures={}",
                            dist_to_goal, no_progress_duration, robot_state_.p.transpose(),
                            gi_.goal_p.transpose(), robot_state_.v.norm(), consecutive_replan_failures_);
+            if (no_progress_duration > cfg_.goal_unreachable_timeout_s) {
+                declareGoalUnreachable("no_progress_timeout");
+            }
         }
     }
 
@@ -278,6 +295,7 @@ namespace fsm {
         last_progress_dist_ = -1.0;
         last_progress_move_t_ = ros_ptr_->getSimTime();
         consecutive_replan_failures_ = 0;
+        goal_unfinish_count_ = 0;
     }
 
     bool Fsm::setGoalWindow(const uint32_t batch_id, const std::vector<Vec3f> &raw_wps,

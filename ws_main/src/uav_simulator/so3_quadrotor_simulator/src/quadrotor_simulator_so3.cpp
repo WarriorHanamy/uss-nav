@@ -224,6 +224,12 @@ main(int argc, char** argv)
   quad.setMass(mass);
   quad.setGravity(g);
 
+  // Ground plane height [m]; must sit below the scene's lowest mission floor
+  // or goals under it become physically unreachable.
+  double floor_z;
+  n.param("simulator/floor_z", floor_z, -10.0);
+  quad.setFloorZ(floor_z);
+
   double                        _init_x, _init_y, _init_z;
   n.param("simulator/init_state_x", _init_x, 0.0);
   n.param("simulator/init_state_y", _init_y, 0.0);
