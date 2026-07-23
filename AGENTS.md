@@ -324,3 +324,21 @@ cd ~/uss-nav && ./start_uss_nav_sim_ego_rviz.sh
 ```
 
 退出时自动停仿真容器。
+
+## 快捷指令
+
+### nav to object \<id\>
+
+> 前提：仿真容器/ROS core 必须运行中。
+
+向 `/bridge/Instruct` 发布 `TURN_OBJECT_ID_NAV` 指令：
+
+```bash
+rostopic pub -1 /bridge/Instruct quadrotor_msgs/Instruction \
+  "{instruction_type: 2, target_obj_id: 0, source_task_id: 2, robot_id: 0}"
+```
+
+- `instruction_type: 2` = `TURN_OBJECT_ID_NAV`（按 ID 导航到物体）
+- `target_obj_id` = 目标物体 ID（上例为 0）
+- `source_task_id: 2` = `SOURCE_TASK_EXPLORATION`
+- 确认响应在 `/Instruct_res`
